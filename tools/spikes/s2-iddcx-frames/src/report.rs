@@ -4,6 +4,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::framelog::{CSV_HEADER, FrameLog, csv_line};
 use crate::frames::{FrameTracker, TrackerSummary};
 use crate::qpc;
 use crate::stats::{Stats, percentiles};
@@ -56,29 +57,48 @@ pub fn summary_text(
     t
 }
 
-/// Converts the tracker's latencies (QPC ticks) to µs in place, then writes both files.
+/// Converts the tracker's latencies (QPC ticks) to µs in place, then writes the summary and the
+/// per-frame CSV from `log`. Harness cost (counter-cell Map) is added to the notes.
 pub fn write_run(
     case: &str,
     kind: &str,
     tracker: &mut FrameTracker,
+    log: &FrameLog,
     ref_counts: [u64; 2],
     notes: &[String],
 ) -> BoxResult<PathBuf> {
     let summary = tracker.summary();
     let latencies = tracker.latencies_mut();
-    let mut csv = String::from("latency_us\n");
     for v in latencies.iter_mut() {
         *v = qpc::to_us(*v);
-        let _ = writeln!(csv, "{v}");
     }
     let stats = percentiles(latencies);
+
+    let freq = qpc::freq();
+    let mut csv = String::from(CSV_HEADER);
+    csv.push('\n');
+    let mut map_us = Vec::with_capacity(log.records().len());
+    for r in log.records() {
+        let _ = writeln!(csv, "{}", csv_line(r, freq));
+        map_us.push(qpc::to_us(r.map_qpc));
+    }
+    let map = percentiles(&mut map_us);
+    let mut notes = notes.to_vec();
+    notes.push(format!(
+        "harness counter-cell map p50 {} us, p99 {} us, max {} us; frame log overflow {}",
+        map.p50,
+        map.p99,
+        map.max,
+        log.overflow()
+    ));
+
     let stem = format!("{}-{case}-{kind}", now_stamp());
     let dir = out_dir()?;
     fs::write(dir.join(format!("{stem}-frames.csv")), csv)?;
     let path = dir.join(format!("{stem}-summary.txt"));
     fs::write(
         &path,
-        summary_text(case, kind, &summary, &stats, ref_counts, notes),
+        summary_text(case, kind, &summary, &stats, ref_counts, &notes),
     )?;
     Ok(path)
 }

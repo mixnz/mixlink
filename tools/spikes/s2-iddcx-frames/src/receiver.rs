@@ -9,6 +9,7 @@ use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
 use windows::core::PCWSTR;
 
 use crate::d3d::{CellReader, adapters, luid_text, save_png};
+use crate::framelog::{FrameLog, FrameRecord};
 use crate::frames::{FrameTracker, RefKind, reference_qpc, sample_capacity};
 use crate::header::{GenerationWatch, S2Slot, SLOT_COUNT, validate};
 use crate::log::RunLog;
@@ -106,6 +107,7 @@ pub fn run(
     let mut watch = GenerationWatch::default();
     let mut frames: Option<(SharedFrames, CellReader)> = None;
     let mut tracker = FrameTracker::new(sample_capacity(minutes));
+    let mut frame_log = FrameLog::new(sample_capacity(minutes));
     let (mut ref_counts, mut diag) = ([0u64; 2], Diag::default());
     let (mut next, mut last_png, mut opens, mut pngs) = (0u64, 0u64, 0u32, 0u32);
     let mut notes = Vec::new();
@@ -180,11 +182,13 @@ pub fn run(
         let slot = section.slot(idx);
         match mode {
             Mode::Timing => {
+                let map_start = qpc::now();
                 let counter = if slot.seq == next {
                     reader.read(&f.ctx, &f.ring[idx])
                 } else {
                     None
                 };
+                let map_qpc = qpc::now() - map_start;
                 let ok = slot.seq == next && section.slot_seq(idx) == next;
                 let (reference, kind) = reference_qpc(slot.present_qpc, slot.acquire_qpc);
                 if ok {
@@ -194,7 +198,16 @@ pub fn run(
                     }] += 1;
                     diag.add(&slot, now);
                 }
-                tracker.on_frame(counter, ok, now.saturating_sub(reference));
+                let latency_qpc = now.saturating_sub(reference);
+                tracker.on_frame(counter, ok, latency_qpc);
+                frame_log.push(FrameRecord {
+                    t_qpc: now,
+                    counter,
+                    ok,
+                    generation: h.generation,
+                    latency_qpc,
+                    map_qpc,
+                });
             }
             Mode::Png => {
                 if now - last_png >= PNG_EVERY_S * qpc::freq() {
@@ -217,7 +230,7 @@ pub fn run(
         for (name, luid, mb) in adapters()? {
             notes.push(format!("gpu {name} luid {} vram {mb} MB", luid_text(luid)));
         }
-        let path = write_run(case, "iddcx", &mut tracker, ref_counts, &notes)?;
+        let path = write_run(case, "iddcx", &mut tracker, &frame_log, ref_counts, &notes)?;
         log.line(&format!("summary {}", path.display()));
     }
     Ok(())

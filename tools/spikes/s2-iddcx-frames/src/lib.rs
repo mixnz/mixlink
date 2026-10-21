@@ -4,6 +4,7 @@ pub mod console_spawn;
 pub mod counter;
 pub mod d3d;
 pub mod display;
+pub mod framelog;
 pub mod frames;
 pub mod header;
 pub mod log;

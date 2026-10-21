@@ -4,6 +4,7 @@
 
 use s2_iddcx_frames::d3d::{CellReader, adapters, device_on_adapter, luid_text};
 use s2_iddcx_frames::display::{from_wide, virtual_gdi_name};
+use s2_iddcx_frames::framelog::{FrameLog, FrameRecord};
 use s2_iddcx_frames::frames::{FrameTracker, sample_capacity};
 use s2_iddcx_frames::qpc;
 use s2_iddcx_frames::report::write_run;
@@ -23,6 +24,7 @@ use windows::Win32::UI::HiDpi::{
 use windows::core::Interface;
 
 const GENERIC_ALL: DESKTOP_ACCESS_FLAGS = DESKTOP_ACCESS_FLAGS(0x1000_0000);
+const RECREATE_WAIT: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// The virtual monitor's output and the adapter it is enumerated on.
 fn find_output(gdi_name: &str) -> BoxResult<(IDXGIAdapter1, IDXGIOutput5)> {
@@ -68,23 +70,42 @@ fn main() -> BoxResult<()> {
     let (device, ctx) =
         device_on_adapter(&adapter).map_err(|e| format!("device_on_adapter: {e}"))?;
     let reader = CellReader::new(&device, DXGI_FORMAT_B8G8R8A8_UNORM)?;
-    let mut dupl = duplicate(&output, &device).map_err(|e| format!("DuplicateOutput1: {e}"))?;
+    let mut dupl = Some(duplicate(&output, &device).map_err(|e| format!("DuplicateOutput1: {e}"))?);
     let mut tracker = FrameTracker::new(sample_capacity(minutes));
-    let mut access_lost = 0u32;
+    let mut frame_log = FrameLog::new(sample_capacity(minutes));
+    let (mut access_lost, mut recreate_failed) = (0u32, 0u32);
+    // Access-lost episodes (start, end) in QPC: when duplication was unavailable.
+    let mut episodes: Vec<(u64, u64)> = Vec::new();
+    let mut lost_since: Option<u64> = None;
     let deadline = qpc::now() + minutes * 60 * qpc::freq();
 
     while qpc::now() < deadline {
+        let Some(d) = &dupl else {
+            // Duplication lost (mode change, display off, secure desktop): wait, then recreate.
+            std::thread::sleep(RECREATE_WAIT);
+            match duplicate(&output, &device) {
+                Ok(d) => {
+                    if let Some(start) = lost_since.take() {
+                        episodes.push((start, qpc::now()));
+                    }
+                    dupl = Some(d);
+                }
+                Err(_) => recreate_failed += 1,
+            }
+            continue;
+        };
         let mut info = DXGI_OUTDUPL_FRAME_INFO::default();
         let mut resource: Option<IDXGIResource> = None;
         // SAFETY: out-pointers are valid locals.
-        let acquired = unsafe { dupl.AcquireNextFrame(100, &mut info, &mut resource) };
+        let acquired = unsafe { d.AcquireNextFrame(100, &mut info, &mut resource) };
         let now = qpc::now();
         match acquired {
             Ok(()) => {}
             Err(e) if e.code() == DXGI_ERROR_WAIT_TIMEOUT => continue,
             Err(e) if e.code() == DXGI_ERROR_ACCESS_LOST => {
                 access_lost += 1;
-                dupl = duplicate(&output, &device)?;
+                lost_since.get_or_insert(now);
+                dupl = None;
                 continue;
             }
             Err(e) => return Err(e.into()),
@@ -93,24 +114,53 @@ fn main() -> BoxResult<()> {
         if info.LastPresentTime != 0
             && let Some(tex) = resource.and_then(|r| r.cast::<ID3D11Texture2D>().ok())
         {
-            let latency = now.saturating_sub(info.LastPresentTime as u64);
-            tracker.on_frame(reader.read(&ctx, &tex), true, latency);
+            let latency_qpc = now.saturating_sub(info.LastPresentTime as u64);
+            let map_start = qpc::now();
+            let counter = reader.read(&ctx, &tex);
+            let map_qpc = qpc::now() - map_start;
+            tracker.on_frame(counter, true, latency_qpc);
+            frame_log.push(FrameRecord {
+                t_qpc: now,
+                counter,
+                ok: true,
+                generation: access_lost,
+                latency_qpc,
+                map_qpc,
+            });
         }
         // SAFETY: a frame was acquired above.
-        unsafe { dupl.ReleaseFrame()? };
+        unsafe { d.ReleaseFrame()? };
+    }
+    if let Some(start) = lost_since {
+        episodes.push((start, qpc::now()));
     }
 
     // SAFETY: plain query on a live adapter.
     let luid = unsafe { adapter.GetDesc1()?.AdapterLuid };
     let mut notes = vec![
         format!("output {gdi} on adapter {}", luid_text(luid)),
-        format!("access lost {access_lost}"),
+        format!(
+            "access lost {access_lost}, recreate failed {recreate_failed} (retry every 100 ms)"
+        ),
     ];
+    for (start, end) in &episodes {
+        notes.push(format!(
+            "no duplication from qpc {start} for {} ms",
+            qpc::to_us(end - start) / 1000
+        ));
+    }
     for (name, luid, mb) in adapters()? {
         notes.push(format!("gpu {name} luid {} vram {mb} MB", luid_text(luid)));
     }
     let delivered = tracker.summary().delivered;
-    let path = write_run(&case, "dda", &mut tracker, [delivered, 0], &notes)?;
+    let path = write_run(
+        &case,
+        "dda",
+        &mut tracker,
+        &frame_log,
+        [delivered, 0],
+        &notes,
+    )?;
     eprintln!("s2-dda: {}", path.display());
     Ok(())
 }
