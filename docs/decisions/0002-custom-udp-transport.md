@@ -1,6 +1,6 @@
 # 0002 — Custom UDP transport instead of WebRTC/QUIC
 
-**Status:** proposed · 2026-10-21
+**Status:** accepted · 2026-10-21
 
 ## Context
 WebRTC brings jitter buffers, congestion control and pacing tuned for video calls

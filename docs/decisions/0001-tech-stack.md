@@ -1,6 +1,6 @@
 # 0001 — Tech stack
 
-**Status:** proposed · 2026-10-21
+**Status:** accepted · 2026-10-21
 
 ## Context
 Need near-zero-latency video/input streaming, Windows gaming PCs first, codebase written

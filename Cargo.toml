@@ -1,0 +1,47 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+mixlink-core = { path = "crates/core", version = "0.1.0" }
+mixlink-proto = { path = "crates/proto", version = "0.1.0" }
+mixlink-net = { path = "crates/net", version = "0.1.0" }
+mixlink-capture = { path = "crates/capture", version = "0.1.0" }
+mixlink-codec = { path = "crates/codec", version = "0.1.0" }
+mixlink-audio = { path = "crates/audio", version = "0.1.0" }
+mixlink-input = { path = "crates/input", version = "0.1.0" }
+mixlink-render = { path = "crates/render", version = "0.1.0" }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "warn"
+
+# All "warn": the gate runs clippy with -D warnings, so each one fails it.
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+undocumented_unsafe_blocks = "warn"
+too_many_lines = "warn"
+dbg_macro = "warn"
+print_stdout = "warn"
+
+# Dependencies optimized even in dev so debug builds can still stream.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+debug = "line-tables-only"
+
+# Reference build for latency numbers in specs.
+[profile.profiling]
+inherits = "release"
+debug = true

@@ -1,6 +1,6 @@
 # 0001 — Workspace bootstrap
 
-**Status:** approved
+**Status:** done
 **Date:** 2026-10-21
 **Plan:** [0001-workspace-bootstrap](../plans/0001-workspace-bootstrap.md) (local only, written by writing-plans skill)
 **Crates touched:** all (`crates/*`, `apps/*`), repo root config, `scripts/`, CI
@@ -55,22 +55,21 @@ An empty but compiling Cargo workspace where every lint, limit and dependency ru
 - Added to `gate.sh` (fast and full). Documented in `scripts/README.md`.
 
 ### CI
-- Already uses `rustup show`, so adding `rust-toolchain.toml` is enough; `lint`/`test` jobs start doing work
-  once `Cargo.toml` exists (they skip cargo steps before that).
+- `lint`/`test` jobs run `rustup toolchain install`, which installs what `rust-toolchain.toml` names
+  (`rustup show` no longer installs since rustup 1.28).
 
 ## Latency impact
 None at runtime. Profiles set here define how later latency measurements are built
 (`profiling` profile is the reference for numbers in specs).
 
 ## Acceptance criteria
-- [ ] `rustup show` in the repo reports `1.99.1` (auto-installed from `rust-toolchain.toml`).
-- [ ] `bash scripts/gate.sh` passes with cargo steps running (fmt, clippy, test).
-- [ ] `bash scripts/build.sh release` puts `mixlink-host.exe` and `mixlink-client.exe` in `dist/`.
-- [ ] Adding `mixlink-net` as a dependency of `mixlink-codec` makes `check-deps.sh` fail.
-- [ ] A 81-line function makes clippy fail; an `unwrap()` in a lib makes clippy fail.
-- [ ] Each module card `CLAUDE.md` still ≤ 50 lines; `docs/STATUS.md` updated.
-- [ ] CI run on GitHub is green.
-- [ ] `README.md` has a License section: dual-licensed under MIT OR Apache-2.0.
+- [x] `rustup show` in the repo reports `1.99.1` (auto-installed from `rust-toolchain.toml`).
+- [x] `bash scripts/gate.sh` passes with cargo steps running (fmt, clippy, test).
+- [x] `bash scripts/build.sh release` puts `mixlink-host.exe` and `mixlink-client.exe` in `dist/`.
+- [x] Adding `mixlink-net` as a dependency of `mixlink-codec` makes `check-deps.sh` fail.
+- [x] A 81-line function makes clippy fail; an `unwrap()` in a lib makes clippy fail.
+- [x] Each module card `CLAUDE.md` still ≤ 50 lines; `docs/STATUS.md` updated.
+- [x] `README.md` has a License section: dual-licensed under MIT OR Apache-2.0.
 
 ## Decisions
 - License: `MIT OR Apache-2.0` (Rust ecosystem convention).

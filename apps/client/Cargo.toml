@@ -1,0 +1,19 @@
+[package]
+name = "mixlink-client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mixlink-core.workspace = true
+mixlink-proto.workspace = true
+mixlink-net.workspace = true
+mixlink-capture.workspace = true
+mixlink-codec.workspace = true
+mixlink-audio.workspace = true
+mixlink-input.workspace = true
+mixlink-render.workspace = true
+
+[lints]
+workspace = true

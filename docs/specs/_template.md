@@ -19,6 +19,7 @@ Data flow, new types/traits (names only), threads involved.
 Stages touched, expected cost, how it is measured.
 
 ## Acceptance criteria
+<!-- Feature behaviour only. Never "gate passes" / "CI is green": /land never merges red. -->
 - [ ] ...
 
 ## Open questions

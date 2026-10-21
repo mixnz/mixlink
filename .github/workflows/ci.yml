@@ -39,8 +39,8 @@ jobs:
       - name: Keep LF on checkout
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
-      - name: Toolchain (from rust-toolchain.toml when present)
-        run: rustup show && rustup component add rustfmt clippy
+      - name: Toolchain (from rust-toolchain.toml, incl. components)
+        run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - name: fmt + clippy
         run: bash scripts/gate.sh --cargo lint
@@ -55,8 +55,8 @@ jobs:
       - name: Keep LF on checkout
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
-      - name: Toolchain (from rust-toolchain.toml when present)
-        run: rustup show
+      - name: Toolchain (from rust-toolchain.toml, incl. components)
+        run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - name: Tests
         run: bash scripts/gate.sh --cargo test
