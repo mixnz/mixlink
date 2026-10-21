@@ -1,6 +1,6 @@
 # 0003 — Spike S1: UMDF driver signed by a per-machine certificate
 
-**Status:** draft
+**Status:** in-progress
 **Date:** 2026-10-22
 **Roadmap:** T14
 **Plan:** [0003-spike-umdf-signing](../plans/0003-spike-umdf-signing.md) (local only, written by writing-plans skill)
@@ -18,6 +18,11 @@ Secure Boot on and test-signing off. Every driver row (T20–T22) waits on this 
     pass is visible (a monitor appears) and S2 (T15) starts from it.
   - Build: MSBuild + WDK from NuGet (`Microsoft.Windows.WDK.x64`, no system WDK install), one script
     producing `vdisplay.inf`, `vdisplay.dll`, unsigned `vdisplay.cat` (Inf2Cat from the same package).
+    Version pinned to `10.0.28000.2526` (pulls `Microsoft.Windows.SDK.cpp.x64` 10.0.28000 itself).
+    The package brings its own MSBuild driver toolset and IddCx headers; the system SDK is not used.
+  - Build prerequisites: VS Build Tools with the C++ workload **and** the components
+    "C++ Spectre-mitigated libraries for x64/x86 (Latest MSVC)" (driver projects link Spectre libs) and
+    "Windows Driver Kit" (MSBuild toolset `WindowsUserModeDriver10.0`; the NuGet package has no toolset).
   - `tools/spikes/s1-signing/install.ps1` (elevated), steps in Design. `uninstall.ps1` reverses all.
   - Two signing methods tried in order: `Set-AuthenticodeSignature` on the `.cat`; if it cannot sign a
     catalog, `SignerSignEx3` (`mssign32.dll`, present on every Windows) from a tiny test program.
@@ -77,5 +82,7 @@ None. No hot path is touched.
 (filled when the spike runs)
 
 ## Open questions
-- Does the WDK NuGet package include Inf2Cat and devcon? If not, the build script falls back to a
-  system WDK install (user installs it).
+- (Answered 2026-10-22) The WDK NuGet package includes Inf2Cat and devcon: checked in the nuget.org
+  catalog file list of `10.0.28000.2526` and `10.0.26100.6584`. Paths in the package:
+  `c/bin/<ver>/x86/Inf2Cat.exe` (.NET Framework tool, with its `HardwareWorkflow` DLLs),
+  `c/tools/<ver>/x64/devcon.exe`, `c/tools/<ver>/x64/infverif.exe`. No system WDK install needed.
