@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Builds the workspace.
 #   scripts/build.sh                 debug build of the whole workspace
-#   scripts/build.sh release         release build, copies app binaries to dist/
+#   scripts/build.sh release         UI + release build (UI embedded), copies the 3 app exes to dist/
 #   scripts/build.sh debug -p NAME   build one package (e.g. mixlink-net)
 source "$(dirname "$0")/lib.sh"
 
 profile="${1:-debug}"
+RELEASE_FEATURES="mixlink-client/custom-protocol,mixlink-host/custom-protocol"
 shift || true
 
 if [[ ! -f Cargo.toml ]]; then
@@ -13,9 +14,15 @@ if [[ ! -f Cargo.toml ]]; then
   exit 1
 fi
 
+# Tauri embeds apps/<app>/ui/dist at compile time.
+if [[ "$profile" == "release" ]]; then
+  bash scripts/check-ui.sh || exit 1
+fi
+
 case "$profile" in
   debug) cargo build --workspace "$@" ;;
-  release) cargo build --workspace --release "$@" ;;
+  # custom-protocol: Tauri apps embed ui/dist instead of loading the Vite dev server.
+  release) cargo build --workspace --release --features "$RELEASE_FEATURES" "$@" ;;
   *)
     echo "usage: scripts/build.sh [debug|release] [cargo args...]"
     exit 2
@@ -24,7 +31,7 @@ esac || exit 1
 
 if [[ "$profile" == "release" ]]; then
   mkdir -p dist
-  for bin in mixlink-host mixlink-client; do
+  for bin in mixlink-host mixlink-client mixlink-stream; do
     for ext in ".exe" ""; do
       src="target/release/$bin$ext"
       if [[ -f "$src" ]]; then

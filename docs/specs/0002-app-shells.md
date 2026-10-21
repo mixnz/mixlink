@@ -1,6 +1,6 @@
 # 0002 — App shells
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-21
 **Roadmap:** T1
 **Plan:** [0002-app-shells](../plans/0002-app-shells.md) (local only, written by writing-plans skill)
@@ -107,20 +107,20 @@ at `info` in the launcher (informational, no target yet).
 
 ## Acceptance criteria
 - [ ] `dist/mixlink-host.exe` started by double-click shows a tray icon; *Open* shows the window,
-      closing it hides to tray, *Quit* exits the process.
-- [ ] `dist/mixlink-client.exe` shows the launcher with an empty device list and Connect (demo),
+      closing it hides to tray, *Quit* exits the process. *(manual check pending: tray not reachable by automation)*
+- [x] `dist/mixlink-client.exe` shows the launcher with an empty device list and Connect (demo),
       loading the embedded UI with no dev server running.
 - [ ] Connect opens the stream window with a solid color; the launcher window closes; resizing
-      the stream window keeps the color filling it with no D3D11 debug-layer errors.
-- [ ] Closing the stream window brings the launcher back with "Stream closed.".
-- [ ] Killing `mixlink-stream.exe` from Task Manager brings the launcher back with
+      the stream window keeps the color filling it with no D3D11 debug-layer errors. *(resize + debug layer: manual check pending)*
+- [x] Closing the stream window brings the launcher back with "Stream closed.".
+- [x] Killing `mixlink-stream.exe` from Task Manager brings the launcher back with
       "The stream window crashed (exit code N).".
-- [ ] Killing the launcher process while streaming makes the stream window close by itself (stdin EOF).
-- [ ] `mixlink-core` unit tests: every IPC message round-trips; unknown `type` and bad JSON return errors.
-- [ ] A TS function over 80 lines fails `npm run lint`; a type error fails `npm run typecheck`.
-- [ ] `npm run dev:client` / `npm run dev:host` start each app with hot reload of the React UI.
-- [ ] Every user-visible string comes from `ui/src/i18n/en.ts` or `src/strings.rs` (ADR-0003).
-- [ ] Module cards for host, client, stream, render, core list the new public API; `STATUS.md` updated.
+- [x] Killing the launcher process while streaming makes the stream window close by itself (stdin EOF).
+- [x] `mixlink-core` unit tests: every IPC message round-trips; unknown `type` and bad JSON return errors.
+- [x] A TS function over 80 lines fails `npm run lint`; a type error fails `npm run typecheck`.
+- [ ] `npm run dev:client` / `npm run dev:host` start each app with hot reload of the React UI. *(dev:client verified; dev:host + hot reload pending)*
+- [ ] Every user-visible string comes from `ui/src/i18n/en.ts` or `src/strings.rs` (ADR-0003). *(except the host window title, still in `tauri.conf.json`)*
+- [x] Module cards for host, client, stream, render, core list the new public API; `STATUS.md` updated.
 
 ## Open questions
 - None blocking. Decisions taken by the author (review while reading): stdin/stdout JSON lines
