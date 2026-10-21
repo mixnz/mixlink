@@ -7,10 +7,11 @@
 **Hot path:** clock and stats are called per frame: must be allocation-free.
 
 ## Planned layout
-- `config.rs`, `error.rs`, `clock.rs`, `stats.rs`, `ids.rs`
+- `ipc.rs` (+ `ipc_tests.rs`), `config.rs`, `error.rs`, `clock.rs`, `stats.rs`, `ids.rs`
 
 ## Public API
-- (none yet — fill in names of exported traits/types, one line each)
+- `ipc`: launcher <-> stream JSON-lines contract — `IPC_VERSION`, `StreamToLauncher`, `LauncherToStream`,
+  `CloseReason`, `IpcError`, `encode_line`, `decode_line`.
 
 ## Notes
 - (gotchas an AI session must know before editing this module)

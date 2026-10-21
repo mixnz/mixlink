@@ -10,7 +10,7 @@ UI (ADR-0001): host = Tauri tray app; client = Tauri launcher (React + TS) that 
 
 | ID | Task | Crates | Needs | Spec | Status |
 |---|---|---|---|---|---|
-| T1 | App shells: Tauri launcher + host tray, `mixlink-stream` empty window, launcher↔stream IPC, npm in gate/CI | host, client, stream, render | — | — | todo |
+| T1 | App shells: Tauri launcher + host tray, `mixlink-stream` empty window, launcher↔stream IPC, npm in gate/CI | host, client, stream, render | — | [0002](../specs/0002-app-shells.md) | wip |
 | T2 | Core types: ids, config, errors, monotonic clock, per-stage timestamps | core | — | — | todo |
 | T3 | Protocol: packet header + channels, packetizer / reassembler (payload ≤ 1200 B) | proto | T2 | — | todo |
 | T4 | UDP layer: socket setup, send/recv threads, SPSC queues | net | T3 | — | todo |
