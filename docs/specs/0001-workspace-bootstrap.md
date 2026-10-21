@@ -1,6 +1,6 @@
 # 0001 — Workspace bootstrap
 
-**Status:** approved
+**Status:** in-progress
 **Date:** 2026-10-21
 **Plan:** [0001-workspace-bootstrap](../plans/0001-workspace-bootstrap.md) (local only, written by writing-plans skill)
 **Crates touched:** all (`crates/*`, `apps/*`), repo root config, `scripts/`, CI
@@ -55,8 +55,8 @@ An empty but compiling Cargo workspace where every lint, limit and dependency ru
 - Added to `gate.sh` (fast and full). Documented in `scripts/README.md`.
 
 ### CI
-- Already uses `rustup show`, so adding `rust-toolchain.toml` is enough; `lint`/`test` jobs start doing work
-  once `Cargo.toml` exists (they skip cargo steps before that).
+- `lint`/`test` jobs run `rustup toolchain install`, which installs what `rust-toolchain.toml` names
+  (`rustup show` no longer installs since rustup 1.28).
 
 ## Latency impact
 None at runtime. Profiles set here define how later latency measurements are built
