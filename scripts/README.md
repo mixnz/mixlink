@@ -4,7 +4,8 @@ Bash scripts (Git Bash on Windows). Each script <= 150 lines; shared helpers in 
 
 | Script | Purpose |
 |---|---|
-| `gate.sh` | Quality gate: all checks + `cargo fmt/clippy/test`. `--fast` skips clippy/test; `--checks`, `--cargo lint\|test` are the CI jobs. |
+| `gate.sh` | Quality gate: all checks + UI + `cargo fmt/clippy/test`. `--fast` skips UI/clippy/test; `--ui` = UI only; `--checks`, `--cargo lint\|test` are the CI jobs (cargo modes run UI first). |
+| `check-ui.sh` | npm workspace: `npm ci` when the lockfile changed, then lint, typecheck, test, build (`ui/dist` for Tauri). |
 | `build.sh` | `debug` (default) or `release` build; release copies binaries to `dist/`. |
 | `ask-ci.sh` | Gate, push branch, dispatch `ci.yml` (CI runs only on dispatch and `v*` tags). `--jobs`, `--watch`. |
 | `watch-ci.sh` | Watch the run for HEAD; `--once` = report and exit (2 = running). |
