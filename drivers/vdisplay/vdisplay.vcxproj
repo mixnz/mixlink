@@ -20,9 +20,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Driver.cpp" />
+    <ClCompile Include="RenderAdapter.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Driver.h" />
+    <ClInclude Include="RenderAdapter.h" />
     <ClInclude Include="Trace.h" />
   </ItemGroup>
   <ItemGroup>
