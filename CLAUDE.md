@@ -25,8 +25,9 @@ Target: < 10 ms extra latency on wired LAN at 120 fps (see `docs/architecture/la
 | `crates/audio` | mixlink-audio | Loopback capture, Opus encode/decode, playback. |
 | `crates/input` | mixlink-input | Client input capture, host input injection. |
 | `crates/render` | mixlink-render | Client presentation (D3D11 swapchain). |
-| `apps/host` | mixlink-host | Host binary: wires capture→codec→net, tray UI. |
-| `apps/client` | mixlink-client | Client binary: device list UI, stream window. |
+| `apps/host` | mixlink-host | Host Tauri app (tray, `ui/` React): wires capture→codec→net. |
+| `apps/client` | mixlink-client | Client Tauri launcher (`ui/` React): device list, pairing; spawns stream. |
+| `apps/stream` | mixlink-stream | Stream window process (from T1): decode, present, input capture. |
 | `tools/` | — | Dev tools: latency probe, packet-loss simulator. |
 
 Dependency direction (never reverse): `apps → {capture, codec, audio, input, render, net} → proto → core`.
@@ -43,6 +44,10 @@ Crates at the same level must not depend on each other; wire them in `apps/`.
 - File size limits: `docs/conventions/file-limits.md` (code hard cap 400 lines, docs 300).
 - Code identifiers, comments, docs: English. Chat with the user: Vietnamese.
 - LF line endings everywhere.
+
+## Project skills (`.claude/skills/`) — invoke, do not skip
+- `safe-coding`: every time you write or change code.
+- `reuse-check`: before writing a UI component or helper, and before each commit.
 
 ## Workflow
 - Feature: roadmap task row (`docs/roadmap/`) → spec in `docs/specs/` (template `_template.md`)

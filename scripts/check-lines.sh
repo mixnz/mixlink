@@ -14,6 +14,7 @@ limits_for() {
     */lib.rs | */mod.rs) echo "80 150" ;;
     */tests/*.rs | *_tests.rs) echo "300 500" ;;
     *.rs) echo "250 400" ;;
+    *.ts | *.tsx | *.css) echo "150 250" ;;
     *.sh | .githooks/*) echo "120 150" ;;
     *.yml | *.yaml | *.toml) echo "150 200" ;;
   esac

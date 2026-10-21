@@ -15,6 +15,13 @@ Small files keep each AI read cheap and each change focused.
 - Split by responsibility (e.g. `encoder/nvenc.rs`, `encoder/amf.rs`), not by line count.
 - Inline `mod tests` longer than ~60 lines moves to a sibling `<name>_tests.rs`.
 
+## Frontend (TypeScript / CSS)
+| Kind | Soft limit | Hard limit |
+|---|---|---|
+| Component / module (`*.ts`, `*.tsx`) | 150 lines | 250 lines |
+| Stylesheet (`*.css`) | 150 lines | 250 lines |
+| Function / component body | 40 lines | 80 lines (eslint `max-lines-per-function`) |
+
 ## Docs (Markdown)
 | Kind | Limit |
 |---|---|

@@ -5,12 +5,12 @@ and controls it with keyboard, mouse and gamepad, all from desktop apps (no term
 **Done when:** a game on the host is playable from the client over wired LAN, with per-stage
 latency reported. Tuning to the full budget is phase 3.
 
-UI: host = tray app (egui + `tray-icon`); client = launcher (egui) that opens a separate stream window
-(`winit` + D3D11 flip-model swapchain). Video never renders inside egui (extra copy, vsync coupling).
+UI (ADR-0001): host = Tauri tray app; client = Tauri launcher (React + TS) that spawns the separate
+`mixlink-stream` process (`winit` + D3D11 flip-model swapchain). Video never renders in a webview.
 
 | ID | Task | Crates | Needs | Spec | Status |
 |---|---|---|---|---|---|
-| T1 | App shells: client launcher (egui), host tray, empty stream window (winit + D3D11) | host, client, render | — | — | todo |
+| T1 | App shells: Tauri launcher + host tray, `mixlink-stream` empty window, launcher↔stream IPC, npm in gate/CI | host, client, stream, render | — | — | todo |
 | T2 | Core types: ids, config, errors, monotonic clock, per-stage timestamps | core | — | — | todo |
 | T3 | Protocol: packet header + channels, packetizer / reassembler (payload ≤ 1200 B) | proto | T2 | — | todo |
 | T4 | UDP layer: socket setup, send/recv threads, SPSC queues | net | T3 | — | todo |

@@ -31,6 +31,14 @@ src/
 - Hardware-dependent code: integration tests behind `--features hw-tests`, skipped in CI.
 - Network logic tested with `tools/packet-sim` (loss, jitter, reorder).
 
+## Frontend (Tauri apps, `apps/<app>/ui/`)
+- React function components + hooks, TypeScript `strict`, Vite, npm (`package-lock.json` committed).
+- One folder per component: `components/<Name>/{<Name>.tsx, <Name>.module.css, index.ts}`
+  (skill `reuse-check`); hooks `useThing.ts`; Tauri calls only via `ui/src/api/`
+  (one typed wrapper per Rust command/event), never `invoke()` from components.
+- No business logic in the UI: discovery, pairing, session state live in Rust and arrive as events.
+- Styling: plain CSS modules (`Name.module.css`); no UI framework until a spec decides one.
+
 ## Naming
 - Crates `mixlink-<name>`, folders `crates/<name>`.
 - Types `PascalCase`, functions `snake_case`, constants `SCREAMING_SNAKE_CASE`.

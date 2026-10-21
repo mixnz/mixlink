@@ -17,9 +17,16 @@ mostly by AI agents (the compiler should catch as many mistakes as possible).
 - **Input:** Raw Input / XInput on client; SendInput + virtual gamepad on host.
 - **Network:** custom UDP protocol (ADR-0002), `mdns-sd` discovery,
   `reed-solomon-erasure` FEC, `aes-gcm` + `x25519-dalek` crypto.
-- **UI:** `egui` (eframe) for launcher/settings/tray; stream window is `winit` + D3D11.
+- **UI:** Tauri v2 for both apps — client launcher (device list, pairing, settings) and host tray
+  (PIN, paired devices, status). Frontend React + TypeScript (strict) + Vite, npm, in `apps/<app>/ui/`.
+  UI reaches Rust only through Tauri commands/events in the app crate; media crates never depend on Tauri.
+- **Stream window:** separate process `mixlink-stream` (`apps/stream`), `winit` + D3D11 flip-model swapchain:
+  decode, present, input capture. The launcher spawns it on Connect; webviews are closed while streaming,
+  so video never passes through a webview.
 - **Concurrency:** dedicated threads + `rtrb`/`crossbeam` queues on hot path; `tokio` control plane only.
 
 ## Consequences
 - Windows-only APIs isolated in `platform/windows` so other clients can be added later.
 - FFmpeg DLLs shipped with the app (LGPL build).
+- Node LTS + npm are build requirements; gate and CI run the frontend steps. WebView2 required on Windows.
+- Launcher ↔ stream process need a local IPC contract (defined in the T1 spec).
