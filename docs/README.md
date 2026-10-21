@@ -5,6 +5,7 @@ Read only the file you need. Every doc ≤ 300 lines.
 | File | When to read |
 |---|---|
 | `STATUS.md` | Session start: what is done, what is next. |
+| `roadmap/README.md` | Picking the next task; phases and row rules. Then read one phase file. |
 | `architecture/overview.md` | Touching data flow between crates or adding a crate. |
 | `architecture/latency-budget.md` | Any change on capture/encode/net/decode/render/input path. |
 | `architecture/protocol.md` | Touching packets, discovery, pairing, encryption. |

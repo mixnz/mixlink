@@ -2,6 +2,7 @@
 
 **Status:** draft
 **Date:** YYYY-MM-DD (day the spec was written; never changed afterwards)
+**Roadmap:** T<n> (row in `docs/roadmap/phase-*.md`; set that row to `spec` and link this file)
 **Plan:** [NNNN-name](../plans/NNNN-name.md) (local only, written by writing-plans skill)
 **Crates touched:** `crates/...`
 

@@ -2,6 +2,7 @@
 
 **Status:** done
 **Date:** 2026-10-21
+**Roadmap:** phase 0
 **Plan:** [0001-workspace-bootstrap](../plans/0001-workspace-bootstrap.md) (local only, written by writing-plans skill)
 **Crates touched:** all (`crates/*`, `apps/*`), repo root config, `scripts/`, CI
 

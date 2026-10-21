@@ -26,7 +26,8 @@ commit format, branch naming (never "claude"), LF line endings.
 4. **One commit per task.** Gate each task with CLAUDE.md's *Commands*: `cargo test -p <crate>` for what it
    touched plus `bash scripts/gate.sh --fast`; the last task runs the full `bash scripts/gate.sh`. Then commit
    that task alone. Flip the spec's status in the spec and in `docs/specs/README.md` (`in-progress` on the first
-   task, `done` on the last), and rewrite `docs/STATUS.md` in the last task's commit.
+   task, `done` on the last), and the spec's roadmap row (`**Roadmap:**` ID in `docs/roadmap/phase-*.md`:
+   `wip` on the first task, `done` on the last). Rewrite `docs/STATUS.md` in the last task's commit.
 
 **Stop and ask** only on: a failure you cannot resolve yourself, the same failure twice with nothing learned,
 or a plan step that contradicts a spec or CLAUDE.md.

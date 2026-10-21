@@ -16,8 +16,7 @@
 - Nothing.
 
 ## Next
-1. Spec `0002-lan-discovery`: mDNS + UDP broadcast, device list on client.
-2. Spec `0003-video-pipeline-mvp`: capture → NVENC → UDP → decode → present.
+- Roadmap phase 1 MVP LAN (`roadmap/phase-1-mvp-lan.md`): next task T1 app shells.
 
 ## Open questions
 - Virtual gamepad driver choice (see `architecture/overview.md` → Risks).

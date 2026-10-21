@@ -7,6 +7,7 @@ Target: < 10 ms extra latency on wired LAN at 120 fps (see `docs/architecture/la
 ## Read order — load only what the task needs
 1. This file (always loaded). Do NOT re-read it.
 2. `docs/STATUS.md` — current state and next steps. Read at session start.
+   Picking new work: `docs/roadmap/README.md` (current phase, next task) → that phase file only.
 3. The `CLAUDE.md` inside the crate/app you touch (auto-loaded when working there).
 4. Other docs only via the index `docs/README.md`, only the ones relevant to the task.
 - Never scan the whole repo. Use the module map below to jump to the right folder.
@@ -44,8 +45,9 @@ Crates at the same level must not depend on each other; wire them in `apps/`.
 - LF line endings everywhere.
 
 ## Workflow
-- Feature: spec in `docs/specs/` (template `_template.md`) → plan via writing-plans skill
-  in `docs/plans/` (gitignored) → link the plan from the spec → implement.
+- Feature: roadmap task row (`docs/roadmap/`) → spec in `docs/specs/` (template `_template.md`)
+  → plan via writing-plans skill in `docs/plans/` (gitignored) → link the plan from the spec → implement.
+  Row statuses follow `docs/roadmap/README.md` → Rules.
 - User-run commands in `.claude/commands/`: `/execute` (plan → branch, one commit per task),
   `/land` (CI green → PR → squash merge), `/watch-ci` (CI fix loop). Follow them exactly when invoked.
 - Accepted decisions live in `docs/decisions/` (ADR). Do not re-open one unless asked.

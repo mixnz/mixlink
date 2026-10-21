@@ -11,7 +11,7 @@ index="docs/README.md"
 while IFS= read -r f; do
   rel="${f#docs/}"
   case "$rel" in
-    README.md | plans/* | specs/* | decisions/*) continue ;;
+    README.md | plans/* | specs/* | decisions/* | roadmap/phase-*) continue ;;
   esac
   grep -qF "\`$rel\`" "$index" || err "$f: not listed in $index"
 done < <(repo_files | grep '^docs/.*\.md$')
@@ -25,6 +25,17 @@ while IFS= read -r f; do
     err "$f: missing '**Status:** draft|approved|in-progress|done'"
   grep -qE '^\*\*Date:\*\* [0-9]{4}-[0-9]{2}-[0-9]{2}' "$f" || err "$f: missing '**Date:** YYYY-MM-DD'"
   grep -qF "](../plans/$name.md)" "$f" || err "$f: missing plan link ](../plans/$name.md)"
+  # Roadmap: a task row T<n> that links back to this spec; "phase 0" predates task IDs.
+  roadmap="$(grep -m1 -E '^\*\*Roadmap:\*\* ' "$f" | sed 's/^\*\*Roadmap:\*\* //')"
+  if [[ "$roadmap" =~ ^(T[0-9]+)$ ]]; then
+    grep -qE "^\| ${BASH_REMATCH[1]} \|.*\]\(\.\./specs/$name\.md\)" docs/roadmap/phase-*.md ||
+      err "$f: roadmap row $roadmap must exist and link ../specs/$name.md"
+  elif [[ "$roadmap" == "phase 0" ]]; then
+    grep -qF "](../specs/$name.md)" docs/roadmap/phase-0-foundation.md ||
+      err "$f: phase-0-foundation.md must link ../specs/$name.md"
+  else
+    err "$f: missing '**Roadmap:** T<n>'"
+  fi
   grep -qF "$name" "$spec_index" || err "$f: not listed in $spec_index"
 done < <(repo_files | grep '^docs/specs/.*\.md$')
 
