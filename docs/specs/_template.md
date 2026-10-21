@@ -1,6 +1,7 @@
 # NNNN — <Feature name>
 
 **Status:** draft
+**Date:** YYYY-MM-DD (day the spec was written; never changed afterwards)
 **Plan:** [NNNN-name](../plans/NNNN-name.md) (local only, written by writing-plans skill)
 **Crates touched:** `crates/...`
 

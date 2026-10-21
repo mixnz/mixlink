@@ -1,6 +1,7 @@
 # 0001 — Workspace bootstrap
 
-**Status:** draft
+**Status:** approved
+**Date:** 2026-10-21
 **Plan:** [0001-workspace-bootstrap](../plans/0001-workspace-bootstrap.md) (local only, written by writing-plans skill)
 **Crates touched:** all (`crates/*`, `apps/*`), repo root config, `scripts/`, CI
 
@@ -10,7 +11,7 @@ An empty but compiling Cargo workspace where every lint, limit and dependency ru
 
 ## Scope
 - In:
-  - Root `Cargo.toml` workspace, toolchain pin, rustfmt/clippy config, build profiles.
+  - Root `Cargo.toml` workspace, toolchain pin, rustfmt/clippy config, build profiles, dual license files.
   - 8 library crates + 2 app binaries, empty, with dependency edges already declared.
   - `scripts/check-deps.sh` enforcing the dependency direction; wired into `gate.sh`.
   - CI uses the pinned toolchain.
@@ -22,10 +23,11 @@ An empty but compiling Cargo workspace where every lint, limit and dependency ru
 ### Root files
 | File | Content |
 |---|---|
-| `Cargo.toml` | `[workspace]` resolver 3, members `crates/*`, `apps/*`; `[workspace.package]` version 0.1.0, edition 2024, rust-version 1.97; `[workspace.lints]`; profiles |
-| `rust-toolchain.toml` | channel `1.97.1`, components `rustfmt`, `clippy` |
+| `Cargo.toml` | `[workspace]` resolver 3, members `crates/*`, `apps/*`; `[workspace.package]` version 0.1.0, edition 2024, rust-version 1.99, license `MIT OR Apache-2.0`; `[workspace.lints]`; profiles |
+| `rust-toolchain.toml` | channel `1.99.1` (exact pin; bump deliberately in its own `chore` commit), components `rustfmt`, `clippy` |
 | `rustfmt.toml` | `edition = "2024"`, `max_width = 100` |
 | `clippy.toml` | `too-many-lines-threshold = 80`, `allow-unwrap-in-tests = true`, `allow-expect-in-tests = true` |
+| `LICENSE-MIT`, `LICENSE-APACHE` | standard texts, copyright "The MixLink Authors"; every crate inherits `license.workspace = true` |
 
 ### Workspace lints (all fail the gate via `-D warnings`)
 - rust: `unsafe_op_in_unsafe_fn`, `missing_debug_implementations`.
@@ -61,15 +63,15 @@ None at runtime. Profiles set here define how later latency measurements are bui
 (`profiling` profile is the reference for numbers in specs).
 
 ## Acceptance criteria
+- [ ] `rustup show` in the repo reports `1.99.1` (auto-installed from `rust-toolchain.toml`).
 - [ ] `bash scripts/gate.sh` passes with cargo steps running (fmt, clippy, test).
 - [ ] `bash scripts/build.sh release` puts `mixlink-host.exe` and `mixlink-client.exe` in `dist/`.
 - [ ] Adding `mixlink-net` as a dependency of `mixlink-codec` makes `check-deps.sh` fail.
 - [ ] A 81-line function makes clippy fail; an `unwrap()` in a lib makes clippy fail.
 - [ ] Each module card `CLAUDE.md` still ≤ 50 lines; `docs/STATUS.md` updated.
 - [ ] CI run on GitHub is green.
+- [ ] `README.md` has a License section: dual-licensed under MIT OR Apache-2.0.
 
-## Open questions
-- License: proprietary (no license file) or open source (MIT/Apache-2.0)?
-- Pin exact toolchain `1.97.1` (reproducible, manual bumps) vs `stable` (auto, may break CI)?
-  Proposed: exact pin.
-- ADR-0001/0002 move to `accepted` when this spec is approved?
+## Decisions
+- License: `MIT OR Apache-2.0` (Rust ecosystem convention).
+- ADR-0001/0002 flip to `accepted` in the first commit of this spec once it is approved.

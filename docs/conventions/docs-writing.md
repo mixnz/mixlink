@@ -14,6 +14,7 @@ Docs are read by AI every session: optimize for few tokens and fast lookup.
 - Must link its plan `docs/plans/NNNN-kebab-name.md` (local, gitignored, written by the
   writing-plans skill). Plans are never committed; the spec is the durable record.
 - Status: `draft` -> `approved` -> `in-progress` -> `done`.
+- `**Date:** YYYY-MM-DD` = the day the spec was written; it never changes (git keeps later edits).
 
 ## ADRs (`docs/decisions/NNNN-kebab-name.md`)
 - Sections: Context, Decision, Consequences. <= 80 lines.

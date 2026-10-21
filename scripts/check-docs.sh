@@ -23,6 +23,7 @@ while IFS= read -r f; do
   [[ "$name" =~ ^[0-9]{4}-[a-z0-9-]+$ ]] || err "$f: name must be NNNN-kebab-case.md"
   grep -q '^\*\*Status:\*\* \(draft\|approved\|in-progress\|done\)' "$f" ||
     err "$f: missing '**Status:** draft|approved|in-progress|done'"
+  grep -qE '^\*\*Date:\*\* [0-9]{4}-[0-9]{2}-[0-9]{2}' "$f" || err "$f: missing '**Date:** YYYY-MM-DD'"
   grep -qF "](../plans/$name.md)" "$f" || err "$f: missing plan link ](../plans/$name.md)"
   grep -qF "$name" "$spec_index" || err "$f: not listed in $spec_index"
 done < <(repo_files | grep '^docs/specs/.*\.md$')

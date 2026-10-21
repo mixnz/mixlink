@@ -11,7 +11,7 @@
 - CI: `ci.yml` (jobs docs/lint/test) runs on dispatch only via `scripts/ask-ci.sh`; `/execute`, `/land`, `/watch-ci`.
 
 ## In progress
-- Spec 0001-workspace-bootstrap (draft, waiting for review).
+- Spec 0001-workspace-bootstrap approved; plan in `docs/plans/` (local), run with `/execute`.
 
 ## Next
 1. Spec `0001-workspace-bootstrap`: Cargo workspace, empty crates, CI lint/test.
