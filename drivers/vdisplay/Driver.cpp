@@ -18,6 +18,7 @@ Environment:
 #include "Driver.h"
 #include "Driver.tmh"
 #include "RenderAdapter.h"
+#include "FrameShare.h"
 
 using namespace std;
 using namespace Microsoft::IndirectDisp;
@@ -387,6 +388,9 @@ void SwapChainProcessor::RunCore()
         return;
     }
 
+    // MixLink spike S2: frames go to another process through FrameShare (spec 0004).
+    FrameShare Share;
+
     // Acquire and release buffers in a loop
     for (;;)
     {
@@ -425,8 +429,15 @@ void SwapChainProcessor::RunCore()
         }
         else if (SUCCEEDED(hr))
         {
+            LARGE_INTEGER AcquireQpc;
+            QueryPerformanceCounter(&AcquireQpc);
+
             // We have new frame to process, the surface has a reference on it that the driver has to release
             AcquiredBuffer.Attach(Buffer.MetaData.pSurface);
+
+            // HOT PATH: one GPU copy into the shared ring, then fence signal.
+            Share.Publish(m_Device->Device.Get(), m_Device->DeviceContext.Get(), m_Device->AdapterLuid, Buffer,
+                static_cast<UINT64>(AcquireQpc.QuadPart));
 
             // ==============================
             // TODO: Process the frame here
