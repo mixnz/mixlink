@@ -2213,6 +2213,8 @@ dependencies = [
 name = "mixlink-host"
 version = "0.1.0"
 dependencies = [
+ "env_logger",
+ "log",
  "mixlink-audio",
  "mixlink-capture",
  "mixlink-codec",
@@ -2221,6 +2223,8 @@ dependencies = [
  "mixlink-net",
  "mixlink-proto",
  "mixlink-render",
+ "tauri",
+ "tauri-build",
 ]
 
 [[package]]

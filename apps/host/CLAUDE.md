@@ -7,10 +7,12 @@
 **Hot path:** only via crates; this app wires threads and queues, no media logic here.
 
 ## Planned layout
-- `src/main.rs` (Tauri + tray), `src/commands.rs`, `src/session.rs`, `src/threads.rs`, `ui/` (React + Vite)
+- Now: `src/main.rs` (Tauri setup, close = hide), `src/tray.rs`, `src/strings.rs`, `ui/` (React + Vite, `ui/src/i18n/en.ts`)
+- Later: `src/commands.rs`, `src/session.rs`, `src/threads.rs`
 
 ## Public API
-- (none yet — fill in names of exported traits/types, one line each)
+- No Tauri commands yet. Tray menu ids: `open`, `quit`.
 
 ## Notes
-- (gotchas an AI session must know before editing this module)
+- Starts hidden (window `main`, `visible: false`); tray left click or Open shows it; X hides; Quit exits.
+- Debug builds load `devUrl` (`npm run dev:host`, port 5174); feature `custom-protocol` embeds `ui/dist`.
