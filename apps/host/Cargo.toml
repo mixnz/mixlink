@@ -14,3 +14,6 @@ mixlink-codec.workspace = true
 mixlink-audio.workspace = true
 mixlink-input.workspace = true
 mixlink-render.workspace = true
+
+[lints]
+workspace = true

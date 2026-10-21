@@ -8,3 +8,6 @@ license.workspace = true
 [dependencies]
 mixlink-proto.workspace = true
 mixlink-core.workspace = true
+
+[lints]
+workspace = true

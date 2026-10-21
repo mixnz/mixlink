@@ -17,3 +17,16 @@ mixlink-codec = { path = "crates/codec", version = "0.1.0" }
 mixlink-audio = { path = "crates/audio", version = "0.1.0" }
 mixlink-input = { path = "crates/input", version = "0.1.0" }
 mixlink-render = { path = "crates/render", version = "0.1.0" }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "warn"
+
+# All "warn": the gate runs clippy with -D warnings, so each one fails it.
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+undocumented_unsafe_blocks = "warn"
+too_many_lines = "warn"
+dbg_macro = "warn"
+print_stdout = "warn"
