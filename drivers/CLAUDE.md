@@ -27,3 +27,5 @@
 - `infverif /w` fails on the sample (DLL in `%12%\UMDF`, not DIRID 13); `/v` passes. Driver isolation
   is for T20.
 - Signing and install live in `tools/spikes/s1-signing/` (spike) and later in T20 tooling.
+- S1 verdict (spec 0003): per-machine signed catalog installs and loads (Secure Boot on, HVCI on/off).
+  UMDF files are checked at install only; install without UI (spec 0003 → Verdict lists T20 constraints).

@@ -1,6 +1,6 @@
 # 0003 — Spike S1: UMDF driver signed by a per-machine certificate
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-22
 **Roadmap:** T14
 **Plan:** [0003-spike-umdf-signing](../plans/0003-spike-umdf-signing.md) (local only, written by writing-plans skill)
@@ -71,11 +71,11 @@ Scripts change machine trust stores, so **the user runs them**; the AI session o
 None. No hot path is touched.
 
 ## Acceptance criteria
-- [ ] One script builds `vdisplay.inf/.dll/.cat` from a clean clone using only VS Build Tools + NuGet.
-- [ ] Case A: after `install.ps1`, the device is `OK` and Windows shows an extra monitor.
-- [ ] Step 5 verified: no private key for the MixLink cert exists on the machine after install.
-- [ ] Cases B–F give the expected result, or the spec records exactly what differed.
-- [ ] Results section filled: OS build, Secure Boot / HVCI / SAC state (and any SAC state change), signing method that worked,
+- [x] One script builds `vdisplay.inf/.dll/.cat` from a clean clone using only VS Build Tools + NuGet.
+- [x] Case A: after `install.ps1`, the device is `OK` and Windows shows an extra monitor.
+- [x] Step 5 verified: no private key for the MixLink cert exists on the machine after install.
+- [x] Cases B–F give the expected result, or the spec records exactly what differed.
+- [x] Results section filled: OS build, Secure Boot / HVCI / SAC state (and any SAC state change), signing method that worked,
   each case's outcome, and the verdict: ADR-0004 holds, or switch to its fallback.
 
 ## Results
@@ -85,10 +85,9 @@ test-signing off. Code Integrity logs event 3084 at boot: "WHQL driver enforceme
 **Build:** WDK/SDK NuGet `10.0.28000.2526`, VS Build Tools 2026 (MSVC 14.51), sample `bb68ed5`.
 Logs: `tools/spikes/s1-signing/out/` (local only).
 
-| Case | Expected | Observed | SAC | Log |
+| Case (run order) | Expected | Observed | SAC | Log |
 |---|---|---|---|---|
 | A | Device OK, extra monitor, no prompt | **Pass.** Catalog signed by `Set-AuthenticodeSignature` (no fallback needed); key deleted (CNG container + file checked); `pnputil` 0 (`oem18.inf`), `devcon` 0; `ROOT\DISPLAY\0000` OK, problem 0; driver-store `.cat` Valid, signer `MixLink Driver (this PC)`; setupapi: signer score Authenticode, "signed ... from a trusted publisher"; 3 monitors added (sample's `IDD_SAMPLE_MONITOR_COUNT`), screens 1 → 4, Settings > Display shows displays 1–4 extended; no prompt; no CI events | Eval | `20261022-013724-A-install` |
-
 | B | Loads again at boot | **Pass.** After reboot (boot 01:43): `ROOT\DISPLAY\0000` OK, problem 0; store `.cat` Valid; 4 screens; CI log has only boot policy events (3116/3099) and 3084 "WHQL driver enforcement" — no block event, so that enforcement does not cover this UMDF driver | Eval | `20261022-014504-B-report` |
 | F | Device, package, both certs gone | **Pass.** `pnputil /remove-device` 0, `/delete-driver oem18.inf /uninstall` 0, cert removed from Root and TrustedPublisher; `RESULT CLEAN`; screens back to 1; no `vdisplay.inf_*` in FileRepository, no `drivers\UMDF\vdisplay.dll`, no `MixLinkVDisplay` service key | Eval | `20261022-014549-F-uninstall` |
 | C | Install refused (cert not trusted) | **Pass (refused).** Catalog signed, key deleted, trust skipped; `pnputil` fails 0x800B0109 "terminated in a root certificate which is not trusted"; setupapi: "catalog file certificate does not belong to Trusted Root Certificates, and Code Integrity is enforced"; `devcon` exit 2; no monitor added; refused outright, no prompt offered | Eval | `20261022-014813-C-install` |
@@ -100,7 +99,7 @@ Logs: `tools/spikes/s1-signing/out/` (local only).
 After the runs the machine is back to its start state (`20261022-020250-final-report`): Secure Boot on,
 HVCI on, SAC Evaluation, no MixLink device, driver package or certificate.
 
-Notes on A:
+Notes:
 - First attempt (`20261022-013307`) signed fine but aborted before pnputil: the key-deletion check read an
   empty `RSACng.Key.UniqueName`. Fixed (`0bddf91`); an elevated listing of `Crypto\Keys` showed no key file
   from that run, so `Remove-Item -DeleteKey` had removed it.
@@ -112,6 +111,20 @@ Notes on A:
   Protection after install rests on the file ACLs of `System32\drivers\UMDF` (admin / TrustedInstaller),
   i.e. an attacker who can replace it is already admin. Acceptable for ADR-0004; T20 must not loosen those ACLs.
 - setupapi warns "WDF schema 2.23 when section requires 2.25" (UMDF 2.25 vs this OS's INF schema); install is not affected.
+
+### Verdict: ADR-0004 holds
+A UMDF 2 driver whose catalog is signed at install time by a fresh per-machine certificate (key deleted
+right after) installs, loads and survives a reboot on Windows 11 26H2 with Secure Boot on, test-signing off,
+HVCI on or off and SAC in Evaluation (A, B, E). Windows really checks the signature: an untrusted signer is
+refused outright (C) and a changed file is flagged (D). `Set-AuthenticodeSignature` is enough; the
+`SignerSignEx3` fallback was never needed. No fallback driver is required.
+
+Constraints carried to T20 (driver install tooling):
+- Install without UI: a tampered package (D) prompts an admin who can override it, and UMDF files are
+  checked at install only (D2). Verify the catalog before installing; fail instead of prompting.
+- Create the device node only after the package is accepted (C leaves an empty node otherwise).
+- Check key deletion from the key container and file name (`certutil` key info), not `RSACng.Key.UniqueName`.
+- Driver isolation (DIRID 13, `infverif /w`) and the WDF schema warning are still open.
 
 ## Open questions
 - (Answered 2026-10-22) The WDK NuGet package includes Inf2Cat and devcon: checked in the nuget.org
