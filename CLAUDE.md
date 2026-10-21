@@ -43,11 +43,14 @@ Crates at the same level must not depend on each other; wire them in `apps/`.
 - `unsafe` only in `platform/` or FFI modules, each block with a `// SAFETY:` comment.
 - File size limits: `docs/conventions/file-limits.md` (code hard cap 400 lines, docs 300).
 - Code identifiers, comments, docs: English. Chat with the user: Vietnamese.
+- App UI languages: English (default) + Vietnamese. Every user-visible string goes through the
+  keyed i18n layer, never hard-coded (ADR-0003).
 - LF line endings everywhere.
 
 ## Project skills (`.claude/skills/`) — invoke, do not skip
 - `safe-coding`: every time you write or change code.
 - `reuse-check`: before writing a UI component or helper, and before each commit.
+- `natural-copy`: whenever writing text an app user will read (UI, errors, tray, release notes).
 
 ## Workflow
 - Feature: roadmap task row (`docs/roadmap/`) → spec in `docs/specs/` (template `_template.md`)
