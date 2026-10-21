@@ -14,7 +14,7 @@ allowed_for() {
     mixlink-capture | mixlink-codec | mixlink-audio | mixlink-input | mixlink-render)
       echo "mixlink-core"
       ;;
-    mixlink-host | mixlink-client | mixlink-stream) echo "*" ;;
+    mixlink-host | mixlink-svc | mixlink-client | mixlink-stream) echo "*" ;;
     *) echo "?" ;;
   esac
 }

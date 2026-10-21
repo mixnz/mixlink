@@ -2,6 +2,8 @@
 
 **Status:** accepted · 2026-10-21
 
+Amended: capture by ADR-0006, host input by ADR-0007, drivers in C++ by ADR-0004, host process by ADR-0005.
+
 ## Context
 Need near-zero-latency video/input streaming, Windows gaming PCs first, codebase written
 mostly by AI agents (the compiler should catch as many mistakes as possible).

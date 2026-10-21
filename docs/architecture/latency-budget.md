@@ -4,7 +4,7 @@ Measured "glass-to-glass": game frame presented on host -> visible on client dis
 
 | Stage | Target | Technique |
 |---|---|---|
-| Capture | <= 1 ms | WGC frame pool on GPU, no CPU readback |
+| Capture | <= 1 ms | IddCx frame copied once into a shared GPU texture + fence, no CPU readback |
 | Encode | <= 3 ms | HW encoder ultra-low-latency, no B-frames, 1-frame VBV, intra-refresh |
 | Packetize + send | <= 0.5 ms | Send slices as soon as encoded, pacing to avoid burst loss |
 | Network (LAN) | <= 1 ms | Single UDP socket, DSCP EF, large socket buffers |

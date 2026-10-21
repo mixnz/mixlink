@@ -20,14 +20,16 @@ Target: < 10 ms extra latency on wired LAN at 120 fps (see `docs/architecture/la
 | `crates/core` | mixlink-core | Shared types: ids, config, errors, clock. No platform code. |
 | `crates/proto` | mixlink-proto | Wire format, packet headers, FEC, encryption framing. |
 | `crates/net` | mixlink-net | UDP transport, pacing, bitrate control, LAN discovery, (later) ICE. |
-| `crates/capture` | mixlink-capture | Host screen capture into GPU textures. |
+| `crates/capture` | mixlink-capture | Host frames from the IddCx shared texture (DDA fallback) into GPU textures. |
 | `crates/codec` | mixlink-codec | HW video encode (host) / decode (client). |
 | `crates/audio` | mixlink-audio | Loopback capture, Opus encode/decode, playback. |
-| `crates/input` | mixlink-input | Client input capture, host input injection. |
+| `crates/input` | mixlink-input | Client input capture, host HID reports (SendInput fallback). |
 | `crates/render` | mixlink-render | Client presentation (D3D11 swapchain). |
-| `apps/host` | mixlink-host | Host Tauri app (tray, `ui/` React): wires capture→codec→net. |
+| `apps/svc` | mixlink-svc | Host Windows service (SYSTEM): wires capture→codec→net, drivers, topology (ADR-0005). |
+| `apps/host` | mixlink-host | Host tray app (Tauri, `ui/` React): control UI over a named pipe to the service. |
 | `apps/client` | mixlink-client | Client Tauri launcher (`ui/` React): device list, pairing; spawns stream. |
 | `apps/stream` | mixlink-stream | Stream window process (from T1): decode, present, input capture. |
+| `drivers/` | — | UMDF drivers in C++ (WDK): `vdisplay` (IddCx), `vhid` (ADR-0004). Not in Cargo. |
 | `tools/` | — | Dev tools: latency probe, packet-loss simulator. |
 
 Dependency direction (never reverse): `apps → {capture, codec, audio, input, render, net} → proto → core`.
