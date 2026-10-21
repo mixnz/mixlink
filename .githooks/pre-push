@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Blocks pushing branches whose name contains "claude" and runs the full gate.
+while read -r local_ref _ _ _; do
+  branch="${local_ref#refs/heads/}"
+  if [[ "${branch,,}" == *claude* ]]; then
+    echo "pre-push: branch name '$branch' must not contain 'claude'"
+    exit 1
+  fi
+done
+exec bash scripts/gate.sh
