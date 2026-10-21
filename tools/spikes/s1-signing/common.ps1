@@ -91,31 +91,46 @@ function Test-S1CleanState {
     return $reasons
 }
 
-# Paths where the CNG or CAPI machine key file of a certificate lives, empty when it has no key.
-function Get-S1KeyFiles([System.Security.Cryptography.X509Certificates.X509Certificate2] $Cert) {
-    if (-not $Cert.HasPrivateKey) { return @() }
-    $crypto = Join-Path $env:ProgramData 'Microsoft\Crypto'
-    $rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($Cert)
-    try {
-        if ($rsa -is [System.Security.Cryptography.RSACng]) {
-            return @(Join-Path $crypto "Keys\$($rsa.Key.UniqueName)")
-        }
-        return @(Join-Path $crypto "RSA\MachineKeys\$($rsa.CspKeyContainerInfo.UniqueKeyContainerName)")
-    } finally { $rsa.Dispose() }
+# Parses `certutil -store` output for the key container and its unique (file) name.
+function ConvertFrom-S1CertutilKeyInfo([string[]] $Lines) {
+    $info = [pscustomobject]@{ Container = $null; UniqueName = $null; Provider = $null }
+    foreach ($line in $Lines) {
+        if ($line -match '^\s*Key Container = (.+)$') { $info.Container = $Matches[1].Trim() }
+        elseif ($line -match '^\s*Unique container name: (.+)$') { $info.UniqueName = $Matches[1].Trim() }
+        elseif ($line -match '^\s*Provider = (.+)$') { $info.Provider = $Matches[1].Trim() }
+    }
+    return $info
+}
+
+# True/false when the machine key is known to exist or not; $null when it cannot be told.
+function Test-S1MachineKey($KeyInfo) {
+    $evidence = @()
+    if ($KeyInfo.Container) {
+        $provider = New-Object System.Security.Cryptography.CngProvider ($(if ($KeyInfo.Provider) { $KeyInfo.Provider } else { 'Microsoft Software Key Storage Provider' }))
+        $evidence += [System.Security.Cryptography.CngKey]::Exists($KeyInfo.Container, $provider,
+            [System.Security.Cryptography.CngKeyOpenOptions]::MachineKey)
+    }
+    if ($KeyInfo.UniqueName) {
+        $crypto = Join-Path $env:ProgramData 'Microsoft\Crypto'
+        $evidence += (Test-Path (Join-Path $crypto "Keys\$($KeyInfo.UniqueName)")) -or
+            (Test-Path (Join-Path $crypto "RSA\MachineKeys\$($KeyInfo.UniqueName)"))
+    }
+    if ($evidence.Count -eq 0) { return $null }
+    return ($evidence -contains $true)
 }
 
 # Deletes the signing certificate and its private key from LocalMachine\My.
-# True only when both the certificate and its key file are gone.
+# True only when the certificate is gone and the key is proven gone (container and file checks).
 function Remove-S1SigningCert([System.Security.Cryptography.X509Certificates.X509Certificate2] $Cert) {
     $certPath = "Cert:\LocalMachine\My\$($Cert.Thumbprint)"
-    $keyFiles = @()
-    try { $keyFiles = Get-S1KeyFiles $Cert } catch { Write-Host "WARN: key file lookup failed: $($_.Exception.Message)" }
-    foreach ($f in $keyFiles) { Write-Host "Key file before delete: $f (exists: $(Test-Path $f))" }
+    $keyInfo = ConvertFrom-S1CertutilKeyInfo (& certutil.exe -store My $Cert.Thumbprint 2>&1)
+    Write-Host "Key before delete: container '$($keyInfo.Container)', file '$($keyInfo.UniqueName)', provider '$($keyInfo.Provider)', exists: $(Test-S1MachineKey $keyInfo)"
     if (Test-Path $certPath) { Remove-Item $certPath -DeleteKey -ErrorAction Continue }
     $certGone = -not (Test-Path $certPath)
-    $keyGone = -not ($keyFiles | Where-Object { Test-Path $_ })
-    Write-Host "Certificate removed: $certGone. Private key file removed: $keyGone."
-    return ($certGone -and $keyGone -and $keyFiles.Count -gt 0)
+    $keyExists = Test-S1MachineKey $keyInfo
+    $keyState = if ($null -eq $keyExists) { 'cannot verify (no key name found)' } else { "exists: $keyExists" }
+    Write-Host "Certificate removed: $certGone. Private key after delete: $keyState."
+    return ($certGone -and $keyExists -eq $false)
 }
 
 function Start-S1Log([string] $Case, [string] $Script) {
