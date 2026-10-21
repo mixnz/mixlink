@@ -14,6 +14,19 @@ mixlink-codec.workspace = true
 mixlink-audio.workspace = true
 mixlink-input.workspace = true
 mixlink-render.workspace = true
+tauri.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+log.workspace = true
+env_logger.workspace = true
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[features]
+# Release builds embed ui/dist instead of loading devUrl (scripts/build.sh enables it).
+custom-protocol = ["tauri/custom-protocol"]
 
 [lints]
 workspace = true

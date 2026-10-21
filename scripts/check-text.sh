@@ -13,6 +13,7 @@ done < <(grep -lIUP '\r' -- "${files[@]}")
 
 for f in "${files[@]}"; do
   [[ -s "$f" ]] || continue
+  grep -qI '' -- "$f" || continue # binary (icons, images): no final-newline rule
   # Last byte must be a newline (command substitution strips it, leaving empty).
   [[ -z "$(tail -c 1 "$f")" ]] || err "$f: missing final newline"
 done
