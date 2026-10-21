@@ -67,4 +67,4 @@ Crates at the same level must not depend on each other; wire them in `apps/`.
   (`--fast` = repo checks + fmt only). Fix every ERROR; WARN = consider splitting.
 - Build: `bash scripts/build.sh [debug|release]`.
 - While iterating, build/test one crate only: `cargo test -p mixlink-<name>`.
-- After cloning: `bash scripts/setup-hooks.sh` (pre-commit fast gate, pre-push full gate).
+- After cloning: `bash scripts/setup-hooks.sh` (pre-push: branch name check; the gate runs in `/land`).

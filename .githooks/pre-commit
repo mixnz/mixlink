@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-# Runs the fast gate before each commit. Full gate runs in CI.
-exec bash scripts/gate.sh --fast

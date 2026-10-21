@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Blocks pushing branches whose name contains "claude" and runs the full gate.
+# Blocks pushing branches whose name contains "claude". The gate runs in /land (scripts/ask-ci.sh).
 while read -r local_ref _ _ _; do
   branch="${local_ref#refs/heads/}"
   if [[ "${branch,,}" == *claude* ]]; then
@@ -7,4 +7,3 @@ while read -r local_ref _ _ _; do
     exit 1
   fi
 done
-exec bash scripts/gate.sh
