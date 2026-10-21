@@ -30,3 +30,18 @@ undocumented_unsafe_blocks = "warn"
 too_many_lines = "warn"
 dbg_macro = "warn"
 print_stdout = "warn"
+
+# Dependencies optimized even in dev so debug builds can still stream.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+debug = "line-tables-only"
+
+# Reference build for latency numbers in specs.
+[profile.profiling]
+inherits = "release"
+debug = true
