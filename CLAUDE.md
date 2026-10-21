@@ -46,6 +46,8 @@ Crates at the same level must not depend on each other; wire them in `apps/`.
 ## Workflow
 - Feature: spec in `docs/specs/` (template `_template.md`) → plan via writing-plans skill
   in `docs/plans/` (gitignored) → link the plan from the spec → implement.
+- User-run commands in `.claude/commands/`: `/execute` (plan → branch, one commit per task),
+  `/land` (CI green → PR → squash merge), `/watch-ci` (CI fix loop). Follow them exactly when invoked.
 - Accepted decisions live in `docs/decisions/` (ADR). Do not re-open one unless asked.
 - Before ending a task: update `docs/STATUS.md` (keep ≤ 80 lines, replace old content,
   do not append history) and the touched crate's `CLAUDE.md` if its public API changed.

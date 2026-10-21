@@ -1,12 +1,36 @@
 name: ci
 
+# Runs only when asked (scripts/ask-ci.sh dispatches it) and on release tags.
 on:
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: Job group to run (narrowed runs skip the others)
+        type: choice
+        default: all
+        options: [all, docs, lint, test]
   push:
-    branches: [master, dev]
-  pull_request:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
 
 jobs:
-  gate:
+  docs:
+    if: ${{ !inputs.jobs || inputs.jobs == 'all' || inputs.jobs == 'docs' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repo checks
+        run: bash scripts/gate.sh --checks
+
+  lint:
+    if: ${{ !inputs.jobs || inputs.jobs == 'all' || inputs.jobs == 'lint' }}
     runs-on: windows-latest
     defaults:
       run:
@@ -15,9 +39,24 @@ jobs:
       - name: Keep LF on checkout
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Toolchain (from rust-toolchain.toml when present)
+        run: rustup show && rustup component add rustfmt clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Gate
-        run: bash scripts/gate.sh
+      - name: fmt + clippy
+        run: bash scripts/gate.sh --cargo lint
+
+  test:
+    if: ${{ !inputs.jobs || inputs.jobs == 'all' || inputs.jobs == 'test' }}
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Keep LF on checkout
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - name: Toolchain (from rust-toolchain.toml when present)
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: Tests
+        run: bash scripts/gate.sh --cargo test

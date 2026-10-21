@@ -7,10 +7,11 @@
 
 ## Done
 - Repo structure, AI working rules, architecture drafts, ADR-0001/0002 (proposed).
-- Check scripts + `scripts/gate.sh`, `scripts/build.sh`, git hooks, CI workflow (gate on windows-latest).
+- Check scripts + `scripts/gate.sh`, `scripts/build.sh`, git hooks.
+- CI: `ci.yml` (jobs docs/lint/test) runs on dispatch only via `scripts/ask-ci.sh`; `/execute`, `/land`, `/watch-ci`.
 
 ## In progress
-- Nothing.
+- Spec 0001-workspace-bootstrap (draft, waiting for review).
 
 ## Next
 1. Spec `0001-workspace-bootstrap`: Cargo workspace, empty crates, CI lint/test.

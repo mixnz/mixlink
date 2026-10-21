@@ -4,8 +4,11 @@ Bash scripts (Git Bash on Windows). Each script <= 150 lines; shared helpers in 
 
 | Script | Purpose |
 |---|---|
-| `gate.sh` | Quality gate: all checks + `cargo fmt/clippy/test`. `--fast` skips clippy/test. |
+| `gate.sh` | Quality gate: all checks + `cargo fmt/clippy/test`. `--fast` skips clippy/test; `--checks`, `--cargo lint\|test` are the CI jobs. |
 | `build.sh` | `debug` (default) or `release` build; release copies binaries to `dist/`. |
+| `ask-ci.sh` | Gate, push branch, dispatch `ci.yml` (CI runs only on dispatch and `v*` tags). `--jobs`, `--watch`. |
+| `watch-ci.sh` | Watch the run for HEAD; `--once` = report and exit (2 = running). |
+| `ci-log-extract.sh` | Short failure extract of a run (called by `watch-ci.sh`); full log saved to a file. |
 | `check-text.sh` | LF endings, final newline, no tabs in md/toml/yml. |
 | `check-lines.sh` | File size limits (`docs/conventions/file-limits.md`). |
 | `check-links.sh` | Markdown links and `` `docs/...md` `` references exist (plans exempt). |
