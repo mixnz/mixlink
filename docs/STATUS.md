@@ -20,7 +20,7 @@
 - Host architecture ADRs accepted: 0004 UMDF-only drivers signed per machine, 0005 host pipeline in
   `mixlink-svc` service, 0006 always stream from IddCx virtual display, 0007 input via virtual HID.
 - Skill `natural-copy` for user-facing text; UI languages EN (default) + VI (ADR-0003, `en` only so far).
-- T14 spike S1 (spec 0003, branch `spike/s1-umdf-signing`, not landed yet): **ADR-0004 holds.**
+- T14 spike S1 (spec 0003): **ADR-0004 holds.**
   - `drivers/vdisplay`: IddSampleDriver renamed; `drivers/build.ps1` builds it from NuGet WDK
     `10.0.28000.2526` (needs VS Build Tools components: C++, Spectre libs, Windows Driver Kit).
   - `tools/spikes/s1-signing/`: install/uninstall/report scripts (user runs them elevated).
@@ -28,7 +28,7 @@
     untrusted signer refused; tampered DLL flagged at install but not re-checked at load.
 
 ## In progress
-- Land T14: `/land` (CI green → PR → squash merge) of `spike/s1-umdf-signing`.
+- Nothing.
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.

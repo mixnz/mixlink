@@ -16,6 +16,9 @@ Note: $ARGUMENTS
 and deleting the branch. Not authorized: force push, committing or pushing `master`, tags. CLAUDE.md rules apply.
 
 1. **Preconditions.** On `master` or uncommitted changes → stop and ask.
+   **STATUS check:** `docs/STATUS.md` must already describe the state *after* this branch merges: the task
+   under Done (no branch name, no "not landed"), nothing about landing it under In progress, Next naming the
+   next roadmap row. Stale → fix it, commit `docs(status): <message>`, then go on to step 2.
 2. **Ask CI.** `bash scripts/watch-ci.sh --once` first: exit 2 means HEAD already has a run, skip to step 4;
    exit 0 means HEAD is already green, skip to step 3 and then 5.
    **Docs/comments-only skip:** take as BASE the newest green, un-narrowed run's SHA on this branch
