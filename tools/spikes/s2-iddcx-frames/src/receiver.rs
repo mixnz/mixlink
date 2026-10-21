@@ -9,7 +9,7 @@ use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
 use windows::core::PCWSTR;
 
 use crate::d3d::{CellReader, adapters, luid_text, save_png};
-use crate::frames::{FrameTracker, RefKind, reference_qpc};
+use crate::frames::{FrameTracker, RefKind, reference_qpc, sample_capacity};
 use crate::header::{GenerationWatch, S2Slot, SLOT_COUNT, validate};
 use crate::log::RunLog;
 use crate::qpc;
@@ -105,7 +105,7 @@ pub fn run(
     let event = unsafe { CreateEventW(None, false, false, PCWSTR::null())? };
     let mut watch = GenerationWatch::default();
     let mut frames: Option<(SharedFrames, CellReader)> = None;
-    let mut tracker = FrameTracker::new((minutes * 60 * 130) as usize);
+    let mut tracker = FrameTracker::new(sample_capacity(minutes));
     let (mut ref_counts, mut diag) = ([0u64; 2], Diag::default());
     let (mut next, mut last_png, mut opens, mut pngs) = (0u64, 0u64, 0u32, 0u32);
     let mut notes = Vec::new();

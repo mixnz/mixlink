@@ -16,6 +16,23 @@ pub fn reference_qpc(present_qpc: u64, acquire_qpc: u64) -> (u64, RefKind) {
     }
 }
 
+/// Latency samples to preallocate: DWM may drive the virtual monitor faster than its mode
+/// (seen: 160 fps from a 160 Hz primary on a 120 Hz virtual mode), so size for 250 fps.
+pub fn sample_capacity(minutes: u64) -> usize {
+    (minutes * 60 * 250) as usize
+}
+
+/// Missed vsyncs between two `(PresentCount, PresentRefreshCount)` samples one present apart.
+/// Disjoint samples (first one, several presents apart, or a jump over 60 refreshes) count 0.
+pub fn vsync_glitches(prev: (u32, u32), cur: (u32, u32)) -> u32 {
+    let dp = cur.0.wrapping_sub(prev.0);
+    let dr = cur.1.wrapping_sub(prev.1);
+    if dp != 1 || dr > 60 {
+        return 0;
+    }
+    dr.saturating_sub(1)
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TrackerSummary {
     /// Frames with a new counter value (latency sampled).

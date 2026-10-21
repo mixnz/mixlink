@@ -4,7 +4,7 @@
 
 use s2_iddcx_frames::d3d::{CellReader, adapters, device_on_adapter, luid_text};
 use s2_iddcx_frames::display::{from_wide, virtual_gdi_name};
-use s2_iddcx_frames::frames::FrameTracker;
+use s2_iddcx_frames::frames::{FrameTracker, sample_capacity};
 use s2_iddcx_frames::qpc;
 use s2_iddcx_frames::report::write_run;
 use s2_iddcx_frames::util::{BoxResult, arg_u64, arg_value};
@@ -16,6 +16,9 @@ use windows::Win32::Graphics::Dxgi::{
 };
 use windows::Win32::System::StationsAndDesktops::{
     DESKTOP_ACCESS_FLAGS, DESKTOP_CONTROL_FLAGS, OpenInputDesktop, SetThreadDesktop,
+};
+use windows::Win32::UI::HiDpi::{
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
 use windows::core::Interface;
 
@@ -53,17 +56,20 @@ fn main() -> BoxResult<()> {
 
     // SAFETY: plain Win32 calls. Failing is fine on the normal desktop of a user session.
     unsafe {
+        // DuplicateOutput1 returns DXGI_ERROR_UNSUPPORTED unless the process is per-monitor DPI aware.
+        SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)?;
         if let Ok(desk) = OpenInputDesktop(DESKTOP_CONTROL_FLAGS(0), false, GENERIC_ALL) {
             let _ = SetThreadDesktop(desk);
         }
     }
 
     let gdi = virtual_gdi_name().ok_or("virtual monitor not found")?;
-    let (adapter, output) = find_output(&gdi)?;
-    let (device, ctx) = device_on_adapter(&adapter)?;
+    let (adapter, output) = find_output(&gdi).map_err(|e| format!("find_output {gdi}: {e}"))?;
+    let (device, ctx) =
+        device_on_adapter(&adapter).map_err(|e| format!("device_on_adapter: {e}"))?;
     let reader = CellReader::new(&device, DXGI_FORMAT_B8G8R8A8_UNORM)?;
-    let mut dupl = duplicate(&output, &device)?;
-    let mut tracker = FrameTracker::new((minutes * 60 * 130) as usize);
+    let mut dupl = duplicate(&output, &device).map_err(|e| format!("DuplicateOutput1: {e}"))?;
+    let mut tracker = FrameTracker::new(sample_capacity(minutes));
     let mut access_lost = 0u32;
     let deadline = qpc::now() + minutes * 60 * qpc::freq();
 

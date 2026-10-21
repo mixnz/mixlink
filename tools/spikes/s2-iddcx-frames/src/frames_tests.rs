@@ -1,6 +1,25 @@
 use super::*;
 
 #[test]
+fn vsync_glitch_counts_extra_refreshes() {
+    assert_eq!(vsync_glitches((10, 100), (11, 101)), 0);
+    assert_eq!(vsync_glitches((10, 100), (11, 103)), 2);
+}
+
+#[test]
+fn vsync_glitch_ignores_first_or_disjoint_stats() {
+    // First sample: refresh count since boot, present count from 0.
+    assert_eq!(vsync_glitches((0, 0), (1, 1_200_120)), 0);
+    // Several presents between samples (stats disjoint): not a glitch signal.
+    assert_eq!(vsync_glitches((10, 100), (14, 110)), 0);
+}
+
+#[test]
+fn capacity_covers_ten_minutes_at_240_hz() {
+    assert!(sample_capacity(10) >= 10 * 60 * 240);
+}
+
+#[test]
 fn reference_uses_acquire_when_present_later() {
     assert_eq!(reference_qpc(200, 150), (150, RefKind::Acquire));
 }

@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use s2_iddcx_frames::counter::{BLOCK, encode};
 use s2_iddcx_frames::display::virtual_gdi_name;
+use s2_iddcx_frames::frames::vsync_glitches;
 use s2_iddcx_frames::qpc;
 use s2_iddcx_frames::util::{BoxResult, arg_u64, now_stamp, out_dir};
 use windows::Win32::Foundation::{HMODULE, HWND};
@@ -173,14 +174,11 @@ impl App {
         let mut stats = DXGI_FRAME_STATISTICS::default();
         // SAFETY: valid out-pointer. Fails until the first frame is shown; that is not an error.
         if unsafe { gfx.swapchain.GetFrameStatistics(&mut stats) }.is_ok() {
-            if let Some((pc, rc)) = self.last_stats {
-                let (dp, dr) = (
-                    stats.PresentCount.wrapping_sub(pc),
-                    stats.PresentRefreshCount.wrapping_sub(rc),
-                );
-                self.glitches += dr.saturating_sub(dp);
+            let cur = (stats.PresentCount, stats.PresentRefreshCount);
+            if let Some(prev) = self.last_stats {
+                self.glitches += vsync_glitches(prev, cur);
             }
-            self.last_stats = Some((stats.PresentCount, stats.PresentRefreshCount));
+            self.last_stats = Some(cur);
         }
         let now = qpc::now();
         if now - self.sec_start >= qpc::freq() {
