@@ -36,6 +36,7 @@ if ((checks)); then
   run_step "check-lines" bash scripts/check-lines.sh
   run_step "check-links" bash scripts/check-links.sh
   run_step "check-docs" bash scripts/check-docs.sh
+  run_step "check-deps" bash scripts/check-deps.sh
 fi
 
 if ((fmt || clippy || tests)); then
