@@ -23,7 +23,8 @@
 - Skill `natural-copy` for user-facing text; UI languages EN (default) + VI (ADR-0003, `en` only so far).
 
 ## In progress
-- Nothing.
+- T14 spike S1 (spec `specs/0003-spike-umdf-signing.md`, draft) on branch `spike/s1-umdf-signing`:
+  runs on a fresh Win11 PC with SAC in Evaluation; plan to be written there.
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
