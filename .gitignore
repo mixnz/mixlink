@@ -1,6 +1,8 @@
 # Build output
 /target/
 /dist/
+/drivers/packages/
+/tools/spikes/*/out/
 node_modules/
 apps/*/ui/dist/
 **/*.rs.bk

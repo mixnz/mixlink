@@ -14,7 +14,7 @@ its spec; a failed spike switches to the fallback its ADR names before dependent
 | ID | Task | Crates | Needs | Spec | Status |
 |---|---|---|---|---|---|
 | T1 | App shells: Tauri launcher + host tray, `mixlink-stream` empty window, launcher↔stream IPC, npm in gate/CI | host, client, stream, render | — | [0002](../specs/0002-app-shells.md) | done |
-| T14 | Spike S1: UMDF driver signed by a per-machine cert installs and loads on Win11 24H2, Secure Boot on, no test-signing | drivers | — | — | todo |
+| T14 | Spike S1: UMDF driver signed by a per-machine cert installs and loads on Win11 24H2, Secure Boot on, no test-signing | drivers | — | [0003](../specs/0003-spike-umdf-signing.md) | done |
 | T15 | Spike S2: IddCx swapchain frame → shared texture + fence → another process; latency vs DDA | drivers, capture | T14 | — | todo |
 | T16 | Spike S3: UMDF HID keyboard, mouse, gamepad accepted by Windows and games; report latency | drivers, input | T14 | — | todo |
 | T17 | Spike S4: NVENC/AMF/QSV encode and WASAPI loopback from a Session 0 service | codec, audio | — | — | todo |

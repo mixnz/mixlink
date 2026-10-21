@@ -19,15 +19,22 @@
   - npm workspace: `@mixlink/i18n` + both React UIs; `bash scripts/build.sh release` → 3 exes in `dist/`.
 - Host architecture ADRs accepted: 0004 UMDF-only drivers signed per machine, 0005 host pipeline in
   `mixlink-svc` service, 0006 always stream from IddCx virtual display, 0007 input via virtual HID.
-  Overview, module map, module cards and phase-1 roadmap updated (spikes S1–S5 = T14–T18).
 - Skill `natural-copy` for user-facing text; UI languages EN (default) + VI (ADR-0003, `en` only so far).
+- T14 spike S1 (spec 0003, branch `spike/s1-umdf-signing`, not landed yet): **ADR-0004 holds.**
+  - `drivers/vdisplay`: IddSampleDriver renamed; `drivers/build.ps1` builds it from NuGet WDK
+    `10.0.28000.2526` (needs VS Build Tools components: C++, Spectre libs, Windows Driver Kit).
+  - `tools/spikes/s1-signing/`: install/uninstall/report scripts (user runs them elevated).
+  - Win11 26H2, Secure Boot on: per-machine signed catalog installs, loads, survives reboot, HVCI on/off;
+    untrusted signer refused; tampered DLL flagged at install but not re-checked at load.
 
 ## In progress
-- Nothing.
+- Land T14: `/land` (CI green → PR → squash merge) of `spike/s1-umdf-signing`.
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
-- Roadmap phase 1 (`roadmap/phase-1-mvp-lan.md`): T14 spike S1 (per-machine signed UMDF driver).
+- Roadmap phase 1 (`roadmap/phase-1-mvp-lan.md`): T15 spike S2 (IddCx frames → shared texture), T16 spike S3
+  (UMDF HID). T20 must follow the constraints in spec 0003 → Verdict (non-interactive install).
 
 ## Open questions
 - Roadmap row for the language switch (EN/VI setting + `vi` strings) not added yet.
+- CI has no WDK build yet (T20); driver build is local only.

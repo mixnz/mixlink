@@ -6,8 +6,9 @@
 **Depends on:** any crate.
 **Hot path:** no.
 
-## Planned layout
-- `latency-probe/`, `packet-sim/`
+## Layout
+- `latency-probe/`, `packet-sim/` (planned)
+- `spikes/s1-signing/`: spike S1 (T14) install/uninstall/report scripts, PowerShell; see its README.
 
 ## Public API
 - (none yet — fill in names of exported traits/types, one line each)
