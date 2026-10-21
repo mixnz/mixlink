@@ -8,6 +8,7 @@ Bash scripts (Git Bash on Windows). Each script <= 150 lines; shared helpers in 
 | `build.sh` | `debug` (default) or `release` build; release copies binaries to `dist/`. |
 | `ask-ci.sh` | Gate, push branch, dispatch `ci.yml` (CI runs only on dispatch and `v*` tags). `--jobs`, `--watch`. |
 | `watch-ci.sh` | Watch the run for HEAD; `--once` = report and exit (2 = running). |
+| `ci-skippable.sh` | `BASE [TARGET]`: exit 0 when only `*.md` / Rust comment lines changed (used by `/land`). |
 | `ci-log-extract.sh` | Short failure extract of a run (called by `watch-ci.sh`); full log saved to a file. |
 | `check-text.sh` | LF endings, final newline, no tabs in md/toml/yml. |
 | `check-lines.sh` | File size limits (`docs/conventions/file-limits.md`). |

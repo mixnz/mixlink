@@ -18,13 +18,19 @@ and deleting the branch. Not authorized: force push, committing or pushing `mast
 1. **Preconditions.** On `master` or uncommitted changes → stop and ask.
 2. **Ask CI.** `bash scripts/watch-ci.sh --once` first: exit 2 means HEAD already has a run, skip to step 4;
    exit 0 means HEAD is already green, skip to step 3 and then 5.
+   **Docs/comments-only skip:** take as BASE the newest green, un-narrowed run's SHA on this branch
+   (`gh run list --branch <branch> --workflow ci.yml --status success --json databaseId,headSha`; un-narrowed =
+   `gh run view <id> --json jobs --jq '[.jobs[]|select(.conclusion=="skipped")]|length'` is `0`), or
+   `git merge-base origin/master HEAD` when the branch has none. If `bash scripts/ci-skippable.sh BASE` exits 0
+   (only `*.md` files and Rust comment lines changed), CI has nothing new to say: run `bash scripts/gate.sh --fast`,
+   `git push origin <branch>`, do not dispatch, skip to step 3 and then 5, and name BASE's run in the report.
    Otherwise `bash scripts/ask-ci.sh` (it runs the gate; red gate → fix, commit, retry).
    `gh workflow run` refusing with "not found" / "no workflow_dispatch" means `ci.yml` is not on remote
    `master` yet → stop and ask (pushing `master` is the user's call).
 3. **PR.** `gh pr view` — reuse it if one exists, else `gh pr create --base master` with a `## Summary`-only body.
 4. **Watch.** `bash scripts/watch-ci.sh` in the background. Red → classify and fix exactly as `/watch-ci` says
    (`.claude/commands/watch-ci.md`: its table, gate, red flags), one commit, back to step 2.
-   Done only when an `all` run is green on HEAD.
+   Done only when an `all` run is green on HEAD, or HEAD passes the docs/comments-only skip of step 2.
 5. **Merge.** Write `<type>(<scope>): <message> (#id)` to a file in the scratchpad, then via PowerShell:
    `gh pr merge <id> --squash --delete-branch --body-file <path>`.
 6. **Clean up.** `git checkout master`, `git pull`, `git branch -D <branch>` if still there, `git fetch --prune`.
