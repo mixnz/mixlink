@@ -69,7 +69,6 @@ None at runtime. Profiles set here define how later latency measurements are bui
 - [x] Adding `mixlink-net` as a dependency of `mixlink-codec` makes `check-deps.sh` fail.
 - [x] A 81-line function makes clippy fail; an `unwrap()` in a lib makes clippy fail.
 - [x] Each module card `CLAUDE.md` still ≤ 50 lines; `docs/STATUS.md` updated.
-- [x] CI run on GitHub is green (run 39612663432).
 - [x] `README.md` has a License section: dual-licensed under MIT OR Apache-2.0.
 
 ## Decisions
