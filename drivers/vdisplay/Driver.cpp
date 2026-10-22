@@ -21,6 +21,7 @@ Environment:
 #include "FrameShare.h"
 #include "Levers.h"
 #include "SurfaceShare.h"
+#include "SwapChain12.h"
 
 using namespace std;
 using namespace Microsoft::IndirectDisp;
@@ -377,6 +378,23 @@ void SwapChainProcessor::Run()
 
 void SwapChainProcessor::RunCore()
 {
+    // MixLink spike S2b, L4: D3D12 swapchain with our own copy queue. L2/L3 are D3D11-only.
+    HRESULT L4Hr = S_OK;
+    if ((m_Levers & S2_LEVER_L4_D3D12) != 0)
+    {
+        LeverReport Levers12;
+        Levers12.Requested = m_Levers;
+        ApplyCpuLever(Levers12, m_L1Hr);
+        Levers12.Hr[1] = (m_Levers & S2_LEVER_L2_GPU) != 0 ? E_NOTIMPL : S_OK;
+        Levers12.Hr[2] = (m_Levers & S2_LEVER_L3_NO_COPY) != 0 ? E_NOTIMPL : S_OK;
+        L4Hr = RunCore12(m_hSwapChain, m_Device->Adapter.Get(), m_Device->AdapterLuid, m_hAvailableBufferEvent,
+            m_hTerminateEvent.Get(), Levers12);
+        if (SUCCEEDED(L4Hr))
+        {
+            return;
+        }
+    }
+
     // Get the DXGI device interface
     ComPtr<IDXGIDevice> DxgiDevice;
     HRESULT hr = m_Device->Device.As(&DxgiDevice);
@@ -401,6 +419,7 @@ void SwapChainProcessor::RunCore()
     ApplyCpuLever(Levers, m_L1Hr);
     ApplyGpuLever(Levers, DxgiDevice.Get());
     Levers.Active |= Levers.Requested & S2_LEVER_L3_NO_COPY; // until the first share attempt fails
+    Levers.Hr[3] = L4Hr; // L4 requested but could not start: D3D11 runs instead
     Share.SetLevers(Levers);
     SurfaceShare Surfaces;
 
