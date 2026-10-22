@@ -13,7 +13,7 @@ use crate::diag::Diag;
 use crate::framelog::{FrameLog, FrameRecord};
 use crate::frames::{FrameTracker, RefKind, reference_qpc, sample_capacity};
 use crate::header::{GenerationWatch, SLOT_COUNT, validate};
-use crate::levers::lever_report;
+use crate::levers::{ReceiverLevers, apply_receiver_levers, lever_report};
 use crate::log::RunLog;
 use crate::qpc;
 use crate::report::write_run;
@@ -67,6 +67,7 @@ pub fn run(
     let (mut ref_counts, mut diag) = ([0u64; 2], Diag::default());
     let (mut next, mut last_png, mut opens, mut pngs) = (0u64, 0u64, 0u32, 0u32);
     let mut notes = Vec::new();
+    let mut rx_levers: Option<ReceiverLevers> = None;
 
     while !stop.load(Ordering::Relaxed) && qpc::now() < deadline {
         let h = section.header();
@@ -98,6 +99,13 @@ pub fn run(
                     let levers = lever_report(&h);
                     log.line(&levers);
                     notes.push(levers);
+                    drop(rx_levers.take()); // revert the previous generation's MMCSS first
+                    let applied = apply_receiver_levers(h.levers_active, &pair.0.device);
+                    for note in applied.notes() {
+                        log.line(note);
+                        notes.push(note.clone());
+                    }
+                    rx_levers.replace(applied); // held (RAII) until the next generation or the end
                     next = h.latest_seq + 1;
                     frames = Some(pair);
                 }

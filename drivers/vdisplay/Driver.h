@@ -85,6 +85,7 @@ namespace Microsoft
             std::shared_ptr<Direct3DDevice> m_Device;
             HANDLE m_hAvailableBufferEvent;
             UINT32 m_Levers = 0; // spike S2b lever bits for this swapchain (Levers.h)
+            HRESULT m_L1Hr = S_OK; // result of the L1 MMCSS setup in Run()
             Microsoft::WRL::Wrappers::Thread m_hThread;
             Microsoft::WRL::Wrappers::Event m_hTerminateEvent;
         };

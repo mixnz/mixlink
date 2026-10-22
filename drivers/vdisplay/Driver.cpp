@@ -357,11 +357,9 @@ void SwapChainProcessor::Run()
 {
     // For improved performance, make use of the Multimedia Class Scheduler Service, which will intelligently
     // prioritize this thread for improved throughput in high CPU-load scenarios.
-    DWORD AvTask = 0;
-    HANDLE AvTaskHandle = AvSetMmThreadCharacteristicsW(L"Distribution", &AvTask);
-
-    // MixLink spike S2b: levers are read once per swapchain (spec 0005).
+    // MixLink spike S2b: levers are read once per swapchain (spec 0005); L1 picks the MMCSS task.
     m_Levers = ReadLeverMask();
+    HANDLE AvTaskHandle = EnterFrameThreadPriority(m_Levers, &m_L1Hr);
 
     RunCore();
 
@@ -370,7 +368,10 @@ void SwapChainProcessor::Run()
     WdfObjectDelete((WDFOBJECT)m_hSwapChain);
     m_hSwapChain = nullptr;
 
-    AvRevertMmThreadCharacteristics(AvTaskHandle);
+    if (AvTaskHandle != nullptr)
+    {
+        AvRevertMmThreadCharacteristics(AvTaskHandle);
+    }
 }
 
 void SwapChainProcessor::RunCore()
@@ -396,6 +397,8 @@ void SwapChainProcessor::RunCore()
     FrameShare Share;
     LeverReport Levers;
     Levers.Requested = m_Levers;
+    ApplyCpuLever(Levers, m_L1Hr);
+    ApplyGpuLever(Levers, DxgiDevice.Get());
     Share.SetLevers(Levers);
 
     // Acquire and release buffers in a loop
