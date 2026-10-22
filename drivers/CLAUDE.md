@@ -4,12 +4,17 @@
 
 **Purpose:** Our own UMDF 2 drivers, signed per machine at install time (ADR-0004). Not in Cargo.
 **Depends on:** WDK + SDK from NuGet (`10.0.28000.2526`, pinned in `vdisplay/packages.config`).
-**Hot path:** yes once S2 lands (IddCx swapchain); not yet.
+**Hot path:** yes: `SwapChainProcessor::RunCore` → `FrameShare::Publish` per frame.
 
 ## Layout
 - `vdisplay/`: IddCx virtual display. Microsoft `IddSampleDriver` (Windows-driver-samples
-  `bb68ed5e770bce04dc5395ec9258dafab034184d`, MIT, `vdisplay/LICENSE`), renamed only:
+  `bb68ed5e770bce04dc5395ec9258dafab034184d`, MIT, `vdisplay/LICENSE`), renamed:
   hardware ID `Root\MixLinkVDisplay`, files `vdisplay.inf/.dll/.cat`. Code still uses `IddSample*` names.
+  - S2 (spec 0004): one monitor, preferred mode 2560x1440@120 (`Driver.cpp`).
+  - `FrameShare.{h,cpp}`: 4 shared NT-handle textures + shared fence + `Global\MixLinkS2Frames` header
+    (SYSTEM + LocalService). Layout mirrored in `tools/spikes/s2-iddcx-frames/src/header.rs`.
+  - `RenderAdapter.{h,cpp}`: `PickRenderAdapter` (most VRAM; hybrid = >1 DXGI hardware entry: wrong on
+    single-GPU machines that list the GPU twice, fix in T21).
 - `Directory.Build.props`: imports the NuGet WDK/SDK props from `drivers/packages/` (gitignored).
 - `build.ps1`: restore + build + Inf2Cat → `target/drivers/vdisplay/pkg/` (catalog unsigned).
 
@@ -27,5 +32,7 @@
 - `infverif /w` fails on the sample (DLL in `%12%\UMDF`, not DIRID 13); `/v` passes. Driver isolation
   is for T20.
 - Signing and install live in `tools/spikes/s1-signing/` (spike) and later in T20 tooling.
+- New `.cpp` files include `Driver.h` first (UMDF_USING_NTSTATUS needs it before WRL).
+- S2 verdict (spec 0004): frame sharing works from Session 0; p99 above DDA's → T23 before ADR-0006 changes.
 - S1 verdict (spec 0003): per-machine signed catalog installs and loads (Secure Boot on, HVCI on/off).
   UMDF files are checked at install only; install without UI (spec 0003 → Verdict lists T20 constraints).

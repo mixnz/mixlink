@@ -1,6 +1,6 @@
 # 0004 — Spike S2: IddCx frames into a shared texture for the service
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-22
 **Roadmap:** T15
 **Plan:** [0004-spike-iddcx-frames](../plans/0004-spike-iddcx-frames.md) (local only, written by writing-plans skill)
@@ -103,13 +103,13 @@ Adds one GPU copy (2560x1440 BGRA, ~14.7 MB) per frame in the driver and one fen
 spike measures. No CPU copy on the frame path.
 
 ## Acceptance criteria
-- [ ] A: IddCx latency p99 ≤ 1 ms, and p99(A) ≤ p99(B).
-- [ ] A: lost frames ≤ 0.1 % over 10 min at 120 fps.
-- [ ] H: no CPU copy on the frame path (counter cell readback is harness only).
-- [ ] C–F: PNGs saved by `s2-svc` for desktop, UAC, lock screen and login screen after reboot (not logged in),
-  with the virtual monitor present from boot.
-- [ ] G: on iGPU + dGPU, frames are on the dGPU (LUID recorded); with one GPU, Results says so.
-- [ ] Results section filled (cases table with Expected / Observed / Log, as in spec 0003) and the verdict:
+- [ ] A: IddCx latency p99 ≤ 1 ms, and p99(A) ≤ p99(B). **Not met** (p99 1 776–2 670 µs; DDA 881–1 903 µs) → T23.
+- [x] A: lost frames ≤ 0.1 % over 10 min at 120 fps (A 0 %, AP 0.099 %).
+- [x] H: no CPU copy on the frame path (counter cell readback is harness only).
+- [x] C–F: PNGs saved by `s2-svc` for desktop, UAC, lock screen and login screen after reboot (not logged in),
+  with the virtual monitor present from boot (lock/login need the virtual monitor as main display: E2, F).
+- [x] G: on iGPU + dGPU, frames are on the dGPU (LUID recorded); with one GPU, Results says so.
+- [x] Results section filled (cases table with Expected / Observed / Log, as in spec 0003) and the verdict:
   ADR-0006 holds, or switch to DDA on the virtual monitor (ADR-0006 fallback) with ADR-0005's fallback.
 
 ## Results
@@ -153,6 +153,20 @@ Measurement notes:
 - **DDA needs per-monitor DPI awareness**: `DuplicateOutput1` returns `DXGI_ERROR_UNSUPPORTED` otherwise.
 - Driver: `PickRenderAdapter` counts DXGI hardware adapters, so the duplicate RTX 5070 entry makes this
   single-GPU machine look hybrid. T21 must compare physical GPUs (vendor/device/subsystem IDs), not entries.
+
+### Verdict: latency criteria not met; ADR-0006 stays, pending T23
+The IddCx shared-texture path works end to end from a LocalSystem service in Session 0: no CPU copy, ≤ 0.1 %
+lost, survives new swapchains, and carries the UAC secure desktop, the lock screen and the login screen after
+reboot (C, D, E2, F, A2, H). It fails criterion 1: p99 1.8–2.7 ms, above 1 ms and above DDA's p99.
+Decision (user, 2026-10-22): **ADR-0006 is not changed yet.** T23 tries to cut the IddCx tail (driver copy
+thread / GPU priority, removing the 14.7 MB copy) and measures again with the same harness. If T23 still
+fails criterion 1, switch to DDA on the virtual monitor (ADR-0006 fallback) with ADR-0005's fallback.
+
+Constraints carried forward (both frame paths):
+- Virtual monitor must be the **main display** while streaming: composition rate and lock/login screens
+  follow the main display (ADR-0006 topology 1 or 2). T21.
+- Hybrid detection by physical GPU, not by DXGI entry count. LUIDs change per boot: never persist one. T21.
+- A DDA reader must be per-monitor DPI aware and back off on `DXGI_ERROR_ACCESS_LOST`. T7 (if fallback).
 
 ## Open questions
 - (Answered 2026-10-22) `PresentDisplayQPCTime` is documented as the time the surface "should be

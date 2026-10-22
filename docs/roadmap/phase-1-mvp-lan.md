@@ -15,7 +15,8 @@ its spec; a failed spike switches to the fallback its ADR names before dependent
 |---|---|---|---|---|---|
 | T1 | App shells: Tauri launcher + host tray, `mixlink-stream` empty window, launcher↔stream IPC, npm in gate/CI | host, client, stream, render | — | [0002](../specs/0002-app-shells.md) | done |
 | T14 | Spike S1: UMDF driver signed by a per-machine cert installs and loads on Win11 24H2, Secure Boot on, no test-signing | drivers | — | [0003](../specs/0003-spike-umdf-signing.md) | done |
-| T15 | Spike S2: IddCx swapchain frame → shared texture + fence → another process; latency vs DDA | drivers, capture | T14 | [0004](../specs/0004-spike-iddcx-frames.md) | wip |
+| T15 | Spike S2: IddCx swapchain frame → shared texture + fence → another process; latency vs DDA | drivers, capture | T14 | [0004](../specs/0004-spike-iddcx-frames.md) | done |
+| T23 | Spike S2b: cut the IddCx frame-path tail (driver copy priority, zero-copy ring), re-measure vs DDA with the S2 harness | drivers, capture | T15 | — | todo |
 | T16 | Spike S3: UMDF HID keyboard, mouse, gamepad accepted by Windows and games; report latency | drivers, input | T14 | — | todo |
 | T17 | Spike S4: NVENC/AMF/QSV encode and WASAPI loopback from a Session 0 service | codec, audio | — | — | todo |
 | T18 | Spike S5: Vanguard, EAC, BattlEye, FACEIT titles run and accept input with our drivers installed | drivers | T15, T16 | — | todo |
@@ -28,7 +29,7 @@ its spec; a failed spike switches to the fallback its ADR names before dependent
 | T22 | Virtual HID driver: keyboard, mouse (relative + absolute), gamepad; IOCTL report feed | drivers, input | T16, T20 | — | todo |
 | T5 | LAN discovery (mDNS + broadcast fallback) in the service, host list in the launcher | net, svc, client | T4, T19 | — | todo |
 | T6 | Pairing: PIN on host tray, entry on client, X25519 + AES-128-GCM session | net, proto, svc, host, client | T5 | — | todo |
-| T7 | Capture from the IddCx shared texture (DDA fallback) → NVENC encode via FFmpeg, GPU zero-copy | capture, codec | T2, T21 | — | todo |
+| T7 | Capture from the IddCx shared texture (DDA fallback) → NVENC encode via FFmpeg, GPU zero-copy | capture, codec | T2, T21, T23 | — | todo |
 | T8 | D3D11VA decode via FFmpeg → present in the stream window | codec, render | T1, T2 | — | todo |
 | T9 | End-to-end video host→client, virtual monitor in client mode, cursor channel, per-stage latency report | svc, client, stream | T6, T7, T8 | — | todo |
 | T10 | Keyboard/mouse: Raw Input + pointer lock on client, virtual HID on host (SendInput fallback), redundant packets | input, svc, stream | T9, T22 | — | todo |

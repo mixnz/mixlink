@@ -26,14 +26,23 @@
   - `tools/spikes/s1-signing/`: install/uninstall/report scripts (user runs them elevated).
   - Win11 26H2, Secure Boot on: per-machine signed catalog installs, loads, survives reboot, HVCI on/off;
     untrusted signer refused; tampered DLL flagged at install but not re-checked at load.
+- T15 spike S2 (spec 0004, branch `spike/s2-iddcx-frames`, not landed yet): **latency criteria not met,
+  ADR-0006 kept pending T23.**
+  - `drivers/vdisplay`: one virtual monitor 2560x1440@120, `FrameShare` (4 shared textures + fence +
+    `Global\MixLinkS2Frames` header), render-adapter pick.
+  - `tools/spikes/s2-iddcx-frames/`: pattern app, receiver service `MixLinkS2`, DDA probe, scripts.
+  - Service in Session 0 gets every frame (≤ 0.1 % lost, no CPU copy), UAC/lock/login screens, survives
+    new swapchains. IddCx p99 1.8–2.7 ms vs DDA 0.9–1.9 ms.
+  - Virtual monitor must be the main display (composition rate and lock/login follow it).
 
 ## In progress
-- Nothing.
+- Land T15: `/land` of `spike/s2-iddcx-frames`. Test machine still has the S2 driver and service
+  `MixLinkS2`: user runs `uninstall-svc.ps1`, then `s1-signing/uninstall.ps1`.
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
-- Roadmap phase 1 (`roadmap/phase-1-mvp-lan.md`): T15 spike S2 (IddCx frames → shared texture), T16 spike S3
-  (UMDF HID). T20 must follow the constraints in spec 0003 → Verdict (non-interactive install).
+- Roadmap phase 1: T23 (cut the IddCx tail, re-measure; fails → DDA fallback), T16 spike S3 (UMDF HID).
+  T20 follows spec 0003 → Verdict; T21 follows spec 0004 → Verdict constraints.
 
 ## Open questions
 - Roadmap row for the language switch (EN/VI setting + `vi` strings) not added yet.
