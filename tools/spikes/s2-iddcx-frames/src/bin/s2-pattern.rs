@@ -66,7 +66,10 @@ impl App {
                     Some(&src_box),
                 );
             }
-            gfx.swapchain.Present(1, DXGI_PRESENT(0)).ok()?;
+            gfx.swapchain
+                .Present(1, DXGI_PRESENT(0))
+                .ok()
+                .map_err(|e| format!("Present (frame {}): {e}", self.frame))?;
         }
         self.presents += 1;
         let mut stats = DXGI_FRAME_STATISTICS::default();
@@ -102,10 +105,7 @@ impl ApplicationHandler for App {
         };
         let attrs = Window::default_attributes()
             .with_title("MixLink S2 pattern")
-            .with_fullscreen(Some(Fullscreen::Borderless(Some(monitor))))
-            // Spec 0005: once the virtual monitor is the main display, new windows open on it; on top,
-            // nothing covers the counter cell (S2b screening lost rounds to that).
-            .with_window_level(WindowLevel::AlwaysOnTop);
+            .with_fullscreen(Some(Fullscreen::Borderless(Some(monitor))));
         let result = event_loop
             .create_window(attrs)
             .map_err(|e| e.into())
@@ -116,6 +116,11 @@ impl ApplicationHandler for App {
             });
         match result {
             Ok((w, gfx)) => {
+                // Spec 0005: once the virtual monitor is the main display, new windows open on it; on
+                // top, nothing covers the counter cell (S2b screening lost rounds to that). Set after
+                // the swapchain exists: as a creation attribute, CreateSwapChainForHwnd fails with
+                // DXGI_ERROR_INVALID_CALL on a borderless fullscreen window.
+                w.set_window_level(WindowLevel::AlwaysOnTop);
                 self.window = Some(w);
                 self.gfx = Some(gfx);
             }
