@@ -2,7 +2,7 @@
 
 > Replace content each update; keep ≤ 80 lines. History lives in git, not here.
 
-**Updated:** 2026-10-22
+**Updated:** 2026-10-23
 **Phase:** 1 — LAN MVP
 
 ## Done
@@ -26,21 +26,25 @@
   - `tools/spikes/s1-signing/`: install/uninstall/report scripts (user runs them elevated).
   - Win11 26H2, Secure Boot on: per-machine signed catalog installs, loads, survives reboot, HVCI on/off;
     untrusted signer refused; tampered DLL flagged at install but not re-checked at load.
-- T15 spike S2 (spec 0004): **latency criteria not met, ADR-0006 kept pending T23.**
-  - `drivers/vdisplay`: one virtual monitor 2560x1440@120, `FrameShare` (4 shared textures + fence +
-    `Global\MixLinkS2Frames` header), render-adapter pick.
+- T15 spike S2 (spec 0004): IddCx frames reach a Session 0 service (≤ 0.1 % lost, no CPU copy, UAC/lock/
+  login screens, new swapchains); p99 1.8–2.7 ms failed the latency criterion → T23.
+  - `drivers/vdisplay`: one virtual monitor 2560x1440@120, `FrameShare` ring + fence + shared header.
   - `tools/spikes/s2-iddcx-frames/`: pattern app, receiver service `MixLinkS2`, DDA probe, scripts.
-  - Service in Session 0 gets every frame (≤ 0.1 % lost, no CPU copy), UAC/lock/login screens, survives
-    new swapchains. IddCx p99 1.8–2.7 ms vs DDA 0.9–1.9 ms.
-  - Virtual monitor must be the main display (composition rate and lock/login follow it).
+- T23 spike S2b (spec 0005): **ADR-0006 holds.** With L1 (MMCSS "Pro Audio" critical) + L3 (share the IddCx
+  surface itself, no 14.7 MB copy): IddCx p99 256 µs vs DDA 422 µs, 0 lost over 5 rounds.
+  - Driver levers switchable at runtime (registry), header v2; harness runs A/B rounds unattended and pools
+    them (`run-case.ps1 -Levers -Rounds`, `s2-ctl`), pattern always on top, covered rounds flagged.
+  - Build `vdisplay` for IddCx 1.4: a 1.11 build breaks adapter init on 24H2 (IddCx 1.10). L4 (D3D12) untested.
+  - Virtual monitor must be the main display (composition rate, lock/login, and the lower baseline).
 
 ## In progress
-- Nothing. Test machine is clean (S2 driver and service removed).
+- Nothing. Test machine still has the S2b driver, service `MixLinkS2` and registry key installed, and the
+  virtual monitor as main display: clean-up commands in spec 0005 → Verdict (user runs them).
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
-- Roadmap phase 1: T23 (cut the IddCx tail, re-measure; fails → DDA fallback), T16 spike S3 (UMDF HID).
-  T20 follows spec 0003 → Verdict; T21 follows spec 0004 → Verdict constraints.
+- Roadmap phase 1: T16 spike S3 (UMDF HID). T20 follows spec 0003 → Verdict; T21 follows spec 0004 and
+  0005 → Verdict constraints; T7 follows spec 0005 → Verdict (read the surface itself, encode within a frame).
 
 ## Open questions
 - Roadmap row for the language switch (EN/VI setting + `vi` strings) not added yet.

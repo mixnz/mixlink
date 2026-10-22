@@ -1,6 +1,6 @@
 # 0005 — Spike S2b: cut the IddCx frame-path tail
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-22
 **Roadmap:** T23
 **Plan:** [0005-spike-iddcx-tail](../plans/0005-spike-iddcx-tail.md) (local only, written by writing-plans skill)
@@ -84,14 +84,17 @@ added on the frame path. Registry read happens once per swapchain, never per fra
 harness above.
 
 ## Acceptance criteria
-- [ ] Each lever (L1–L4) has a Results row: applied or not (HRESULT), pooled A p99 vs baseline, lost.
-- [ ] Final run (GPU default, 5 rounds): pooled IddCx p99 ≤ 1 ms **and** ≤ pooled DDA p99, pooled
+- [x] Each lever (L1–L4) has a Results row: applied or not (HRESULT), pooled A p99 vs baseline, lost.
+  (L4: not available on IddCx 1.10.)
+- [x] Final run (GPU default, 5 rounds): pooled IddCx p99 ≤ 1 ms **and** ≤ pooled DDA p99, pooled
   IddCx lost ≤ 0.1 %. Met → ADR-0006 holds. Not met → verdict is the DDA fallback.
-- [ ] Every round with lost > 1 % has a stated cause from its burst report; a cause in the IddCx path
-  counts as an IddCx failure, not a discarded round.
-- [ ] Every summary carries the run conditions listed above.
-- [ ] Spec 0004 Results corrected (round 3 conditions, A2 lost).
-- [ ] Verdict written; if fallback, ADR-0006 and the T7/T21 rows' wording updated (roadmap change asked first).
+  **Met:** 256 µs ≤ 1 000 µs and ≤ 422 µs; lost 0 %.
+- [x] Every round with lost > 1 % has a stated cause from its burst report; a cause in the IddCx path
+  counts as an IddCx failure, not a discarded round. (Only in the discarded first run: covered pattern.)
+- [x] Every summary carries the run conditions listed above.
+- [x] Spec 0004 Results corrected (round 3 conditions, A2 lost).
+- [x] Verdict written; if fallback, ADR-0006 and the T7/T21 rows' wording updated (roadmap change asked first).
+  (Not fallback: ADR-0006 and the roadmap rows unchanged.)
 
 ## Results
 **Machine:** as spec 0004 (Windows 11 Pro 26H2 build 26300.9711, Secure Boot on, HVCI on, SAC off, one GPU
@@ -133,7 +136,29 @@ Measurement notes:
 - No round of the repeated run lost > 1 %; baseline A round 1 lost 0.695 % (98 undecodable, one burst).
 - Spec 0004 Results corrected (round 3 = first "Prefer maximum performance" round; A2 lost 14.9 %).
 
+### Verdict: ADR-0006 holds
+With L1 + L3 (+ L2) the IddCx shared-texture path meets spec 0004's criterion that S2 failed: pooled p99
+**256 µs** against DDA's 422 µs, 0 frames lost over 71 891, steady across rounds (249–262 µs), and the same
+with "Prefer maximum performance" (266 vs 459 µs). ADR-0006 and the T7/T21 rows stay as they are.
+
+Constraints carried forward:
+- **T7 (capture):** read the IddCx surface itself (L3), not a copy: the driver shares each surface once
+  (per-surface NT handle, `SurfaceShare`) and the slot names it. The surface is only valid until the driver's
+  next `IddCxSwapChainReleaseAndAcquireBuffer`, so the encoder must finish with it within that window (or the
+  driver must hold the frame / fall back to the ring copy). T7 designs that hand-off.
+- **T7 / T19:** frame thread in the driver and the service's frame-wait thread on MMCSS "Pro Audio" at critical
+  priority (L1). `SetGPUThreadPriority(7)` (L2) is harmless but measured no gain; optional.
+- **T21 / T20:** build `vdisplay` for the oldest IddCx it must run on (1.4 today) and use runtime checks for
+  newer DDIs: a build for IddCx 1.11 fails adapter init on 24H2 (IddCx 1.10). L4 (D3D12 copy queue) stays
+  untested until an OS with IddCx 1.11; with L3 there is no copy left for it to speed up.
+- **T21:** virtual monitor as the main display at the client refresh (spec 0004) also gave the lower baseline.
+- **Harness:** the pattern must stay on top once the virtual monitor is main; pool rejects covered rounds.
+
+Clean-up (user, elevated): `uninstall-svc.ps1`, `tools\spikes\s1-signing\uninstall.ps1 -Case S2b-end`,
+`reg delete HKLM\SOFTWARE\MixLink\S2b /f`, then make the MSI the main display again. Not run yet.
+
 ## Open questions
 - (Answered) `SetGPUThreadPriority` works from WUDFHost as LocalService (L2 active, HRESULT 0). The HIGH D3D12
   queue could not be tried (IddCx 1.10 here).
 - If L3 sharing works, how long may the receiver hold the surface? Only matters if L3 is kept.
+  (L3 is kept: until the driver's next acquire. How the encoder fits in that window is T7's question.)

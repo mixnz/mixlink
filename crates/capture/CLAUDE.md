@@ -13,8 +13,10 @@
 - (none yet — fill in names of exported traits/types, one line each)
 
 ## Notes
-- Frame path not final: spike S2 (spec 0004) passed everything but p99 latency; T23 decides IddCx vs DDA.
-- IddCx reader reference: `tools/spikes/s2-iddcx-frames/src/{shared,receiver}.rs` (DuplicateHandle from
-  WUDFHost, device on the header's LUID, fence wait, generation change = reopen).
+- Frame path: IddCx (ADR-0006 holds, spec 0005: p99 256 µs vs DDA 422 µs). Read the IddCx surface itself
+  (L3, slot `SurfaceHandle`), valid only until the driver's next acquire; frame-wait thread on MMCSS
+  "Pro Audio" critical (L1). Spec 0005 → Verdict lists the T7 constraints.
+- IddCx reader reference: `tools/spikes/s2-iddcx-frames/src/{shared,receiver,surface_cache}.rs`
+  (DuplicateHandle from WUDFHost, device on the header's LUID, fence wait, generation change = reopen).
 - DDA reader must be per-monitor DPI aware (`DuplicateOutput1` → `DXGI_ERROR_UNSUPPORTED` otherwise), run in
   the console session, and back off on `DXGI_ERROR_ACCESS_LOST`.
