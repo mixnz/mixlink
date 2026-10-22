@@ -7,5 +7,6 @@
 | 0003 | [0003-spike-umdf-signing](0003-spike-umdf-signing.md) | done |
 | 0004 | [0004-spike-iddcx-frames](0004-spike-iddcx-frames.md) | done |
 | 0005 | [0005-spike-iddcx-tail](0005-spike-iddcx-tail.md) | done |
+| 0006 | [0006-spike-vhid](0006-spike-vhid.md) | in-progress |
 
 Rules: `../conventions/docs-writing.md`. Template: `_template.md`.
