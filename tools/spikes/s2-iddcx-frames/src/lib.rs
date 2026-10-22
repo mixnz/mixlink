@@ -12,6 +12,7 @@ pub mod header;
 pub mod levers;
 pub mod log;
 pub mod pattern_gfx;
+pub mod pool;
 pub mod qpc;
 pub mod receiver;
 pub mod report;
