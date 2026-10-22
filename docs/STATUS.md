@@ -26,8 +26,7 @@
   - `tools/spikes/s1-signing/`: install/uninstall/report scripts (user runs them elevated).
   - Win11 26H2, Secure Boot on: per-machine signed catalog installs, loads, survives reboot, HVCI on/off;
     untrusted signer refused; tampered DLL flagged at install but not re-checked at load.
-- T15 spike S2 (spec 0004, branch `spike/s2-iddcx-frames`, not landed yet): **latency criteria not met,
-  ADR-0006 kept pending T23.**
+- T15 spike S2 (spec 0004): **latency criteria not met, ADR-0006 kept pending T23.**
   - `drivers/vdisplay`: one virtual monitor 2560x1440@120, `FrameShare` (4 shared textures + fence +
     `Global\MixLinkS2Frames` header), render-adapter pick.
   - `tools/spikes/s2-iddcx-frames/`: pattern app, receiver service `MixLinkS2`, DDA probe, scripts.
@@ -36,7 +35,7 @@
   - Virtual monitor must be the main display (composition rate and lock/login follow it).
 
 ## In progress
-- Land T15: `/land` of `spike/s2-iddcx-frames`. Test machine is clean (S2 driver and service removed).
+- Nothing. Test machine is clean (S2 driver and service removed).
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
