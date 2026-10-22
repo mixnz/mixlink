@@ -22,7 +22,6 @@ Environment:
 #include "Levers.h"
 #include "SurfaceShare.h"
 #include "SwapChain12.h"
-#include "Diag.h"
 
 using namespace std;
 using namespace Microsoft::IndirectDisp;
@@ -237,14 +236,7 @@ NTSTATUS IddSampleDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
     IddConfig.EvtIddCxMonitorAssignSwapChain = IddSampleMonitorAssignSwapChain;
     IddConfig.EvtIddCxMonitorUnassignSwapChain = IddSampleMonitorUnassignSwapChain;
 
-    // MixLink spike S2b: framework version and every init step go to the event log (Diag.h).
-    IDARG_OUT_GETVERSION IddVersion = {};
-    NTSTATUS VersionStatus = IddCxGetVersion(&IddVersion);
-    DiagStatus(L"IddCxGetVersion (status)", VersionStatus);
-    DiagStatus(L"IddCxGetVersion (IddCxVersion)", static_cast<LONG>(IddVersion.IddCxVersion));
-
     Status = IddCxDeviceInitConfig(pDeviceInit, &IddConfig);
-    DiagStatus(L"IddCxDeviceInitConfig", Status);
     if (!NT_SUCCESS(Status))
     {
         return Status;
@@ -270,7 +262,6 @@ NTSTATUS IddSampleDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
     }
 
     Status = IddCxDeviceInitialize(Device);
-    DiagStatus(L"IddCxDeviceInitialize", Status);
 
     // Create a new device context object and attach it to the WDF device object
     auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(Device);
@@ -593,7 +584,6 @@ void IndirectDeviceContext::InitAdapter()
     // Start the initialization of the adapter, which will trigger the AdapterFinishInit callback later
     IDARG_OUT_ADAPTER_INIT AdapterInitOut;
     NTSTATUS Status = IddCxAdapterInitAsync(&AdapterInit, &AdapterInitOut);
-    DiagStatus(L"IddCxAdapterInitAsync", Status);
 
     if (NT_SUCCESS(Status))
     {
@@ -656,7 +646,6 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
     // Create a monitor object with the specified monitor descriptor
     IDARG_OUT_MONITORCREATE MonitorCreateOut;
     NTSTATUS Status = IddCxMonitorCreate(m_Adapter, &MonitorCreate, &MonitorCreateOut);
-    DiagStatus(L"IddCxMonitorCreate", Status);
     if (NT_SUCCESS(Status))
     {
         // Create a new monitor context object and attach it to the Idd monitor object
@@ -666,7 +655,6 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
         // Tell the OS that the monitor has been plugged in
         IDARG_OUT_MONITORARRIVAL ArrivalOut;
         Status = IddCxMonitorArrival(MonitorCreateOut.MonitorObject, &ArrivalOut);
-        DiagStatus(L"IddCxMonitorArrival", Status);
     }
 }
 
@@ -715,7 +703,6 @@ NTSTATUS IddSampleAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG_I
     // to report attached monitors.
 
     auto* pDeviceContextWrapper = WdfObjectGet_IndirectDeviceContextWrapper(AdapterObject);
-    DiagStatus(L"AdapterInitFinished (AdapterInitStatus)", pInArgs->AdapterInitStatus);
     if (NT_SUCCESS(pInArgs->AdapterInitStatus))
     {
         // MixLink spike S2: on iGPU + dGPU machines, render on the dGPU (ADR-0006).

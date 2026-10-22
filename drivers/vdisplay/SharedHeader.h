@@ -67,5 +67,10 @@ namespace Microsoft
 
         // Writes the lever fields of the header. Call while Magic is 0 (before a ring is published).
         void ReportLevers(const LeverReport& Report);
+
+        // Publishes a freshly opened ring: every field (new generation, empty slots, levers), then Magic.
+        // Header->Magic must be 0 (FrameShare*::Close sets it) so the receiver never sees a half-written ring.
+        void PublishRing(S2Header* Header, UINT32 Width, UINT32 Height, UINT32 DxgiFormat, LUID Luid,
+            const HANDLE (&Textures)[S2_SLOT_COUNT], HANDLE Fence, const LeverReport& Levers);
     }
 }

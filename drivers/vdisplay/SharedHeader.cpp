@@ -47,6 +47,30 @@ S2Header* Microsoft::IndirectDisp::SharedHeader()
     return g_Header;
 }
 
+void Microsoft::IndirectDisp::PublishRing(S2Header* Header, UINT32 Width, UINT32 Height, UINT32 DxgiFormat, LUID Luid,
+    const HANDLE (&Textures)[S2_SLOT_COUNT], HANDLE Fence, const LeverReport& Levers)
+{
+    Header->Version = S2_VERSION;
+    Header->WudfPid = GetCurrentProcessId();
+    Header->SlotCount = S2_SLOT_COUNT;
+    Header->Generation += 1;
+    Header->Width = Width;
+    Header->Height = Height;
+    Header->DxgiFormat = DxgiFormat;
+    Header->LuidLow = Luid.LowPart;
+    Header->LuidHigh = Luid.HighPart;
+    for (UINT32 i = 0; i < S2_SLOT_COUNT; i++)
+    {
+        Header->TextureHandles[i] = reinterpret_cast<UINT64>(Textures[i]);
+        InterlockedExchange64(&Header->Slots[i].Seq, 0);
+        Header->Slots[i].SurfaceHandle = 0;
+    }
+    Header->FenceHandle = reinterpret_cast<UINT64>(Fence);
+    ReportLevers(Levers);
+    InterlockedExchange64(&Header->LatestSeq, 0);
+    InterlockedExchange(reinterpret_cast<volatile LONG*>(&Header->Magic), static_cast<LONG>(S2_MAGIC));
+}
+
 void Microsoft::IndirectDisp::ReportLevers(const LeverReport& Report)
 {
     S2Header* Header = SharedHeader();

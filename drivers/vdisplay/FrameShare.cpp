@@ -113,27 +113,9 @@ HRESULT FrameShare::Open(ID3D11Device* Device, ID3D11DeviceContext* Context, LUI
         return hr;
     }
 
-    // Magic stays 0 (set by Close) until every field below is written.
-    S2Header* Header = m_Header;
-    Header->Version = S2_VERSION;
-    Header->WudfPid = GetCurrentProcessId();
-    Header->SlotCount = S2_SLOT_COUNT;
-    Header->Generation += 1;
-    Header->Width = Desc.Width;
-    Header->Height = Desc.Height;
-    Header->DxgiFormat = static_cast<UINT32>(Desc.Format);
-    Header->LuidLow = Luid.LowPart;
-    Header->LuidHigh = Luid.HighPart;
-    for (UINT32 i = 0; i < S2_SLOT_COUNT; i++)
-    {
-        Header->TextureHandles[i] = reinterpret_cast<UINT64>(m_RingHandles[i]);
-        InterlockedExchange64(&Header->Slots[i].Seq, 0);
-        Header->Slots[i].SurfaceHandle = 0;
-    }
-    Header->FenceHandle = reinterpret_cast<UINT64>(m_FenceHandle);
-    ReportLevers(m_Levers);
-    InterlockedExchange64(&Header->LatestSeq, 0);
-    InterlockedExchange(reinterpret_cast<volatile LONG*>(&Header->Magic), static_cast<LONG>(S2_MAGIC));
+    // Magic stays 0 (set by Close) until PublishRing has written every other field.
+    PublishRing(m_Header, Desc.Width, Desc.Height, static_cast<UINT32>(Desc.Format), Luid, m_RingHandles, m_FenceHandle,
+        m_Levers);
 
     m_Desc = SurfaceDesc;
     m_Seq = 0;

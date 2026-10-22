@@ -36,9 +36,6 @@
     <ClInclude Include="FrameShare12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Diag.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="SwapChain12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -63,9 +60,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="FrameShare12.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Diag.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SwapChain12.cpp">
