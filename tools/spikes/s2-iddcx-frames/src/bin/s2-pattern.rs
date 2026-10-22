@@ -1,6 +1,6 @@
 //! Test pattern on the virtual monitor: new background color every frame and the frame counter
 //! in the top-left cell (see `counter.rs`). Logs presents and vsync glitches per second.
-//! Usage: `s2-pattern [--minutes 12]`. Esc or closing the window stops it. Keeps the display awake.
+//! Usage: `s2-pattern [--minutes 12]`. Esc or closing the window stops it. Keeps the display awake, always on top.
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -21,7 +21,7 @@ use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
-use winit::window::{Fullscreen, Window, WindowId};
+use winit::window::{Fullscreen, Window, WindowId, WindowLevel};
 
 struct App {
     deadline: u64,
@@ -102,7 +102,10 @@ impl ApplicationHandler for App {
         };
         let attrs = Window::default_attributes()
             .with_title("MixLink S2 pattern")
-            .with_fullscreen(Some(Fullscreen::Borderless(Some(monitor))));
+            .with_fullscreen(Some(Fullscreen::Borderless(Some(monitor))))
+            // Spec 0005: once the virtual monitor is the main display, new windows open on it; on top,
+            // nothing covers the counter cell (S2b screening lost rounds to that).
+            .with_window_level(WindowLevel::AlwaysOnTop);
         let result = event_loop
             .create_window(attrs)
             .map_err(|e| e.into())

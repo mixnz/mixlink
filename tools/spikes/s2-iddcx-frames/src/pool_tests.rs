@@ -68,3 +68,25 @@ fn pool_rejects_mixed_conditions() {
 fn pool_rejects_empty() {
     assert!(pool(&[]).is_err());
 }
+
+#[test]
+fn pool_flags_covered_round() {
+    // 3 delivered, 2 duplicates (> 1 %): the counter cell stopped changing.
+    let a = round("r1", &[("1", 100), ("2", 100), ("3", 100)], "1");
+    let b = round(
+        "r2",
+        &[("1", 100), ("1", 0), ("1", 0), ("2", 100), ("3", 100)],
+        "1",
+    );
+    let text = pool(&[a, b]).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    assert!(!lines[2].contains("INVALID"), "{}", lines[2]);
+    assert_eq!(
+        lines[3],
+        "round r2: p99 100 us, lost 0 / 3 (0.000 %), undecodable 0, duplicates 2 INVALID: pattern covered or stopped"
+    );
+    assert_eq!(
+        lines[4],
+        "invalid rounds 1 of 2: re-run them with nothing over the pattern"
+    );
+}

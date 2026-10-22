@@ -24,6 +24,16 @@ pub struct RoundStats {
     pub lost: u64,
     pub delivered: u64,
     pub undecodable: u64,
+    /// Same counter again: the pattern runs at the composition rate, so a clean round has ~none.
+    pub duplicates: u64,
+}
+
+impl RoundStats {
+    /// More than 1 % duplicates: the counter cell stopped changing (a window over the pattern, or the
+    /// pattern stopped), so the round measures the wrong thing (spec 0005 → Task 7 screening).
+    pub fn covered(&self) -> bool {
+        self.duplicates * 100 > self.delivered
+    }
 }
 
 /// Latencies (µs) of delivered frames and the counts, recomputed with `FrameTracker` rules
@@ -88,6 +98,7 @@ pub fn pool(rounds: &[RoundInput]) -> BoxResult<String> {
             lost: s.lost,
             delivered: s.delivered,
             undecodable: s.undecodable,
+            duplicates: s.duplicates,
         });
     }
     let stats = percentiles(&mut all);
@@ -109,8 +120,9 @@ pub fn pool(rounds: &[RoundInput]) -> BoxResult<String> {
         lost_percent(total.lost, total.delivered),
         total.undecodable
     );
+    let mut invalid = 0;
     for r in &per_round {
-        let _ = writeln!(
+        let _ = write!(
             t,
             "round {}: p99 {} us, lost {} / {} ({:.3} %), undecodable {}",
             r.file,
@@ -119,6 +131,22 @@ pub fn pool(rounds: &[RoundInput]) -> BoxResult<String> {
             r.lost + r.delivered,
             lost_percent(r.lost, r.delivered),
             r.undecodable
+        );
+        if r.covered() {
+            invalid += 1;
+            let _ = write!(
+                t,
+                ", duplicates {} INVALID: pattern covered or stopped",
+                r.duplicates
+            );
+        }
+        t.push('\n');
+    }
+    if invalid > 0 {
+        let _ = writeln!(
+            t,
+            "invalid rounds {invalid} of {}: re-run them with nothing over the pattern",
+            per_round.len()
         );
     }
     Ok(t)
