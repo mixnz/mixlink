@@ -60,7 +60,10 @@ fn direct_input(lines: &mut Vec<String>) {
 }
 
 fn wgi(lines: &mut Vec<String>) {
-    // WGI fills its lists asynchronously; give it a moment.
+    // WGI starts enumerating on first access and fills its lists asynchronously:
+    // touch both lists, wait, then read them.
+    let _ = RawGameController::RawGameControllers();
+    let _ = Gamepad::Gamepads();
     std::thread::sleep(std::time::Duration::from_millis(1500));
     match RawGameController::RawGameControllers() {
         Ok(list) => {

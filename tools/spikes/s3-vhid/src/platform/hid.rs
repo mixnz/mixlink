@@ -24,14 +24,10 @@ pub struct VhidFeeder {
 
 impl VhidFeeder {
     pub fn open() -> Result<Self, FeedError> {
-        let list = devices::list()?;
-        let control = list
-            .iter()
-            .find(|d| d.is_vhid() && d.collection() == Some(CONTROL_COLLECTION))
-            .ok_or(FeedError::Os(
-                "vhid control collection (VID_DEED&PID_FEED&Col05) not found: is the driver installed?".into(),
+        let path = devices::vhid_interface_path(CONTROL_COLLECTION)?.ok_or(FeedError::Os(
+                "vhid control collection (Col05, VID DEED PID FEED) not found: is the driver installed?".into(),
             ))?;
-        Self::open_path(&control.path)
+        Self::open_path(&path)
     }
 
     pub fn open_path(path: &str) -> Result<Self, FeedError> {

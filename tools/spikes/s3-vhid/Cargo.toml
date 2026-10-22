@@ -13,6 +13,7 @@ vigem-client = "0.1.4"
 windows = { version = "0.62.2", features = [
   "Foundation_Collections",
   "Gaming_Input",
+  "Win32_Devices_DeviceAndDriverInstallation",
   "Win32_Devices_HumanInterfaceDevice",
   "Win32_Foundation",
   "Win32_Graphics_Gdi",

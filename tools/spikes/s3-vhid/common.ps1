@@ -14,10 +14,11 @@ $S3CertStores = 'Cert:\LocalMachine\My', 'Cert:\LocalMachine\Root', 'Cert:\Local
 $S3Collections = @{ '01' = 'keyboard'; '02' = 'mouse-rel'; '03' = 'mouse-abs'; '04' = 'gamepad'; '05' = 'control' }
 
 # Kind of one HID child from its hardware IDs; 'other' when it is not one of ours.
+# Root-enumerated: hidclass builds child IDs from the parent's (HID\MixLinkVHid&ColNN), not from VID/PID.
 function Get-S3CollectionKind([string[]] $HardwareIds) {
     foreach ($id in $HardwareIds) {
-        if ($id -match '^HID\\VID_DEED&PID_FEED.*&Col(\d\d)$' -and $S3Collections.ContainsKey($Matches[1])) {
-            return $S3Collections[$Matches[1]]
+        if ($id -match '^HID\\(VID_DEED&PID_FEED.*|MixLinkVHid)&Col(\d\d)$' -and $S3Collections.ContainsKey($Matches[2])) {
+            return $S3Collections[$Matches[2]]
         }
     }
     return 'other'
