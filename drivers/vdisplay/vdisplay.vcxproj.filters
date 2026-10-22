@@ -30,6 +30,12 @@
     <ClInclude Include="Trace.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SharedHeader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Levers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="FrameShare.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -39,6 +45,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Driver.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SharedHeader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Levers.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="FrameShare.cpp">

@@ -8,6 +8,7 @@ pub mod display;
 pub mod framelog;
 pub mod frames;
 pub mod header;
+pub mod levers;
 pub mod log;
 pub mod pattern_gfx;
 pub mod qpc;

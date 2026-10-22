@@ -124,7 +124,7 @@ Logs: `tools/spikes/s2-iddcx-frames/out/` (local only; PNGs show the account nam
 | B (run 2) | p99(A) ≤ p99(B) | DDA p50 106 µs, p99 1 903 µs, max 14 422 µs; lost 41 / 72 001 (0.057 %) → **p99(A) > p99(B)** | `20261021-220642-B-dda` |
 | AP (GPU "Prefer maximum performance") | as A | **Fail.** p50 242 µs, p99 **1 776 µs**, max 16 147 µs; lost 71 / 71 982 (**0.099 %**, 1–5 frames at a time) | `20261021-230618-AP-iddcx` |
 | BP (same GPU mode) | p99(AP) ≤ p99(BP) | DDA p50 150 µs, p99 881 µs, max 16 453 µs; lost 102 / 72 000 (0.142 %) → **p99(AP) ≈ 2 × p99(BP)** | `20261021-231656-BP-dda` |
-| A2 (120 → 60 → 120 Hz while measuring) | receiver survives new swapchains | **Pass.** Generations 3 → 4 (60 frames/s) → 5 (120 frames/s), reopened by itself each time, p99 1 559 µs | `20261021-235511-A2-iddcx` |
+| A2 (120 → 60 → 120 Hz while measuring) | receiver survives new swapchains | **Pass.** Generations 3 → 4 (60 frames/s) → 5 (120 frames/s), reopened by itself each time, p99 1 559 µs; lost 2 133 / 14 284 (14.9 %, 449 undecodable), cause not found (corrected by spec 0005) | `20261021-235511-A2-iddcx` |
 | C (desktop) | PNG of the desktop | **Pass.** 12 PNGs, pattern with counter cell | `20261021-234348-C` … |
 | D (UAC) | PNG of the UAC prompt | **Pass.** Dimmed secure desktop for 80 s (dialog on the main display), then desktop | `20261021-235729-D` … |
 | E (Win+L, virtual monitor not main) | PNG of the lock screen | **Partial.** Virtual monitor all black while locked (Windows draws the lock screen on the main display); new swapchain on unlock, reopened | `20261022-000058-E` … |
@@ -149,7 +149,8 @@ Measurement notes:
 - **Lock and login show only on the main display**: the virtual monitor must be main (ADR-0006 topology 1
   or 2) for E/F to stream, as E vs E2 shows.
 - Discarded runs: run 1 (primary screen slept; DDA spun on `ACCESS_LOST` 335 233 times, harness fixed in
-  `ab24ce8`), run 3 at 05:12–05:44 local (conditions unknown: A lost 11 %).
+  `ab24ce8`), run 3 at 05:12–05:44 local (A lost 11 %, B 0.115 %). Corrected by spec 0005: run 3 was the
+  first "Prefer maximum performance" round (user's account), not "conditions unknown"; AP/BP repeated it.
 - **DDA needs per-monitor DPI awareness**: `DuplicateOutput1` returns `DXGI_ERROR_UNSUPPORTED` otherwise.
 - Driver: `PickRenderAdapter` first counted DXGI entries, so the duplicate RTX 5070 entry made this
   single-GPU machine look hybrid. Fixed after the runs: it now counts physical GPUs (vendor, device,

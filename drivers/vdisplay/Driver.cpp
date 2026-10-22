@@ -19,6 +19,7 @@ Environment:
 #include "Driver.tmh"
 #include "RenderAdapter.h"
 #include "FrameShare.h"
+#include "Levers.h"
 
 using namespace std;
 using namespace Microsoft::IndirectDisp;
@@ -359,6 +360,9 @@ void SwapChainProcessor::Run()
     DWORD AvTask = 0;
     HANDLE AvTaskHandle = AvSetMmThreadCharacteristicsW(L"Distribution", &AvTask);
 
+    // MixLink spike S2b: levers are read once per swapchain (spec 0005).
+    m_Levers = ReadLeverMask();
+
     RunCore();
 
     // Always delete the swap-chain object when swap-chain processing loop terminates in order to kick the system to
@@ -390,6 +394,9 @@ void SwapChainProcessor::RunCore()
 
     // MixLink spike S2: frames go to another process through FrameShare (spec 0004).
     FrameShare Share;
+    LeverReport Levers;
+    Levers.Requested = m_Levers;
+    Share.SetLevers(Levers);
 
     // Acquire and release buffers in a loop
     for (;;)

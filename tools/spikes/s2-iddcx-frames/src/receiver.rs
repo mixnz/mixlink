@@ -13,6 +13,7 @@ use crate::diag::Diag;
 use crate::framelog::{FrameLog, FrameRecord};
 use crate::frames::{FrameTracker, RefKind, reference_qpc, sample_capacity};
 use crate::header::{GenerationWatch, SLOT_COUNT, validate};
+use crate::levers::lever_report;
 use crate::log::RunLog;
 use crate::qpc;
 use crate::report::write_run;
@@ -94,6 +95,9 @@ pub fn run(
                     );
                     log.line(&line);
                     notes.push(line);
+                    let levers = lever_report(&h);
+                    log.line(&levers);
+                    notes.push(levers);
                     next = h.latest_seq + 1;
                     frames = Some(pair);
                 }

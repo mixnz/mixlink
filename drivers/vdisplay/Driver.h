@@ -84,6 +84,7 @@ namespace Microsoft
             IDDCX_SWAPCHAIN m_hSwapChain;
             std::shared_ptr<Direct3DDevice> m_Device;
             HANDLE m_hAvailableBufferEvent;
+            UINT32 m_Levers = 0; // spike S2b lever bits for this swapchain (Levers.h)
             Microsoft::WRL::Wrappers::Thread m_hThread;
             Microsoft::WRL::Wrappers::Event m_hTerminateEvent;
         };

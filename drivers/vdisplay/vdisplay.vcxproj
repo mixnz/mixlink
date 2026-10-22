@@ -22,11 +22,15 @@
     <ClCompile Include="Driver.cpp" />
     <ClCompile Include="RenderAdapter.cpp" />
     <ClCompile Include="FrameShare.cpp" />
+    <ClCompile Include="SharedHeader.cpp" />
+    <ClCompile Include="Levers.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Driver.h" />
     <ClInclude Include="RenderAdapter.h" />
     <ClInclude Include="FrameShare.h" />
+    <ClInclude Include="SharedHeader.h" />
+    <ClInclude Include="Levers.h" />
     <ClInclude Include="Trace.h" />
   </ItemGroup>
   <ItemGroup>
