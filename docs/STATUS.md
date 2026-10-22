@@ -36,8 +36,7 @@
   - Virtual monitor must be the main display (composition rate and lock/login follow it).
 
 ## In progress
-- Land T15: `/land` of `spike/s2-iddcx-frames`. Test machine still has the S2 driver and service
-  `MixLinkS2`: user runs `uninstall-svc.ps1`, then `s1-signing/uninstall.ps1`.
+- Land T15: `/land` of `spike/s2-iddcx-frames`. Test machine is clean (S2 driver and service removed).
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.

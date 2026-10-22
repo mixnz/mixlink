@@ -20,7 +20,19 @@ namespace Microsoft
                 return hr;
             }
 
-            UINT hardware_count = 0;
+            // One GPU can be listed more than once (seen in spike S2: a second LUID for the same RTX 5070
+            // until reboot), so "hybrid" counts distinct physical GPUs, not DXGI entries.
+            struct GpuId
+            {
+                UINT Vendor;
+                UINT Device;
+                UINT SubSys;
+                UINT Revision;
+            };
+            constexpr UINT MaxGpus = 16;
+            GpuId gpus[MaxGpus] = {};
+            UINT gpu_count = 0;
+            bool found = false;
             SIZE_T best_memory = 0;
             ComPtr<IDXGIAdapter1> adapter;
             for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; i++)
@@ -31,20 +43,31 @@ namespace Microsoft
                     continue;
                 }
 
-                hardware_count++;
-                if (hardware_count == 1 || desc.DedicatedVideoMemory > best_memory)
+                bool known = false;
+                for (UINT g = 0; g < gpu_count; g++)
                 {
+                    known = known || (gpus[g].Vendor == desc.VendorId && gpus[g].Device == desc.DeviceId &&
+                        gpus[g].SubSys == desc.SubSysId && gpus[g].Revision == desc.Revision);
+                }
+                if (!known && gpu_count < MaxGpus)
+                {
+                    gpus[gpu_count++] = GpuId{ desc.VendorId, desc.DeviceId, desc.SubSysId, desc.Revision };
+                }
+
+                if (!found || desc.DedicatedVideoMemory > best_memory)
+                {
+                    found = true;
                     best_memory = desc.DedicatedVideoMemory;
                     *out_luid = desc.AdapterLuid;
                 }
             }
 
-            if (hardware_count == 0)
+            if (!found)
             {
                 return DXGI_ERROR_NOT_FOUND;
             }
 
-            *out_hybrid = hardware_count > 1;
+            *out_hybrid = gpu_count > 1;
             return S_OK;
         }
     }

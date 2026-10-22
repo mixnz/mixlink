@@ -13,8 +13,8 @@
   - S2 (spec 0004): one monitor, preferred mode 2560x1440@120 (`Driver.cpp`).
   - `FrameShare.{h,cpp}`: 4 shared NT-handle textures + shared fence + `Global\MixLinkS2Frames` header
     (SYSTEM + LocalService). Layout mirrored in `tools/spikes/s2-iddcx-frames/src/header.rs`.
-  - `RenderAdapter.{h,cpp}`: `PickRenderAdapter` (most VRAM; hybrid = >1 DXGI hardware entry: wrong on
-    single-GPU machines that list the GPU twice, fix in T21).
+  - `RenderAdapter.{h,cpp}`: `PickRenderAdapter` (most VRAM; hybrid = >1 physical GPU by vendor/device/
+    subsystem/revision, since DXGI can list one GPU twice). Not yet tested on an iGPU + dGPU machine.
 - `Directory.Build.props`: imports the NuGet WDK/SDK props from `drivers/packages/` (gitignored).
 - `build.ps1`: restore + build + Inf2Cat → `target/drivers/vdisplay/pkg/` (catalog unsigned).
 

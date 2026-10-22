@@ -130,7 +130,7 @@ Logs: `tools/spikes/s2-iddcx-frames/out/` (local only; PNGs show the account nam
 | E (Win+L, virtual monitor not main) | PNG of the lock screen | **Partial.** Virtual monitor all black while locked (Windows draws the lock screen on the main display); new swapchain on unlock, reopened | `20261022-000058-E` … |
 | E2 (Win+L, virtual monitor main) | as E | **Pass.** Lock screen (clock, "Enter your PIN"), sign-in screen incl. a wrong-PIN dialog, then desktop | `20261022-000707-E2` … |
 | F (reboot, not logged in, virtual monitor main) | monitor from boot; PNG of the login screen | **Pass.** Boot 00:13:12 UTC; service waited 1 s for the section, frames from 00:13:23; lock screen from 00:13:29, PIN screen 00:13:49–14:14, then desktop | `20261022-001322-F` … |
-| G (adapter) | dGPU, or "one GPU" noted | **One GPU.** Frames on the RTX 5070 (LUID `0000C311`, `0000C8D0` after reboot: LUIDs change per boot). DXGI lists the RTX 5070 **twice** (second LUID `03294BCA`) | all summaries |
+| G (adapter) | dGPU, or "one GPU" noted | **One GPU.** Frames on the RTX 5070 (LUID `0000C311`, `0000C8D0` after reboot: LUIDs change per boot). Before the reboot DXGI listed the RTX 5070 **twice** (second LUID `03294BCA`); after it, once | all summaries |
 | H (no CPU copy) | only GPU copies | **Pass.** `FrameShare::Publish`: one `CopyResource` GPU→GPU + fence signal; `receiver.rs`: the only `Map` is the 256x8 counter cell (timing) or the PNG (png mode only) | code |
 
 Measurement notes:
@@ -151,8 +151,9 @@ Measurement notes:
 - Discarded runs: run 1 (primary screen slept; DDA spun on `ACCESS_LOST` 335 233 times, harness fixed in
   `ab24ce8`), run 3 at 05:12–05:44 local (conditions unknown: A lost 11 %).
 - **DDA needs per-monitor DPI awareness**: `DuplicateOutput1` returns `DXGI_ERROR_UNSUPPORTED` otherwise.
-- Driver: `PickRenderAdapter` counts DXGI hardware adapters, so the duplicate RTX 5070 entry makes this
-  single-GPU machine look hybrid. T21 must compare physical GPUs (vendor/device/subsystem IDs), not entries.
+- Driver: `PickRenderAdapter` first counted DXGI entries, so the duplicate RTX 5070 entry made this
+  single-GPU machine look hybrid. Fixed after the runs: it now counts physical GPUs (vendor, device,
+  subsystem, revision). Built, not re-run on hardware (no hybrid machine; driver already uninstalled).
 
 ### Verdict: latency criteria not met; ADR-0006 stays, pending T23
 The IddCx shared-texture path works end to end from a LocalSystem service in Session 0: no CPU copy, ≤ 0.1 %
@@ -165,7 +166,8 @@ fails criterion 1, switch to DDA on the virtual monitor (ADR-0006 fallback) with
 Constraints carried forward (both frame paths):
 - Virtual monitor must be the **main display** while streaming: composition rate and lock/login screens
   follow the main display (ADR-0006 topology 1 or 2). T21.
-- Hybrid detection by physical GPU, not by DXGI entry count. LUIDs change per boot: never persist one. T21.
+- Hybrid detection by physical GPU, not by DXGI entry count (done in `PickRenderAdapter`; T21 tests it on
+  an iGPU + dGPU machine). LUIDs change per boot: never persist one. T21.
 - A DDA reader must be per-monitor DPI aware and back off on `DXGI_ERROR_ACCESS_LOST`. T7 (if fallback).
 
 ## Open questions
