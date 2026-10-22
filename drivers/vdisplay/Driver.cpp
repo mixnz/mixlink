@@ -17,6 +17,8 @@ Environment:
 
 #include "Driver.h"
 #include "Driver.tmh"
+#include "RenderAdapter.h"
+#include "FrameShare.h"
 
 using namespace std;
 using namespace Microsoft::IndirectDisp;
@@ -24,7 +26,8 @@ using namespace Microsoft::WRL;
 
 #pragma region SampleMonitors
 
-static constexpr DWORD IDD_SAMPLE_MONITOR_COUNT = 3; // If monitor count > ARRAYSIZE(s_SampleMonitors), we create edid-less monitors
+// MixLink spike S2: one virtual monitor (spec 0004).
+static constexpr DWORD IDD_SAMPLE_MONITOR_COUNT = 1; // If monitor count > ARRAYSIZE(s_SampleMonitors), we create edid-less monitors
 
 // Default modes reported for edid-less monitors. The first mode is set as preferred
 static const struct IndirectSampleMonitor::SampleMonitorMode s_SampleDefaultModes[] = 
@@ -49,9 +52,10 @@ static const struct IndirectSampleMonitor s_SampleMonitors[] =
             0x9B,0xFA,0xFA,0x40,0x01,0x0A,0x20,0x20,0x20,0x20,0x20,0x20,0x00,0x2C
         },
         {
+            // MixLink spike S2: 2560x1440@120 is the preferred mode (index 0).
+            { 2560, 1440, 120 },
             { 2560, 1440, 144 },
             { 1920, 1080,  60 },
-            { 1024,  768,  60 },
         },
         0
     },
@@ -384,6 +388,9 @@ void SwapChainProcessor::RunCore()
         return;
     }
 
+    // MixLink spike S2: frames go to another process through FrameShare (spec 0004).
+    FrameShare Share;
+
     // Acquire and release buffers in a loop
     for (;;)
     {
@@ -422,8 +429,15 @@ void SwapChainProcessor::RunCore()
         }
         else if (SUCCEEDED(hr))
         {
+            LARGE_INTEGER AcquireQpc;
+            QueryPerformanceCounter(&AcquireQpc);
+
             // We have new frame to process, the surface has a reference on it that the driver has to release
             AcquiredBuffer.Attach(Buffer.MetaData.pSurface);
+
+            // HOT PATH: one GPU copy into the shared ring, then fence signal.
+            Share.Publish(m_Device->Device.Get(), m_Device->DeviceContext.Get(), m_Device->AdapterLuid, Buffer,
+                static_cast<UINT64>(AcquireQpc.QuadPart));
 
             // ==============================
             // TODO: Process the frame here
@@ -645,6 +659,16 @@ NTSTATUS IddSampleAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG_I
     auto* pDeviceContextWrapper = WdfObjectGet_IndirectDeviceContextWrapper(AdapterObject);
     if (NT_SUCCESS(pInArgs->AdapterInitStatus))
     {
+        // MixLink spike S2: on iGPU + dGPU machines, render on the dGPU (ADR-0006).
+        LUID RenderLuid = {};
+        bool bHybrid = false;
+        if (SUCCEEDED(PickRenderAdapter(&RenderLuid, &bHybrid)) && bHybrid)
+        {
+            IDARG_IN_ADAPTERSETRENDERADAPTER RenderArgs = {};
+            RenderArgs.PreferredRenderAdapter = RenderLuid;
+            IddCxAdapterSetRenderAdapter(AdapterObject, &RenderArgs);
+        }
+
         for (DWORD i = 0; i < IDD_SAMPLE_MONITOR_COUNT; i++)
         {
             pDeviceContextWrapper->pContext->FinishInit(i);
@@ -769,6 +793,7 @@ NTSTATUS IddSampleMonitorQueryModes(IDDCX_MONITOR MonitorObject, const IDARG_IN_
     // monitor's descriptor and instead are based on the static processing capability of the device. The OS will
     // report the available set of modes for a given output as the intersection of monitor modes with target modes.
 
+    TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 120));
     TargetModes.push_back(CreateIddCxTargetMode(3840, 2160, 60));
     TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 144));
     TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 90));

@@ -3,6 +3,7 @@
 /dist/
 /drivers/packages/
 /tools/spikes/*/out/
+/tools/spikes/*/target/
 node_modules/
 apps/*/ui/dist/
 **/*.rs.bk
