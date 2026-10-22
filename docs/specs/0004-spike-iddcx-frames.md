@@ -113,7 +113,46 @@ spike measures. No CPU copy on the frame path.
   ADR-0006 holds, or switch to DDA on the virtual monitor (ADR-0006 fallback) with ADR-0005's fallback.
 
 ## Results
-(filled after the runs)
+**Machine:** Windows 11 Pro 26H2 build 26300.9711, Secure Boot on, HVCI on, SAC Evaluation, test-signing off.
+One GPU: NVIDIA GeForce RTX 5070 (12 GB). Physical monitor MSI MPG 274U (160 Hz, set to **120 Hz** for timing
+runs). Driver signed and installed with S1's `install.ps1` (pnputil 0, problem code 0, one extra monitor).
+Logs: `tools/spikes/s2-iddcx-frames/out/` (local only; PNGs show the account name, never copy them into docs).
+
+| Case | Expected | Observed | Log |
+|---|---|---|---|
+| A (run 2, GPU default power) | p99 ≤ 1 ms; lost ≤ 0.1 % | **Fail.** p50 242 µs, p99 **2 670 µs**, max 10 085 µs; lost 0 / 71 978; one generation | `20261021-215628-A-iddcx` |
+| B (run 2) | p99(A) ≤ p99(B) | DDA p50 106 µs, p99 1 903 µs, max 14 422 µs; lost 41 / 72 001 (0.057 %) → **p99(A) > p99(B)** | `20261021-220642-B-dda` |
+| AP (GPU "Prefer maximum performance") | as A | **Fail.** p50 242 µs, p99 **1 776 µs**, max 16 147 µs; lost 71 / 71 982 (**0.099 %**, 1–5 frames at a time) | `20261021-230618-AP-iddcx` |
+| BP (same GPU mode) | p99(AP) ≤ p99(BP) | DDA p50 150 µs, p99 881 µs, max 16 453 µs; lost 102 / 72 000 (0.142 %) → **p99(AP) ≈ 2 × p99(BP)** | `20261021-231656-BP-dda` |
+| A2 (120 → 60 → 120 Hz while measuring) | receiver survives new swapchains | **Pass.** Generations 3 → 4 (60 frames/s) → 5 (120 frames/s), reopened by itself each time, p99 1 559 µs | `20261021-235511-A2-iddcx` |
+| C (desktop) | PNG of the desktop | **Pass.** 12 PNGs, pattern with counter cell | `20261021-234348-C` … |
+| D (UAC) | PNG of the UAC prompt | **Pass.** Dimmed secure desktop for 80 s (dialog on the main display), then desktop | `20261021-235729-D` … |
+| E (Win+L, virtual monitor not main) | PNG of the lock screen | **Partial.** Virtual monitor all black while locked (Windows draws the lock screen on the main display); new swapchain on unlock, reopened | `20261022-000058-E` … |
+| E2 (Win+L, virtual monitor main) | as E | **Pass.** Lock screen (clock, "Enter your PIN"), sign-in screen incl. a wrong-PIN dialog, then desktop | `20261022-000707-E2` … |
+| F (reboot, not logged in, virtual monitor main) | monitor from boot; PNG of the login screen | **Pass.** Boot 00:13:12 UTC; service waited 1 s for the section, frames from 00:13:23; lock screen from 00:13:29, PIN screen 00:13:49–14:14, then desktop | `20261022-001322-F` … |
+| G (adapter) | dGPU, or "one GPU" noted | **One GPU.** Frames on the RTX 5070 (LUID `0000C311`, `0000C8D0` after reboot: LUIDs change per boot). DXGI lists the RTX 5070 **twice** (second LUID `03294BCA`) | all summaries |
+| H (no CPU copy) | only GPU copies | **Pass.** `FrameShare::Publish`: one `CopyResource` GPU→GPU + fence signal; `receiver.rs`: the only `Map` is the 256x8 counter cell (timing) or the PNG (png mode only) | code |
+
+Measurement notes:
+- **Reference time.** `PresentDisplayQPCTime` was later than the driver acquire on every frame of A and AP
+  (0.9–12 ms, avg 4–8 ms; A2: all but 2 frames), so IddCx latencies use the **acquire** QPC (rule from Open questions). DDA uses DWM's
+  `LastPresentTime`. The two start points differ: DDA's includes DWM's own present-to-copy time, IddCx's
+  starts after DWM has handed the frame to the driver.
+- **Tail is not the harness.** Frames > 1 ms that arrived < 100 µs after the previous counter-cell `Map`:
+  A 9 / 2 531, B 0 / 1 757; dropping them leaves p99 unchanged. The tail is spread evenly over the 10 min.
+- **GPU clocks matter.** "Prefer maximum performance" cut the counter-cell `Map` p99 from ~2 ms to 0.7 ms and
+  both p99s, but the IddCx tail stayed about twice DDA's. IddCx latency = driver `CopyResource` (14.7 MB) +
+  fence signal + service wake-up: avg ~310–340 µs.
+- **Refresh follows the main display.** With the MSI at 160 Hz, DWM composed the 120 Hz virtual monitor at
+  **160 fps** (DDA 9 601 frames / 60 s, 0 lost). ADR-0006's "client refresh, no judder" needs the virtual
+  monitor to drive composition (main display / virtual-only topology).
+- **Lock and login show only on the main display**: the virtual monitor must be main (ADR-0006 topology 1
+  or 2) for E/F to stream, as E vs E2 shows.
+- Discarded runs: run 1 (primary screen slept; DDA spun on `ACCESS_LOST` 335 233 times, harness fixed in
+  `ab24ce8`), run 3 at 05:12–05:44 local (conditions unknown: A lost 11 %).
+- **DDA needs per-monitor DPI awareness**: `DuplicateOutput1` returns `DXGI_ERROR_UNSUPPORTED` otherwise.
+- Driver: `PickRenderAdapter` counts DXGI hardware adapters, so the duplicate RTX 5070 entry makes this
+  single-GPU machine look hybrid. T21 must compare physical GPUs (vendor/device/subsystem IDs), not entries.
 
 ## Open questions
 - (Answered 2026-10-22) `PresentDisplayQPCTime` is documented as the time the surface "should be
