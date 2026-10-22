@@ -19,13 +19,15 @@ namespace Microsoft
             FrameShare(const FrameShare&) = delete;
             FrameShare& operator=(const FrameShare&) = delete;
 
-            // Lever state written into the header on every ring open (spec 0005).
-            void SetLevers(const LeverReport& Report) { m_Levers = Report; }
+            // Lever state written into the header on every ring open (spec 0005), and at once when the
+            // ring is already open (a lever that fails mid-swapchain).
+            void SetLevers(const LeverReport& Report);
 
             // HOT PATH: one GPU copy into the next ring slot, header update, fence signal.
+            // With SurfaceHandle (L3) the copy is skipped and the slot points at the surface itself.
             // Opens (or reopens) the ring when the surface size or format changes.
             void Publish(ID3D11Device* Device, ID3D11DeviceContext* Context, LUID Luid,
-                const IDARG_OUT_RELEASEANDACQUIREBUFFER& Buffer, UINT64 AcquireQpc);
+                const IDARG_OUT_RELEASEANDACQUIREBUFFER& Buffer, UINT64 AcquireQpc, HANDLE SurfaceHandle);
 
             // Marks the header invalid, then releases the ring, the fence and their handles.
             void Close();

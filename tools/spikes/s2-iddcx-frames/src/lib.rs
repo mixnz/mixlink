@@ -17,4 +17,5 @@ pub mod report;
 pub mod service;
 pub mod shared;
 pub mod stats;
+pub mod surface_cache;
 pub mod util;

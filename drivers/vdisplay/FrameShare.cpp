@@ -8,6 +8,15 @@ FrameShare::~FrameShare()
     Close();
 }
 
+void FrameShare::SetLevers(const LeverReport& Report)
+{
+    m_Levers = Report;
+    if (m_Open)
+    {
+        ReportLevers(Report);
+    }
+}
+
 void FrameShare::Close()
 {
     if (m_Header != nullptr)
@@ -134,7 +143,7 @@ HRESULT FrameShare::Open(ID3D11Device* Device, ID3D11DeviceContext* Context, LUI
 
 // HOT PATH
 void FrameShare::Publish(ID3D11Device* Device, ID3D11DeviceContext* Context, LUID Luid,
-    const IDARG_OUT_RELEASEANDACQUIREBUFFER& Buffer, UINT64 AcquireQpc)
+    const IDARG_OUT_RELEASEANDACQUIREBUFFER& Buffer, UINT64 AcquireQpc, HANDLE SurfaceHandle)
 {
     ComPtr<ID3D11Texture2D> Surface;
     if (FAILED(Buffer.MetaData.pSurface->QueryInterface(IID_PPV_ARGS(&Surface))))
@@ -167,7 +176,11 @@ void FrameShare::Publish(ID3D11Device* Device, ID3D11DeviceContext* Context, LUI
     S2Slot& Slot = m_Header->Slots[Index];
 
     InterlockedExchange64(&Slot.Seq, 0);
-    m_Context4->CopyResource(m_Ring[Index].Get(), Surface.Get());
+    if (SurfaceHandle == nullptr)
+    {
+        m_Context4->CopyResource(m_Ring[Index].Get(), Surface.Get());
+    }
+    Slot.SurfaceHandle = reinterpret_cast<UINT64>(SurfaceHandle);
     Slot.PresentFrameNumber = Buffer.MetaData.PresentationFrameNumber;
     Slot.DirtyRectCount = Buffer.MetaData.DirtyRectCount;
     Slot.PresentQpc = Buffer.MetaData.PresentDisplayQPCTime;

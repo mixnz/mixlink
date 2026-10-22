@@ -33,6 +33,9 @@
     <ClInclude Include="SharedHeader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SurfaceShare.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Levers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -48,6 +51,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SharedHeader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SurfaceShare.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Levers.cpp">

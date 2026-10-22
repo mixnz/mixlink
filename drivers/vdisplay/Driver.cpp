@@ -20,6 +20,7 @@ Environment:
 #include "RenderAdapter.h"
 #include "FrameShare.h"
 #include "Levers.h"
+#include "SurfaceShare.h"
 
 using namespace std;
 using namespace Microsoft::IndirectDisp;
@@ -399,7 +400,9 @@ void SwapChainProcessor::RunCore()
     Levers.Requested = m_Levers;
     ApplyCpuLever(Levers, m_L1Hr);
     ApplyGpuLever(Levers, DxgiDevice.Get());
+    Levers.Active |= Levers.Requested & S2_LEVER_L3_NO_COPY; // until the first share attempt fails
     Share.SetLevers(Levers);
+    SurfaceShare Surfaces;
 
     // Acquire and release buffers in a loop
     for (;;)
@@ -445,9 +448,23 @@ void SwapChainProcessor::RunCore()
             // We have new frame to process, the surface has a reference on it that the driver has to release
             AcquiredBuffer.Attach(Buffer.MetaData.pSurface);
 
-            // HOT PATH: one GPU copy into the shared ring, then fence signal.
+            // MixLink spike S2b, L3: share the surface itself; the first failure drops L3 for this swapchain.
+            HANDLE SurfaceHandle = nullptr;
+            if ((Levers.Active & S2_LEVER_L3_NO_COPY) != 0)
+            {
+                HRESULT ShareHr = S_OK;
+                SurfaceHandle = Surfaces.HandleFor(Buffer.MetaData.pSurface, &ShareHr);
+                if (SurfaceHandle == nullptr)
+                {
+                    Levers.Active &= ~S2_LEVER_L3_NO_COPY;
+                    Levers.Hr[2] = ShareHr;
+                    Share.SetLevers(Levers);
+                }
+            }
+
+            // HOT PATH: one GPU copy into the shared ring (none with L3), then fence signal.
             Share.Publish(m_Device->Device.Get(), m_Device->DeviceContext.Get(), m_Device->AdapterLuid, Buffer,
-                static_cast<UINT64>(AcquireQpc.QuadPart));
+                static_cast<UINT64>(AcquireQpc.QuadPart), SurfaceHandle);
 
             // ==============================
             // TODO: Process the frame here
