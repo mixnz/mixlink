@@ -134,6 +134,10 @@ Measurement notes:
   discarded and repeated (all rounds valid). Its baseline B round with 1.5 % lost had the same cause
   (218 consecutive undecodable frames at 65 s).
 - No round of the repeated run lost > 1 %; baseline A round 1 lost 0.695 % (98 undecodable, one burst).
+- **L3 fence caveat.** With L3 the driver signals the fence with no GPU command on the surface, so the fence
+  alone does not order DWM's rendering before the reader. Checked with latency + counter readback (the readback
+  waits for the GPU): p99 IddCx final 693 µs, DDA final 819 µs, IddCx baseline 1 105 µs; readback alone p99
+  587 µs (final) vs 673 µs (baseline). No hidden GPU wait, the verdict stands; 0 undecodable frames.
 - Spec 0004 Results corrected (round 3 = first "Prefer maximum performance" round; A2 lost 14.9 %).
 
 ### Verdict: ADR-0006 holds
@@ -145,7 +149,8 @@ Constraints carried forward:
 - **T7 (capture):** read the IddCx surface itself (L3), not a copy: the driver shares each surface once
   (per-surface NT handle, `SurfaceShare`) and the slot names it. The surface is only valid until the driver's
   next `IddCxSwapChainReleaseAndAcquireBuffer`, so the encoder must finish with it within that window (or the
-  driver must hold the frame / fall back to the ring copy). T7 designs that hand-off.
+  driver must hold the frame / fall back to the ring copy). T7 designs that hand-off, including explicit
+  GPU sync for the shared surface (the spike's fence does not cover DWM's writes, see Measurement notes).
 - **T7 / T19:** frame thread in the driver and the service's frame-wait thread on MMCSS "Pro Audio" at critical
   priority (L1). `SetGPUThreadPriority(7)` (L2) is harmless but measured no gain; optional.
 - **T21 / T20:** build `vdisplay` for the oldest IddCx it must run on (1.4 today) and use runtime checks for
