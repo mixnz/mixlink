@@ -11,6 +11,10 @@ pub enum Scenario {
     PadWalk,
     PadLook,
     PadMenu,
+    /// UAC prompt (case F): mouse move, then Tab x3. Never Enter.
+    UacTab,
+    /// Lock screen (case G): mouse move, then Space. Never text.
+    LockSpace,
 }
 
 pub use crate::input::Input as Action;
@@ -23,6 +27,8 @@ pub struct Step {
 
 const USAGE_W: u8 = 0x1A;
 const USAGE_ESC: u8 = 0x29;
+const USAGE_TAB: u8 = 0x2B;
+const USAGE_SPACE: u8 = 0x2C;
 /// Gamepad buttons in Xbox order: A=1, B=2, ..., Back=7, Start=8 (bit = button - 1).
 const BUTTON_B: u16 = 1 << 1;
 const BUTTON_START: u16 = 1 << 7;
@@ -36,6 +42,8 @@ impl Scenario {
             Scenario::PadWalk,
             Scenario::PadLook,
             Scenario::PadMenu,
+            Scenario::UacTab,
+            Scenario::LockSpace,
         ];
         all.into_iter()
             .find(|s| format!("{s:?}").eq_ignore_ascii_case(name))
@@ -70,6 +78,20 @@ fn press(at_ms: u32, buttons: u16) -> [Step; 2] {
             },
         ),
         pad(at_ms + 100, PadState::CENTERED),
+    ]
+}
+
+/// Small right-then-left move that ends where it started.
+fn mouse_wiggle() -> [Step; 2] {
+    [
+        Step {
+            at_ms: 0,
+            action: Action::MouseMove { dx: 40, dy: 0 },
+        },
+        Step {
+            at_ms: 100,
+            action: Action::MouseMove { dx: -40, dy: 0 },
+        },
     ]
 }
 
@@ -120,6 +142,14 @@ pub fn steps(scenario: Scenario) -> Vec<Step> {
         ],
         // Start opens the menu, B closes it.
         Scenario::PadMenu => [press(0, BUTTON_START), press(1500, BUTTON_B)].concat(),
+        Scenario::UacTab => [
+            &mouse_wiggle()[..],
+            &tap(500, USAGE_TAB),
+            &tap(1000, USAGE_TAB),
+            &tap(1500, USAGE_TAB),
+        ]
+        .concat(),
+        Scenario::LockSpace => [&mouse_wiggle()[..], &tap(500, USAGE_SPACE)].concat(),
     }
 }
 

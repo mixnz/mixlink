@@ -1,7 +1,9 @@
 //! Win32 side of the harness. Every `unsafe` block carries a `// SAFETY:` note.
 
 pub mod devices;
+pub mod dinput;
 pub mod hid;
+pub mod hook;
 pub mod poll;
 pub mod qpc;
 pub mod rawinput;

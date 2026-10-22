@@ -19,6 +19,12 @@ Build once: `cargo build --release --manifest-path tools/spikes/s3-vhid/Cargo.to
 | `s3-latency <vhid\|sendinput\|vigem> <kbd\|rel\|abs\|pad\|wgi> [--count N]` | Feed call -> input seen by a receiver (Raw Input; XInput for `vigem pad`; `RawGameController` for `wgi`). 10 000 events, 2 ms apart; p50/p99/max, lost, driver drops. PASS = p99 <= 1 ms (+ 0 lost for vhid) |
 | `s3-feed <backend> <scenario> [--delay s]` | Scripted input after a countdown: `Walk`, `Look`, `Menu`, `PadWalk`, `PadLook`, `PadMenu` |
 | `s3-feed vhid --raw <hex>` | One raw control output report (driver validation) |
+| `s3-apis` | Which APIs see which device: Raw Input, DirectInput 8, WGI (`RawGameController`, `Gamepad`), XInput 0-3 |
+| `s3-hook [--seconds N]` | Low-level hooks: counts keyboard / mouse events with and without the injected flags |
+
+`run-system.ps1 -Scenario <UacTab|LockSpace> [-Delay s]` (elevated): runs the release `s3-feed vhid` as
+LocalSystem in Session 0 via a one-shot scheduled task, then removes the task. `UacTab` = mouse move +
+Tab x3, `LockSpace` = mouse move + Space; never Enter, never text.
 
 Latency events never type text: keys F13-F24, mouse moves return to the start, the pad moves LX only.
 `vigem` needs ViGEmBus installed by the user from its author's signed release.

@@ -1,14 +1,41 @@
 use super::*;
 use crate::report::PadState;
 
-const ALL: [Scenario; 6] = [
+const ALL: [Scenario; 8] = [
     Scenario::Walk,
     Scenario::Look,
     Scenario::Menu,
     Scenario::PadWalk,
     Scenario::PadLook,
     Scenario::PadMenu,
+    Scenario::UacTab,
+    Scenario::LockSpace,
 ];
+
+#[test]
+fn secure_desktop_scenarios_send_no_enter_and_no_text() {
+    const TAB: u8 = 0x2B;
+    const SPACE: u8 = 0x2C;
+    for (scenario, key) in [(Scenario::UacTab, TAB), (Scenario::LockSpace, SPACE)] {
+        let steps = steps(scenario);
+        let mut presses = 0;
+        let mut moves = 0;
+        for step in &steps {
+            match step.action {
+                Action::Key { usage, down } => {
+                    assert_eq!(usage, key, "{scenario:?} may only press {key:#x}");
+                    presses += usize::from(down);
+                }
+                Action::MouseMove { .. } => moves += 1,
+                other => panic!("{scenario:?}: unexpected {other:?}"),
+            }
+        }
+        assert!(moves > 0, "{scenario:?} moves the mouse first");
+        assert!(presses > 0, "{scenario:?} presses {key:#x}");
+    }
+    assert_eq!(Scenario::parse("uactab"), Some(Scenario::UacTab));
+    assert_eq!(Scenario::parse("LockSpace"), Some(Scenario::LockSpace));
+}
 
 #[test]
 fn scenarios_are_sorted_and_end_released() {
