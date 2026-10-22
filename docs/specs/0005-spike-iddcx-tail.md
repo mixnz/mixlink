@@ -93,7 +93,47 @@ harness above.
 - [ ] Spec 0004 Results corrected (round 3 conditions, A2 lost).
 - [ ] Verdict written; if fallback, ADR-0006 and the T7/T21 rows' wording updated (roadmap change asked first).
 
+## Results
+**Machine:** as spec 0004 (Windows 11 Pro 26H2 build 26300.9711, Secure Boot on, HVCI on, SAC off, one GPU
+RTX 5070). OS IddCx framework `IddCx.dll` 10.0.26100.4202 = IddCx 1.10 (24H2), so **no D3D12 swapchains**.
+Virtual monitor `\\.\DISPLAY6` = main display at 120 Hz, MSI not main. Every summary carries its `cond` lines
+(levers, GPU mode, OS build, driver time, display check, nvidia-smi). Logs: `tools/spikes/s2-iddcx-frames/out/`.
+Rounds of 2 min, A then B alternating, pooled by `s2-ctl pool`; p99 in µs, nearest rank.
+
+| Run (GPU default unless noted) | IddCx p99 pooled (per round) | IddCx p50 | IddCx lost | DDA p99 pooled | Pool files |
+|---|---|---|---|---|---|
+| Baseline, mask 0 | 618 (552 / 614 / 700) | 244 | 101 / 43 112 (0.234 %) | 498 | `20261022-231226-L0-default-pool-*` |
+| L1 CPU, mask 1 | **494** (489 / 498 / 496) | 243 | 0 % | 418 | `20261022-232431-L1-*` |
+| L2 GPU, mask 2 | 614 (596 / 637 / 612) | 266 | 0 % | 422 | `20261022-233635-L2-*` |
+| L3 no copy, mask 4 | **479** (392 / 596 / 263) | **85** | 0.002 % | 483 | `20261022-234840-L4-*` |
+| L4 D3D12 | not available: needs IddCx 1.11 (`ERROR_NOT_SUPPORTED`) | | | | — |
+| **Final, mask 7 (L1+L2+L3), 5 rounds** | **256** (262 / 249 / 261 / 250 / 260) | 68 | **0 / 71 891 (0 %)** | **422** | `20261023-000157-L7-default-pool-*` |
+| Diagnostic, mask 7, "Prefer maximum performance" | 266 (263 / 275 / 261) | 79 | 0 % | 459 | `20261023-002326-L7-max-pool-*` |
+
+Levers (from the summaries' `levers requested … active …` lines):
+- **L1** applied in the driver and the receiver every time (no HRESULT). Evens out the rounds and halves the
+  max (8.4 → 4.2 ms).
+- **L2** applied (`SetGPUThreadPriority(7)` works from WUDFHost as LocalService), within noise of the
+  baseline. Kept in the final mask by the screening rule (614 < 618 µs).
+- **L3** applied: `CreateSharedHandle` on the IddCx surface works, the receiver reads it intact (0 undecodable).
+  Removes the 14.7 MB copy: fence − acquire avg ~273 µs → ~80 µs.
+- **L4** not measurable here (see Machine). Code kept, compiled only when building for IddCx ≥ 1.11.
+
+Measurement notes:
+- **Building for IddCx 1.11 breaks the driver on a 1.10 framework**: `IddCxAdapterInitAsync` returned
+  `STATUS_INVALID_PARAMETER`, no monitor arrived (init steps logged to the event log, source `MixLinkVDisplay`).
+  Building for 1.4 (as S2) fixed it. `IddCxGetVersion` returned `0x10C00` on both builds (not in Microsoft's table).
+- **Baseline is already under 1 ms** (S2: 1.8–2.7 ms). Difference to S2: the virtual monitor is the main display
+  at 120 Hz here (S2: MSI main, virtual secondary). The levers then cut p99 from 618 to 256 µs.
+- **Covered pattern.** The first screening run lost L1-B round 3, L2 and L3 (1 frame per round or garbage
+  counters, 11 410 duplicates): with the virtual monitor as main display, new windows opened over the pattern.
+  `s2-pattern` is now always on top and `pool` marks rounds with > 1 % duplicates `INVALID`; that run was
+  discarded and repeated (all rounds valid). Its baseline B round with 1.5 % lost had the same cause
+  (218 consecutive undecodable frames at 65 s).
+- No round of the repeated run lost > 1 %; baseline A round 1 lost 0.695 % (98 undecodable, one burst).
+- Spec 0004 Results corrected (round 3 = first "Prefer maximum performance" round; A2 lost 14.9 %).
+
 ## Open questions
-- Does `SetGPUThreadPriority` / a HIGH D3D12 queue work from WUDFHost as LocalService, or does it need a
-  privilege the host process lacks? Answered by the L2/L4 HRESULTs.
+- (Answered) `SetGPUThreadPriority` works from WUDFHost as LocalService (L2 active, HRESULT 0). The HIGH D3D12
+  queue could not be tried (IddCx 1.10 here).
 - If L3 sharing works, how long may the receiver hold the surface? Only matters if L3 is kept.
