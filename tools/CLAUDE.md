@@ -12,6 +12,8 @@
 - `spikes/s2-iddcx-frames/`: spikes S2 (T15) and S2b (T23) Rust package outside the workspace (pattern,
   receiver service, DDA probe, `s2-ctl` check/cycle/pool) + scripts (`run-case.ps1 -Levers -Rounds`);
   see its README.
+- `spikes/s3-vhid/`: spike S3 (T16) `vhid` install/uninstall/report scripts (reuse S1 signing) + Rust harness
+  outside the workspace; see its README.
 
 ## Public API
 - (none yet — fill in names of exported traits/types, one line each)
