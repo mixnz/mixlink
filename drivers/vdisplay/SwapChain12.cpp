@@ -6,6 +6,8 @@
 using namespace Microsoft::IndirectDisp;
 using Microsoft::WRL::ComPtr;
 
+#if S2_HAS_D3D12_SWAPCHAIN
+
 namespace
 {
     constexpr UINT32 L4_INDEX = 3;
@@ -125,3 +127,17 @@ HRESULT Microsoft::IndirectDisp::RunCore12(IDDCX_SWAPCHAIN SwapChain, IDXGIAdapt
     Levers.Hr[L4_INDEX] = g_L4FailHr;
     return S_OK;
 }
+
+#else // !S2_HAS_D3D12_SWAPCHAIN
+
+bool Microsoft::IndirectDisp::D3D12SwapChainsSupported()
+{
+    return false;
+}
+
+HRESULT Microsoft::IndirectDisp::RunCore12(IDDCX_SWAPCHAIN, IDXGIAdapter*, LUID, HANDLE, HANDLE, LeverReport&)
+{
+    return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+}
+
+#endif // S2_HAS_D3D12_SWAPCHAIN

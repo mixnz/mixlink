@@ -3,6 +3,8 @@
 using namespace Microsoft::IndirectDisp;
 using Microsoft::WRL::ComPtr;
 
+#if S2_HAS_D3D12_SWAPCHAIN
+
 FrameShare12::~FrameShare12()
 {
     Close();
@@ -224,3 +226,5 @@ HRESULT FrameShare12::Publish(ID3D12Device* Device, ID3D12CommandQueue* Queue, L
 
     return Queue->Signal(m_Fence.Get(), Seq);
 }
+
+#endif // S2_HAS_D3D12_SWAPCHAIN

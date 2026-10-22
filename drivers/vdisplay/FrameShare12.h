@@ -8,6 +8,12 @@
 
 #include <d3d12.h>
 
+// D3D12 swapchains (IDDCX_METADATA2, IddCxSwapChainSetDevice2) exist from IddCx 1.11 on. A build for an
+// older IddCx (as on 24H2, IddCx 1.10) compiles L4 out; RunCore12 then reports ERROR_NOT_SUPPORTED.
+#define S2_HAS_D3D12_SWAPCHAIN (IDDCX_VERSION_MAJOR > 1 || IDDCX_VERSION_MINOR >= 11)
+
+#if S2_HAS_D3D12_SWAPCHAIN
+
 namespace Microsoft
 {
     namespace IndirectDisp
@@ -56,3 +62,4 @@ namespace Microsoft
         };
     }
 }
+#endif // S2_HAS_D3D12_SWAPCHAIN
