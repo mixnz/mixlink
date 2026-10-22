@@ -52,6 +52,18 @@ fn recv_ignores_out_of_range_and_repeats() {
 }
 
 #[test]
+fn merge_takes_sent_and_recv_halves() {
+    let mut a = Samples::with_capacity(2);
+    let mut b = Samples::with_capacity(2);
+    a.record_sent(0, 10);
+    a.record_sent(1, 20);
+    b.record_recv(1, 25);
+    b.record_sent(0, 999);
+    let sum = summary(&Samples::merge(a, b), 1_000_000);
+    assert_eq!((sum.sent, sum.received, sum.max_us), (2, 1, 5.0));
+}
+
+#[test]
 fn recv_before_send_is_not_a_sample() {
     let mut s = Samples::with_capacity(1);
     s.record_recv(0, 6);

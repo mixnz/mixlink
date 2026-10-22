@@ -15,6 +15,14 @@ impl Samples {
         }
     }
 
+    /// Send times from the sender thread, receive times from the receiver thread.
+    pub fn merge(sender: Samples, receiver: Samples) -> Samples {
+        Samples {
+            sent: sender.sent,
+            recv: receiver.recv,
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.sent.len()
     }

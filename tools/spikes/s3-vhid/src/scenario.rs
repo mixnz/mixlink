@@ -13,12 +13,7 @@ pub enum Scenario {
     PadMenu,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Action {
-    Key { usage: u8, down: bool },
-    MouseMove { dx: i16, dy: i16 },
-    Pad(PadState),
-}
+pub use crate::input::Input as Action;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Step {

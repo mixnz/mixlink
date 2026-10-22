@@ -17,15 +17,54 @@ fn decode_roundtrip_all_devices() {
         let normalized = (i32::from(x) * 65535) / 32767;
         assert_eq!(decode_abs(normalized), Some(i % ABS_PERIOD), "abs {i}");
 
-        assert_eq!(decode_pad_lx(encode_pad_lx(i)), i % PAD_PERIOD, "pad {i}");
+        assert_eq!(
+            decode_pad_lx(encode_pad_lx(i)),
+            Some(i % PAD_PERIOD),
+            "pad {i}"
+        );
         assert_eq!(
             decode_xinput_lx(encode_xinput_lx(i)),
-            i % PAD_PERIOD,
+            Some(i % PAD_PERIOD),
             "xinput {i}"
         );
         let v = f64::from(encode_pad_lx(i)) / 65535.0;
-        assert_eq!(decode_wgi_axis(v), i % PAD_PERIOD, "wgi {i}");
+        assert_eq!(decode_wgi_axis(v), Some(i % PAD_PERIOD), "wgi {i}");
     }
+}
+
+#[test]
+fn decode_pad_rejects_center() {
+    // A polled receiver's first reading is the centered stick: it must not be a code.
+    assert_eq!(decode_pad_lx(0x8000), None);
+    assert_eq!(decode_xinput_lx(0), None);
+    assert_eq!(decode_wgi_axis(0.5), None);
+    assert_eq!(decode_pad_lx(0x7FFF), Some(0x7FFF));
+}
+
+#[test]
+fn input_for_matches_the_codes() {
+    use crate::input::Input;
+    assert_eq!(
+        input_for(Probe::Kbd, 3),
+        Input::Key {
+            usage: 0x69,
+            down: false
+        }
+    );
+    assert_eq!(input_for(Probe::Rel, 3), Input::MouseMove { dx: -2, dy: 0 });
+    assert_eq!(
+        input_for(Probe::Abs, 2),
+        Input::MouseAbs { x: 1060, y: 16384 }
+    );
+    match input_for(Probe::Pad, 70_000) {
+        Input::Pad(p) => assert_eq!(p.lx, (70_000 % 32_768) as u16),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(Probe::parse("wgi"), Some(Probe::Wgi));
+    assert_eq!(Probe::parse("ABS"), Some(Probe::Abs));
+    assert_eq!(Probe::parse("x"), None);
+    assert_eq!(Probe::Kbd.period(), KEY_PERIOD);
+    assert_eq!(Probe::Wgi.period(), PAD_PERIOD);
 }
 
 #[test]

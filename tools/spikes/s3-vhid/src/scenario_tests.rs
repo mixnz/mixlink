@@ -30,7 +30,7 @@ fn scenarios_are_sorted_and_end_released() {
                 Action::Key { usage, down: false } => {
                     held.remove(&usage);
                 }
-                Action::MouseMove { .. } => {}
+                Action::MouseMove { .. } | Action::MouseAbs { .. } => {}
                 Action::Pad(state) => pad = state,
             }
         }
