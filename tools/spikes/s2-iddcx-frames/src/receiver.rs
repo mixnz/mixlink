@@ -51,6 +51,7 @@ pub fn run(
     mode: Mode,
     case: &str,
     minutes: u64,
+    conditions: &[String],
     stop: &AtomicBool,
     log: &mut RunLog,
 ) -> BoxResult<()> {
@@ -204,6 +205,7 @@ pub fn run(
     log.line(&format!("loop ended: opens {opens}, pngs {pngs}"));
     if mode == Mode::Timing {
         notes.push(format!("generations opened {opens}"));
+        notes.extend_from_slice(conditions);
         notes.extend(diag.notes());
         for (name, luid, mb) in adapters()? {
             notes.push(format!("gpu {name} luid {} vram {mb} MB", luid_text(luid)));

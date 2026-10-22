@@ -1,5 +1,6 @@
 //! Spike S2 (spec 0004): IddCx shared-texture frames vs DDA. Throwaway code.
 
+pub mod bursts;
 pub mod console_spawn;
 pub mod counter;
 pub mod d3d;

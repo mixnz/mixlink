@@ -52,3 +52,14 @@ fn summary_reports_reference_counts_and_notes() {
 fn lost_percent_with_no_frames_is_zero() {
     assert_eq!(lost_percent(0, 0), 0.0);
 }
+
+#[test]
+fn condition_notes_prefixes_lines() {
+    let notes = condition_notes("c.txt", Some("levers 3\r\ngpu-mode default\n\n"));
+    assert_eq!(notes, vec!["cond levers 3", "cond gpu-mode default"]);
+}
+
+#[test]
+fn condition_notes_missing_file() {
+    assert_eq!(condition_notes("c.txt", None), vec!["cond missing c.txt"]);
+}
