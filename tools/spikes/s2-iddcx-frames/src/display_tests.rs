@@ -23,3 +23,26 @@ fn wide_stops_at_nul() {
     }
     assert_eq!(from_wide(&w), "AB");
 }
+
+#[test]
+fn check_passes_when_virtual_is_main_at_120() {
+    assert_eq!(
+        check_verdict(r"\.\DISPLAY3", 120, Some(r"\.\DISPLAY3")),
+        Ok(r"main \.\DISPLAY3 120 Hz, virtual \.\DISPLAY3 is main".to_string())
+    );
+}
+
+#[test]
+fn check_fails_when_virtual_not_main() {
+    let err = check_verdict(r"\.\DISPLAY1", 120, Some(r"\.\DISPLAY3")).unwrap_err();
+    assert_eq!(
+        err,
+        r"main \.\DISPLAY1 120 Hz, virtual \.\DISPLAY3 is not main: make the virtual monitor the main display"
+    );
+}
+
+#[test]
+fn check_fails_on_wrong_refresh_or_no_virtual() {
+    assert!(check_verdict(r"\.\DISPLAY3", 60, Some(r"\.\DISPLAY3")).is_err());
+    assert!(check_verdict(r"\.\DISPLAY1", 120, None).is_err());
+}

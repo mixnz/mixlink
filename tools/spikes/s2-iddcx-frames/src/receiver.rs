@@ -13,11 +13,14 @@ use crate::diag::Diag;
 use crate::framelog::{FrameLog, FrameRecord};
 use crate::frames::{FrameTracker, RefKind, reference_qpc, sample_capacity};
 use crate::header::{GenerationWatch, SLOT_COUNT, validate};
+use crate::levers::{ReceiverLevers, apply_receiver_levers, lever_report};
 use crate::log::RunLog;
 use crate::qpc;
 use crate::report::write_run;
-use crate::shared::{Section, SharedFrames};
+use crate::shared::{Section, SharedFrames, open_surface};
+use crate::surface_cache::SurfaceCache;
 use crate::util::{BoxResult, now_stamp, out_dir};
+use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -48,6 +51,7 @@ pub fn run(
     mode: Mode,
     case: &str,
     minutes: u64,
+    conditions: &[String],
     stop: &AtomicBool,
     log: &mut RunLog,
 ) -> BoxResult<()> {
@@ -66,6 +70,8 @@ pub fn run(
     let (mut ref_counts, mut diag) = ([0u64; 2], Diag::default());
     let (mut next, mut last_png, mut opens, mut pngs) = (0u64, 0u64, 0u32, 0u32);
     let mut notes = Vec::new();
+    let mut rx_levers: Option<ReceiverLevers> = None;
+    let mut surfaces: SurfaceCache<ID3D11Texture2D> = SurfaceCache::new();
 
     while !stop.load(Ordering::Relaxed) && qpc::now() < deadline {
         let h = section.header();
@@ -94,6 +100,17 @@ pub fn run(
                     );
                     log.line(&line);
                     notes.push(line);
+                    let levers = lever_report(&h);
+                    log.line(&levers);
+                    notes.push(levers);
+                    drop(rx_levers.take()); // revert the previous generation's MMCSS first
+                    let applied = apply_receiver_levers(h.levers_active, &pair.0.device);
+                    for note in applied.notes() {
+                        log.line(note);
+                        notes.push(note.clone());
+                    }
+                    rx_levers.replace(applied); // held (RAII) until the next generation or the end
+                    surfaces.clear();
                     next = h.latest_seq + 1;
                     frames = Some(pair);
                 }
@@ -138,10 +155,17 @@ pub fn run(
         match mode {
             Mode::Timing => {
                 let map_start = qpc::now();
-                let counter = if slot.seq == next {
-                    reader.read(&f.ctx, &f.ring[idx])
-                } else {
+                let counter = if slot.seq != next {
                     None
+                } else if slot.surface_handle != 0 {
+                    // L3: the frame is the driver's IddCx surface itself; opened on first sight only.
+                    surfaces
+                        .get_or_open(slot.surface_handle, |v| {
+                            open_surface(&f.device, h.wudf_pid, v)
+                        })
+                        .and_then(|tex| reader.read(&f.ctx, tex))
+                } else {
+                    reader.read(&f.ctx, &f.ring[idx])
                 };
                 let map_qpc = qpc::now() - map_start;
                 let ok = slot.seq == next && section.slot_seq(idx) == next;
@@ -181,6 +205,7 @@ pub fn run(
     log.line(&format!("loop ended: opens {opens}, pngs {pngs}"));
     if mode == Mode::Timing {
         notes.push(format!("generations opened {opens}"));
+        notes.extend_from_slice(conditions);
         notes.extend(diag.notes());
         for (name, luid, mb) in adapters()? {
             notes.push(format!("gpu {name} luid {} vram {mb} MB", luid_text(luid)));

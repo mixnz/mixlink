@@ -10,9 +10,11 @@
 - `vdisplay/`: IddCx virtual display. Microsoft `IddSampleDriver` (Windows-driver-samples
   `bb68ed5e770bce04dc5395ec9258dafab034184d`, MIT, `vdisplay/LICENSE`), renamed:
   hardware ID `Root\MixLinkVDisplay`, files `vdisplay.inf/.dll/.cat`. Code still uses `IddSample*` names.
-  - S2 (spec 0004): one monitor, preferred mode 2560x1440@120 (`Driver.cpp`).
-  - `FrameShare.{h,cpp}`: 4 shared NT-handle textures + shared fence + `Global\MixLinkS2Frames` header
-    (SYSTEM + LocalService). Layout mirrored in `tools/spikes/s2-iddcx-frames/src/header.rs`.
+  - S2 (spec 0004): one monitor, 2560x1440@120. `SharedHeader` (`Global\MixLinkS2Frames` v2, mirrored in
+    the spike's `header.rs`); `FrameShare`: 4 shared textures + fence, or (L3) the slot names the surface.
+  - S2b levers (spec 0005), `Levers.{h,cpp}`: registry `HKLM\SOFTWARE\MixLink\S2b\Levers` read per swapchain.
+    L1 MMCSS "Pro Audio" critical, L2 `SetGPUThreadPriority(7)`, L3 `SurfaceShare.{h,cpp}` (shares the IddCx
+    surface itself), L4 `SwapChain12`/`FrameShare12` (D3D12 copy queue, compiled only for IddCx >= 1.11).
   - `RenderAdapter.{h,cpp}`: `PickRenderAdapter` (most VRAM; hybrid = >1 physical GPU by vendor/device/
     subsystem/revision, since DXGI can list one GPU twice). Not yet tested on an iGPU + dGPU machine.
 - `Directory.Build.props`: imports the NuGet WDK/SDK props from `drivers/packages/` (gitignored).
@@ -29,10 +31,10 @@
 - `Inf2CatUseLocalTime=true` / `/uselocaltime`: stampinf writes a local-time `DriverVer`; east of UTC
   Inf2Cat otherwise rejects it as "postdated".
 - `SignMode=Off`: the WDK build must never create or use a `WDKTestCert`.
-- `infverif /w` fails on the sample (DLL in `%12%\UMDF`, not DIRID 13); `/v` passes. Driver isolation
-  is for T20.
-- Signing and install live in `tools/spikes/s1-signing/` (spike) and later in T20 tooling.
+- `infverif /w` fails on the sample (DLL in `%12%\UMDF`, not DIRID 13); `/v` passes; isolation is T20.
+- Signing and install: `tools/spikes/s1-signing/` (spike), later T20 tooling.
 - New `.cpp` files include `Driver.h` first (UMDF_USING_NTSTATUS needs it before WRL).
-- S2 verdict (spec 0004): frame sharing works from Session 0; p99 above DDA's → T23 before ADR-0006 changes.
-- S1 verdict (spec 0003): per-machine signed catalog installs and loads (Secure Boot on, HVCI on/off).
-  UMDF files are checked at install only; install without UI (spec 0003 → Verdict lists T20 constraints).
+- Build for IddCx 1.4 (`IDDCX_VERSION_MINOR` 4, define 6): a 1.11 build fails `IddCxAdapterInitAsync` with
+  `STATUS_INVALID_PARAMETER` on 24H2 (IddCx 1.10), so no monitor arrives. Newer DDIs: runtime checks only.
+- Verdicts: S1 (spec 0003) per-machine signed catalog installs and loads, UMDF files checked at install only;
+  S2b (spec 0005) with L1 + L3 IddCx p99 256 µs vs DDA 422 µs, 0 lost → ADR-0006 holds.

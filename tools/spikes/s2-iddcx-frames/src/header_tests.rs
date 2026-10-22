@@ -11,12 +11,14 @@ fn valid() -> S2Header {
 }
 
 #[test]
-fn header_layout_matches_driver() {
-    assert_eq!(size_of::<S2Slot>(), 32);
-    assert_eq!(size_of::<S2Header>(), 216);
+fn header_v2_layout() {
+    assert_eq!(size_of::<S2Slot>(), 40);
+    assert_eq!(size_of::<S2Header>(), 272);
     assert_eq!(offset_of!(S2Header, texture_handles), 40);
     assert_eq!(offset_of!(S2Header, latest_seq), 80);
     assert_eq!(offset_of!(S2Header, slots), 88);
+    assert_eq!(offset_of!(S2Header, levers_requested), 248);
+    assert_eq!(offset_of!(S2Header, lever_hr), 256);
 }
 
 #[test]
@@ -36,10 +38,19 @@ fn validate_rejects_bad_magic() {
 #[test]
 fn validate_rejects_bad_version() {
     let h = S2Header {
-        version: 2,
+        version: 3,
         ..valid()
     };
-    assert_eq!(validate(&h), Err(HeaderError::BadVersion(2)));
+    assert_eq!(validate(&h), Err(HeaderError::BadVersion(3)));
+}
+
+#[test]
+fn validate_rejects_v1() {
+    let h = S2Header {
+        version: 1,
+        ..valid()
+    };
+    assert_eq!(validate(&h), Err(HeaderError::BadVersion(1)));
 }
 
 #[test]

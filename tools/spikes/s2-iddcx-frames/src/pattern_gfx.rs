@@ -96,8 +96,12 @@ pub fn create_gfx(window: &Window) -> BoxResult<Gfx> {
     let (swapchain, back, rtv) = unsafe {
         let dxgi: IDXGIDevice = device.cast()?;
         let factory: IDXGIFactory2 = dxgi.GetAdapter()?.GetParent()?;
-        let swapchain = factory.CreateSwapChainForHwnd(&device, hwnd, &desc, None, None)?;
-        let back: ID3D11Texture2D = swapchain.GetBuffer(0)?;
+        let swapchain = factory
+            .CreateSwapChainForHwnd(&device, hwnd, &desc, None, None)
+            .map_err(|e| format!("CreateSwapChainForHwnd {}x{}: {e}", desc.Width, desc.Height))?;
+        let back: ID3D11Texture2D = swapchain
+            .GetBuffer(0)
+            .map_err(|e| format!("GetBuffer: {e}"))?;
         let mut rtv = None;
         device.CreateRenderTargetView(&back, None, Some(&mut rtv))?;
         (swapchain, back, rtv.ok_or("no rtv")?)

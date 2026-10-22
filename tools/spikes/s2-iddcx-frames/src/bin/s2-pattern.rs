@@ -1,6 +1,6 @@
 //! Test pattern on the virtual monitor: new background color every frame and the frame counter
 //! in the top-left cell (see `counter.rs`). Logs presents and vsync glitches per second.
-//! Usage: `s2-pattern [--minutes 12]`. Esc or closing the window stops it.
+//! Usage: `s2-pattern [--minutes 12]`. Esc or closing the window stops it. Keeps the display awake, always on top.
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -14,11 +14,14 @@ use s2_iddcx_frames::qpc;
 use s2_iddcx_frames::util::{BoxResult, arg_u64, now_stamp, out_dir};
 use windows::Win32::Graphics::Direct3D11::D3D11_BOX;
 use windows::Win32::Graphics::Dxgi::{DXGI_FRAME_STATISTICS, DXGI_PRESENT};
+use windows::Win32::System::Power::{
+    ES_CONTINUOUS, ES_DISPLAY_REQUIRED, ES_SYSTEM_REQUIRED, SetThreadExecutionState,
+};
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
-use winit::window::{Fullscreen, Window, WindowId};
+use winit::window::{Fullscreen, Window, WindowId, WindowLevel};
 
 struct App {
     deadline: u64,
@@ -63,7 +66,10 @@ impl App {
                     Some(&src_box),
                 );
             }
-            gfx.swapchain.Present(1, DXGI_PRESENT(0)).ok()?;
+            gfx.swapchain
+                .Present(1, DXGI_PRESENT(0))
+                .ok()
+                .map_err(|e| format!("Present (frame {}): {e}", self.frame))?;
         }
         self.presents += 1;
         let mut stats = DXGI_FRAME_STATISTICS::default();
@@ -110,6 +116,11 @@ impl ApplicationHandler for App {
             });
         match result {
             Ok((w, gfx)) => {
+                // Spec 0005: once the virtual monitor is the main display, new windows open on it; on
+                // top, nothing covers the counter cell (S2b screening lost rounds to that). Set after
+                // the swapchain exists: as a creation attribute, CreateSwapChainForHwnd fails with
+                // DXGI_ERROR_INVALID_CALL on a borderless fullscreen window.
+                w.set_window_level(WindowLevel::AlwaysOnTop);
                 self.window = Some(w);
                 self.gfx = Some(gfx);
             }
@@ -167,9 +178,19 @@ fn main() -> BoxResult<()> {
         glitches: 0,
         error: None,
     };
+    // Spec 0005: keep the display awake for the whole run (spec 0004 round 1 lost it to screen sleep).
+    // SAFETY: plain Win32 call on this thread; reset below.
+    unsafe {
+        SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
+    }
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
-    event_loop.run_app(&mut app)?;
+    let ran = event_loop.run_app(&mut app);
+    // SAFETY: as above.
+    unsafe {
+        SetThreadExecutionState(ES_CONTINUOUS);
+    }
+    ran?;
     eprintln!("s2-pattern: {} frames, log {}", app.frame, path.display());
     match app.error {
         Some(e) => Err(e.into()),

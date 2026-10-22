@@ -4,11 +4,34 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::bursts::{burst_notes, bursts};
 use crate::framelog::{CSV_HEADER, FrameLog, csv_line};
 use crate::frames::{FrameTracker, TrackerSummary};
 use crate::qpc;
 use crate::stats::{Stats, percentiles};
 use crate::util::{BoxResult, now_stamp, out_dir};
+
+/// Run conditions written by `run-case.ps1` (`--conditions <path>`), one `cond <line>` note per
+/// non-empty line. `text` is `None` when the file could not be read.
+pub fn condition_notes(path: &str, text: Option<&str>) -> Vec<String> {
+    match text {
+        Some(t) => t
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(|l| format!("cond {l}"))
+            .collect(),
+        None => vec![format!("cond missing {path}")],
+    }
+}
+
+/// Reads the `--conditions` file named in `args`, if any (no arg = no notes).
+pub fn conditions_from_args(args: &[String]) -> Vec<String> {
+    match crate::util::arg_value(args, "--conditions") {
+        Some(path) => condition_notes(path, fs::read_to_string(path).ok().as_deref()),
+        None => Vec::new(),
+    }
+}
 
 pub fn lost_percent(lost: u64, delivered: u64) -> f64 {
     let total = lost + delivered;
@@ -84,6 +107,8 @@ pub fn write_run(
     }
     let map = percentiles(&mut map_us);
     let mut notes = notes.to_vec();
+    let run_start = log.records().first().map_or(0, |r| r.t_qpc);
+    notes.extend(burst_notes(&bursts(log.records()), run_start, freq));
     notes.push(format!(
         "harness counter-cell map p50 {} us, p99 {} us, max {} us; frame log overflow {}",
         map.p50,

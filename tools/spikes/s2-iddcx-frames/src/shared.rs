@@ -104,6 +104,25 @@ fn dup(process: HANDLE, value: u64) -> BoxResult<HANDLE> {
     Ok(out)
 }
 
+/// L3: opens the IddCx surface the driver shared as `value` (a handle inside WUDFHost `wudf_pid`).
+/// Called once per handle (see `SurfaceCache`), never per frame.
+pub fn open_surface(
+    device: &ID3D11Device5,
+    wudf_pid: u32,
+    value: u64,
+) -> BoxResult<ID3D11Texture2D> {
+    // SAFETY: the process and duplicated handles are closed here; the texture holds its own ref.
+    unsafe {
+        let process = OpenProcess(PROCESS_DUP_HANDLE, false, wudf_pid)?;
+        let handle = dup(process, value);
+        let _ = CloseHandle(process);
+        let handle = handle?;
+        let tex = device.OpenSharedResource1::<ID3D11Texture2D>(handle);
+        let _ = CloseHandle(handle);
+        Ok(tex?)
+    }
+}
+
 impl SharedFrames {
     pub fn open(h: &S2Header) -> BoxResult<Self> {
         let luid = LUID {

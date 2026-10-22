@@ -1,9 +1,9 @@
-//! Shared-memory header written by `drivers/vdisplay/FrameShare.h`. Same layout, change both together.
+//! Shared-memory header written by `drivers/vdisplay/SharedHeader.h`. Same layout, change both together.
 
 use std::fmt;
 
 pub const MAGIC: u32 = 0x3253_584D; // "MXS2"
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 pub const SLOT_COUNT: usize = 4;
 pub const SECTION_NAME: &str = "Global\\MixLinkS2Frames";
 
@@ -16,6 +16,8 @@ pub struct S2Slot {
     pub dirty_rect_count: u32,
     pub present_qpc: u64,
     pub acquire_qpc: u64,
+    /// L3: driver's NT handle of the IddCx surface itself (no ring copy); 0 = frame is in the ring.
+    pub surface_handle: u64,
 }
 
 #[repr(C)]
@@ -36,6 +38,12 @@ pub struct S2Header {
     pub fence_handle: u64,
     pub latest_seq: u64,
     pub slots: [S2Slot; SLOT_COUNT],
+    /// Lever bits read from the registry for this swapchain (`levers.rs`).
+    pub levers_requested: u32,
+    /// Lever bits the driver actually applied.
+    pub levers_active: u32,
+    /// HRESULT per lever (index 0 = L1); 0 when it worked or was not requested.
+    pub lever_hr: [i32; 4],
 }
 
 impl S2Header {
@@ -46,6 +54,7 @@ impl S2Header {
             dirty_rect_count: 0,
             present_qpc: 0,
             acquire_qpc: 0,
+            surface_handle: 0,
         };
         Self {
             magic: 0,
@@ -62,6 +71,9 @@ impl S2Header {
             fence_handle: 0,
             latest_seq: 0,
             slots: [SLOT; SLOT_COUNT],
+            levers_requested: 0,
+            levers_active: 0,
+            lever_hr: [0; 4],
         }
     }
 }

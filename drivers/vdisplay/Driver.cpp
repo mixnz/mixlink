@@ -19,6 +19,9 @@ Environment:
 #include "Driver.tmh"
 #include "RenderAdapter.h"
 #include "FrameShare.h"
+#include "Levers.h"
+#include "SurfaceShare.h"
+#include "SwapChain12.h"
 
 using namespace std;
 using namespace Microsoft::IndirectDisp;
@@ -356,8 +359,9 @@ void SwapChainProcessor::Run()
 {
     // For improved performance, make use of the Multimedia Class Scheduler Service, which will intelligently
     // prioritize this thread for improved throughput in high CPU-load scenarios.
-    DWORD AvTask = 0;
-    HANDLE AvTaskHandle = AvSetMmThreadCharacteristicsW(L"Distribution", &AvTask);
+    // MixLink spike S2b: levers are read once per swapchain (spec 0005); L1 picks the MMCSS task.
+    m_Levers = ReadLeverMask();
+    HANDLE AvTaskHandle = EnterFrameThreadPriority(m_Levers, &m_L1Hr);
 
     RunCore();
 
@@ -366,11 +370,31 @@ void SwapChainProcessor::Run()
     WdfObjectDelete((WDFOBJECT)m_hSwapChain);
     m_hSwapChain = nullptr;
 
-    AvRevertMmThreadCharacteristics(AvTaskHandle);
+    if (AvTaskHandle != nullptr)
+    {
+        AvRevertMmThreadCharacteristics(AvTaskHandle);
+    }
 }
 
 void SwapChainProcessor::RunCore()
 {
+    // MixLink spike S2b, L4: D3D12 swapchain with our own copy queue. L2/L3 are D3D11-only.
+    HRESULT L4Hr = S_OK;
+    if ((m_Levers & S2_LEVER_L4_D3D12) != 0)
+    {
+        LeverReport Levers12;
+        Levers12.Requested = m_Levers;
+        ApplyCpuLever(Levers12, m_L1Hr);
+        Levers12.Hr[1] = (m_Levers & S2_LEVER_L2_GPU) != 0 ? E_NOTIMPL : S_OK;
+        Levers12.Hr[2] = (m_Levers & S2_LEVER_L3_NO_COPY) != 0 ? E_NOTIMPL : S_OK;
+        L4Hr = RunCore12(m_hSwapChain, m_Device->Adapter.Get(), m_Device->AdapterLuid, m_hAvailableBufferEvent,
+            m_hTerminateEvent.Get(), Levers12);
+        if (SUCCEEDED(L4Hr))
+        {
+            return;
+        }
+    }
+
     // Get the DXGI device interface
     ComPtr<IDXGIDevice> DxgiDevice;
     HRESULT hr = m_Device->Device.As(&DxgiDevice);
@@ -390,6 +414,14 @@ void SwapChainProcessor::RunCore()
 
     // MixLink spike S2: frames go to another process through FrameShare (spec 0004).
     FrameShare Share;
+    LeverReport Levers;
+    Levers.Requested = m_Levers;
+    ApplyCpuLever(Levers, m_L1Hr);
+    ApplyGpuLever(Levers, DxgiDevice.Get());
+    Levers.Active |= Levers.Requested & S2_LEVER_L3_NO_COPY; // until the first share attempt fails
+    Levers.Hr[3] = L4Hr; // L4 requested but could not start: D3D11 runs instead
+    Share.SetLevers(Levers);
+    SurfaceShare Surfaces;
 
     // Acquire and release buffers in a loop
     for (;;)
@@ -435,9 +467,23 @@ void SwapChainProcessor::RunCore()
             // We have new frame to process, the surface has a reference on it that the driver has to release
             AcquiredBuffer.Attach(Buffer.MetaData.pSurface);
 
-            // HOT PATH: one GPU copy into the shared ring, then fence signal.
+            // MixLink spike S2b, L3: share the surface itself; the first failure drops L3 for this swapchain.
+            HANDLE SurfaceHandle = nullptr;
+            if ((Levers.Active & S2_LEVER_L3_NO_COPY) != 0)
+            {
+                HRESULT ShareHr = S_OK;
+                SurfaceHandle = Surfaces.HandleFor(Buffer.MetaData.pSurface, &ShareHr);
+                if (SurfaceHandle == nullptr)
+                {
+                    Levers.Active &= ~S2_LEVER_L3_NO_COPY;
+                    Levers.Hr[2] = ShareHr;
+                    Share.SetLevers(Levers);
+                }
+            }
+
+            // HOT PATH: one GPU copy into the shared ring (none with L3), then fence signal.
             Share.Publish(m_Device->Device.Get(), m_Device->DeviceContext.Get(), m_Device->AdapterLuid, Buffer,
-                static_cast<UINT64>(AcquireQpc.QuadPart));
+                static_cast<UINT64>(AcquireQpc.QuadPart), SurfaceHandle);
 
             // ==============================
             // TODO: Process the frame here

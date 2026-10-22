@@ -1,65 +1,27 @@
 #include "FrameShare.h"
 
-#include <sddl.h>
-
 using namespace Microsoft::IndirectDisp;
 using Microsoft::WRL::ComPtr;
-
-namespace
-{
-    // One header per WUDFHost process, kept for the process lifetime so its generation counter
-    // survives swapchain reassignments.
-    S2Header* g_Header = nullptr;
-    HANDLE g_Section = nullptr;
-
-    // SYSTEM and LocalService only (spec 0004).
-    constexpr wchar_t S2_SDDL[] = L"D:P(A;;GA;;;SY)(A;;GA;;;LS)";
-    constexpr wchar_t S2_SECTION_NAME[] = L"Global\\MixLinkS2Frames";
-
-    S2Header* SharedHeader()
-    {
-        if (g_Header != nullptr)
-        {
-            return g_Header;
-        }
-
-        PSECURITY_DESCRIPTOR Sd = nullptr;
-        if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(S2_SDDL, SDDL_REVISION_1, &Sd, nullptr))
-        {
-            return nullptr;
-        }
-
-        SECURITY_ATTRIBUTES Sa = { sizeof(Sa), Sd, FALSE };
-        HANDLE Section = CreateFileMappingW(INVALID_HANDLE_VALUE, &Sa, PAGE_READWRITE, 0, sizeof(S2Header), S2_SECTION_NAME);
-        LocalFree(Sd);
-        if (Section == nullptr)
-        {
-            return nullptr;
-        }
-
-        void* View = MapViewOfFile(Section, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(S2Header));
-        if (View == nullptr)
-        {
-            CloseHandle(Section);
-            return nullptr;
-        }
-
-        g_Section = Section;
-        g_Header = static_cast<S2Header*>(View);
-        return g_Header;
-    }
-}
 
 FrameShare::~FrameShare()
 {
     Close();
 }
 
+void FrameShare::SetLevers(const LeverReport& Report)
+{
+    m_Levers = Report;
+    if (m_Open)
+    {
+        ReportLevers(Report);
+    }
+}
+
 void FrameShare::Close()
 {
-    if (g_Header != nullptr)
+    if (m_Header != nullptr)
     {
-        InterlockedExchange(reinterpret_cast<volatile LONG*>(&g_Header->Magic), 0);
+        InterlockedExchange(reinterpret_cast<volatile LONG*>(&m_Header->Magic), 0);
     }
 
     for (UINT32 i = 0; i < S2_SLOT_COUNT; i++)
@@ -87,8 +49,8 @@ HRESULT FrameShare::Open(ID3D11Device* Device, ID3D11DeviceContext* Context, LUI
 {
     Close();
 
-    S2Header* Header = SharedHeader();
-    if (Header == nullptr)
+    m_Header = SharedHeader();
+    if (m_Header == nullptr)
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -151,24 +113,9 @@ HRESULT FrameShare::Open(ID3D11Device* Device, ID3D11DeviceContext* Context, LUI
         return hr;
     }
 
-    // Magic stays 0 (set by Close) until every field below is written.
-    Header->Version = S2_VERSION;
-    Header->WudfPid = GetCurrentProcessId();
-    Header->SlotCount = S2_SLOT_COUNT;
-    Header->Generation += 1;
-    Header->Width = Desc.Width;
-    Header->Height = Desc.Height;
-    Header->DxgiFormat = static_cast<UINT32>(Desc.Format);
-    Header->LuidLow = Luid.LowPart;
-    Header->LuidHigh = Luid.HighPart;
-    for (UINT32 i = 0; i < S2_SLOT_COUNT; i++)
-    {
-        Header->TextureHandles[i] = reinterpret_cast<UINT64>(m_RingHandles[i]);
-        InterlockedExchange64(&Header->Slots[i].Seq, 0);
-    }
-    Header->FenceHandle = reinterpret_cast<UINT64>(m_FenceHandle);
-    InterlockedExchange64(&Header->LatestSeq, 0);
-    InterlockedExchange(reinterpret_cast<volatile LONG*>(&Header->Magic), static_cast<LONG>(S2_MAGIC));
+    // Magic stays 0 (set by Close) until PublishRing has written every other field.
+    PublishRing(m_Header, Desc.Width, Desc.Height, static_cast<UINT32>(Desc.Format), Luid, m_RingHandles, m_FenceHandle,
+        m_Levers);
 
     m_Desc = SurfaceDesc;
     m_Seq = 0;
@@ -178,7 +125,7 @@ HRESULT FrameShare::Open(ID3D11Device* Device, ID3D11DeviceContext* Context, LUI
 
 // HOT PATH
 void FrameShare::Publish(ID3D11Device* Device, ID3D11DeviceContext* Context, LUID Luid,
-    const IDARG_OUT_RELEASEANDACQUIREBUFFER& Buffer, UINT64 AcquireQpc)
+    const IDARG_OUT_RELEASEANDACQUIREBUFFER& Buffer, UINT64 AcquireQpc, HANDLE SurfaceHandle)
 {
     ComPtr<ID3D11Texture2D> Surface;
     if (FAILED(Buffer.MetaData.pSurface->QueryInterface(IID_PPV_ARGS(&Surface))))
@@ -208,16 +155,20 @@ void FrameShare::Publish(ID3D11Device* Device, ID3D11DeviceContext* Context, LUI
 
     UINT64 Seq = ++m_Seq;
     UINT32 Index = static_cast<UINT32>(Seq % S2_SLOT_COUNT);
-    S2Slot& Slot = g_Header->Slots[Index];
+    S2Slot& Slot = m_Header->Slots[Index];
 
     InterlockedExchange64(&Slot.Seq, 0);
-    m_Context4->CopyResource(m_Ring[Index].Get(), Surface.Get());
+    if (SurfaceHandle == nullptr)
+    {
+        m_Context4->CopyResource(m_Ring[Index].Get(), Surface.Get());
+    }
+    Slot.SurfaceHandle = reinterpret_cast<UINT64>(SurfaceHandle);
     Slot.PresentFrameNumber = Buffer.MetaData.PresentationFrameNumber;
     Slot.DirtyRectCount = Buffer.MetaData.DirtyRectCount;
     Slot.PresentQpc = Buffer.MetaData.PresentDisplayQPCTime;
     Slot.AcquireQpc = AcquireQpc;
     InterlockedExchange64(&Slot.Seq, static_cast<LONG64>(Seq));
-    InterlockedExchange64(&g_Header->LatestSeq, static_cast<LONG64>(Seq));
+    InterlockedExchange64(&m_Header->LatestSeq, static_cast<LONG64>(Seq));
 
     m_Context4->Signal(m_Fence.Get(), Seq);
     m_Context4->Flush();

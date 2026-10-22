@@ -7,7 +7,7 @@ use s2_iddcx_frames::display::{from_wide, virtual_gdi_name};
 use s2_iddcx_frames::framelog::{FrameLog, FrameRecord};
 use s2_iddcx_frames::frames::{FrameTracker, sample_capacity};
 use s2_iddcx_frames::qpc;
-use s2_iddcx_frames::report::write_run;
+use s2_iddcx_frames::report::{conditions_from_args, write_run};
 use s2_iddcx_frames::util::{BoxResult, arg_u64, arg_value};
 use windows::Win32::Graphics::Direct3D11::{ID3D11Device5, ID3D11Texture2D};
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -55,6 +55,7 @@ fn main() -> BoxResult<()> {
     let args: Vec<String> = std::env::args().collect();
     let case = arg_value(&args, "--case").unwrap_or("dev").to_string();
     let minutes = arg_u64(&args, "--minutes", 10)?;
+    let conditions = conditions_from_args(&args);
 
     // SAFETY: plain Win32 calls. Failing is fine on the normal desktop of a user session.
     unsafe {
@@ -152,6 +153,7 @@ fn main() -> BoxResult<()> {
     for (name, luid, mb) in adapters()? {
         notes.push(format!("gpu {name} luid {} vram {mb} MB", luid_text(luid)));
     }
+    notes.extend(conditions);
     let delivered = tracker.summary().delivered;
     let path = write_run(
         &case,
