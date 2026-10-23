@@ -1,20 +1,18 @@
-//! FFmpeg hardware device and frame-pool contexts for the encoder (D3D11, QSV derived, QSV owned).
+//! FFmpeg hardware device and frame-pool contexts for the encoder (D3D11 ours or FFmpeg-created, QSV derived).
 
-use std::ffi::c_void;
+use std::ffi::{CString, c_void};
 use std::ptr;
 
 use ffmpeg_sys_next as ff;
-use windows::Win32::Graphics::Direct3D11::{D3D11_BIND_RENDER_TARGET, ID3D11Device};
+use windows::Win32::Graphics::Direct3D11::ID3D11Device;
 use windows::core::Interface;
 
 use crate::args::{EncodeArgs, Format};
-use crate::platform::ff_util::{Options, check};
+use crate::platform::ff_util::check;
 use crate::util::BoxResult;
 
-const POOL_SIZE: i32 = 8;
-/// `MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET` (mfxstructures.h): FFmpeg then creates the D3D11 child
-/// textures with the render-target bind flag.
-const MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET: i32 = 0x0020;
+/// Fixed pool size (QSV derives one surface per pool texture).
+pub const POOL_SIZE: i32 = 8;
 const D3D11VA: ff::AVHWDeviceType = ff::AVHWDeviceType::AV_HWDEVICE_TYPE_D3D11VA;
 const QSV: ff::AVHWDeviceType = ff::AVHWDeviceType::AV_HWDEVICE_TYPE_QSV;
 
@@ -83,8 +81,27 @@ impl HwRefs {
         Ok(())
     }
 
-    /// D3D11 pool with the render-target bind flag (we draw into it).
-    pub fn open_d3d11_frames(&mut self, a: &EncodeArgs) -> BoxResult<()> {
+    /// D3D11 device created by FFmpeg on adapter `index` (multithread protection on, as QSV wants).
+    pub fn open_d3d11_ffmpeg(&mut self, index: u32) -> BoxResult<()> {
+        let device = CString::new(index.to_string())?;
+        // SAFETY: out-pointer is a field of self; FFmpeg owns what it creates.
+        unsafe {
+            check(
+                ff::av_hwdevice_ctx_create(
+                    &mut self.device,
+                    D3D11VA,
+                    device.as_ptr(),
+                    ptr::null_mut(),
+                    0,
+                ),
+                "create d3d11va device",
+            )?;
+        }
+        Ok(())
+    }
+
+    /// D3D11 pool of `pool` textures with `bind` flags (`pool` 0 = single textures, grown on demand).
+    pub fn open_d3d11_frames(&mut self, a: &EncodeArgs, bind: u32, pool: i32) -> BoxResult<()> {
         // SAFETY: the frames ref comes from our live device ref; fields set before init as documented.
         unsafe {
             self.frames = ff::av_hwframe_ctx_alloc(self.device);
@@ -99,20 +116,15 @@ impl HwRefs {
             };
             (*fc).width = a.width as i32;
             (*fc).height = a.height as i32;
-            // NV12 array textures cannot carry the render-target bind flag (E_INVALIDARG on NVIDIA);
-            // pool size 0 makes FFmpeg allocate one single texture per frame instead.
-            (*fc).initial_pool_size = match a.format {
-                Format::Bgra => POOL_SIZE,
-                Format::Nv12 => 0,
-            };
+            (*fc).initial_pool_size = pool;
             let d3d = (*fc).hwctx as *mut ff::AVD3D11VAFramesContext;
-            (*d3d).BindFlags = D3D11_BIND_RENDER_TARGET.0 as u32;
+            (*d3d).BindFlags = bind;
             check(ff::av_hwframe_ctx_init(self.frames), "av_hwframe_ctx_init")?;
         }
         Ok(())
     }
 
-    /// QSV device + frames derived from the D3D11 ones above.
+    /// QSV device + frames derived from the D3D11 ones above (needs a fixed-size pool).
     pub fn derive_qsv(&mut self) -> BoxResult<()> {
         // SAFETY: derives from our live D3D11 device/frames refs; out-pointers are fields of self.
         unsafe {
@@ -129,43 +141,6 @@ impl HwRefs {
                     0,
                 ),
                 "derive QSV frames",
-            )?;
-        }
-        Ok(())
-    }
-
-    /// QSV fallback: FFmpeg creates the QSV device itself (D3D11 child on the Intel adapter) and the pool.
-    pub fn open_qsv_owned(&mut self, a: &EncodeArgs, adapter_index: u32) -> BoxResult<()> {
-        // The device string picks the MFX implementation; the adapter goes to the D3D11 child.
-        let opts = Options::new(&[
-            ("child_device_type", "d3d11va".into()),
-            ("child_device", adapter_index.to_string()),
-        ])?;
-        // SAFETY: refs created here are owned by self; fields set before av_hwframe_ctx_init.
-        unsafe {
-            check(
-                ff::av_hwdevice_ctx_create(&mut self.qsv_device, QSV, c"hw".as_ptr(), opts.0, 0),
-                "create QSV device (child d3d11va)",
-            )?;
-            check(
-                ff::av_hwdevice_ctx_create_derived(&mut self.device, D3D11VA, self.qsv_device, 0),
-                "get the QSV device's D3D11 child",
-            )?;
-            self.qsv_frames = ff::av_hwframe_ctx_alloc(self.qsv_device);
-            if self.qsv_frames.is_null() {
-                return Err("av_hwframe_ctx_alloc (QSV) failed".into());
-            }
-            let fc = (*self.qsv_frames).data as *mut ff::AVHWFramesContext;
-            (*fc).format = ff::AVPixelFormat::AV_PIX_FMT_QSV;
-            (*fc).sw_format = ff::AVPixelFormat::AV_PIX_FMT_NV12;
-            (*fc).width = a.width as i32;
-            (*fc).height = a.height as i32;
-            (*fc).initial_pool_size = POOL_SIZE;
-            let q = (*fc).hwctx as *mut ff::AVQSVFramesContext;
-            (*q).frame_type = MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET;
-            check(
-                ff::av_hwframe_ctx_init(self.qsv_frames),
-                "av_hwframe_ctx_init (QSV)",
             )?;
         }
         Ok(())

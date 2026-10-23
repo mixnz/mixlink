@@ -5,14 +5,16 @@ use std::collections::HashMap;
 use windows::Win32::Foundation::{HMODULE, RECT};
 use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_UNKNOWN;
 use windows::Win32::Graphics::Direct3D11::{
-    D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_VIDEO_SUPPORT, D3D11_QUERY_DESC,
-    D3D11_QUERY_EVENT, D3D11_RENDER_TARGET_VIEW_DESC, D3D11_RENDER_TARGET_VIEW_DESC_0,
-    D3D11_RTV_DIMENSION_TEXTURE2DARRAY, D3D11_SDK_VERSION, D3D11_TEX2D_ARRAY_RTV,
-    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11DeviceContext1, ID3D11Query,
+    D3D11_BIND_RENDER_TARGET, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
+    D3D11_QUERY_DESC, D3D11_QUERY_EVENT, D3D11_RENDER_TARGET_VIEW_DESC,
+    D3D11_RENDER_TARGET_VIEW_DESC_0, D3D11_RTV_DIMENSION_TEXTURE2DARRAY, D3D11_SDK_VERSION,
+    D3D11_TEX2D_ARRAY_RTV, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11CreateDevice,
+    ID3D11Device, ID3D11DeviceContext, ID3D11DeviceContext1, ID3D11Multithread, ID3D11Query,
     ID3D11RenderTargetView, ID3D11Texture2D,
 };
 use windows::Win32::Graphics::Dxgi::Common::{
-    DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8_UNORM, DXGI_FORMAT_R8G8_UNORM,
+    DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_NV12, DXGI_FORMAT_R8_UNORM,
+    DXGI_FORMAT_R8G8_UNORM, DXGI_SAMPLE_DESC,
 };
 use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE, IDXGIAdapter1, IDXGIFactory1,
@@ -81,7 +83,11 @@ pub fn immediate_context(device: &ID3D11Device) -> BoxResult<ID3D11DeviceContext
 }
 
 /// Device (video support on, as FFmpeg's d3d11va and QSV need) on the first adapter of `vendor`.
-pub fn device_for_vendor(vendor: u32) -> BoxResult<(ID3D11Device, ID3D11DeviceContext1, String)> {
+/// `multithread`: turn on D3D multithread protection (Intel's runtime refuses the device without it).
+pub fn device_for_vendor(
+    vendor: u32,
+    multithread: bool,
+) -> BoxResult<(ID3D11Device, ID3D11DeviceContext1, String)> {
     let (adapter, name, _, _) = hardware_adapters()?
         .into_iter()
         .find(|(_, _, v, _)| *v == vendor)
@@ -102,20 +108,66 @@ pub fn device_for_vendor(vendor: u32) -> BoxResult<(ID3D11Device, ID3D11DeviceCo
         )?
     };
     let device: ID3D11Device = device.ok_or("no device")?;
+    if multithread {
+        // SAFETY: plain setter on the device's multithread interface.
+        unsafe {
+            let _ = device
+                .cast::<ID3D11Multithread>()?
+                .SetMultithreadProtected(true);
+        }
+    }
     let context: ID3D11DeviceContext = context.ok_or("no context")?;
     Ok((device, context.cast()?, name))
 }
 
+/// Single render-target texture of the pool's format (NV12 or BGRA) to draw into before the copy.
+fn target_texture(
+    device: &ID3D11Device,
+    format: Format,
+    w: u32,
+    h: u32,
+) -> BoxResult<ID3D11Texture2D> {
+    let desc = D3D11_TEXTURE2D_DESC {
+        Width: w,
+        Height: h,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: match format {
+            Format::Bgra => DXGI_FORMAT_B8G8R8A8_UNORM,
+            Format::Nv12 => DXGI_FORMAT_NV12,
+        },
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        Usage: D3D11_USAGE_DEFAULT,
+        BindFlags: D3D11_BIND_RENDER_TARGET.0 as u32,
+        ..Default::default()
+    };
+    let mut tex = None;
+    // SAFETY: valid desc and out-pointer.
+    unsafe { device.CreateTexture2D(&desc, None, Some(&mut tex))? };
+    Ok(tex.ok_or("no texture")?)
+}
+
 /// Draws frame number grids into slices of FFmpeg's pool texture; views are created once per slice.
+/// With an own target (pool without the render-target bind flag), it draws there and the GPU copies
+/// the result into the pool slice (`CopySubresourceRegion`, no CPU).
 pub struct GridPainter {
     device: ID3D11Device,
     format: Format,
     views: HashMap<(usize, u32), Vec<ID3D11RenderTargetView>>,
     query: ID3D11Query,
+    own_target: Option<ID3D11Texture2D>,
 }
 
 impl GridPainter {
-    pub fn new(device: &ID3D11Device, format: Format) -> BoxResult<Self> {
+    /// `own_target`: (width, height) to draw into an own texture and copy, `None` to draw in place.
+    pub fn new(
+        device: &ID3D11Device,
+        format: Format,
+        own_target: Option<(u32, u32)>,
+    ) -> BoxResult<Self> {
         let desc = D3D11_QUERY_DESC {
             Query: D3D11_QUERY_EVENT,
             MiscFlags: 0,
@@ -128,6 +180,10 @@ impl GridPainter {
             format,
             views: HashMap::new(),
             query: query.ok_or("no query")?,
+            own_target: match own_target {
+                Some((w, h)) => Some(target_texture(device, format, w, h)?),
+                None => None,
+            },
         })
     }
 
@@ -157,8 +213,25 @@ impl GridPainter {
         Ok(rtv.ok_or("no render target view")?)
     }
 
-    /// Clears the slice to black and paints the bits of `n` white. NV12: luma 16 / 235, chroma 128.
+    /// Paints frame number `n` into `slice` of the pool texture `tex` (in place or via the own target).
     pub fn draw(
+        &mut self,
+        ctx: &ID3D11DeviceContext1,
+        tex: &ID3D11Texture2D,
+        slice: u32,
+        n: u32,
+    ) -> BoxResult<()> {
+        let Some(own) = self.own_target.clone() else {
+            return self.paint(ctx, tex, slice, n);
+        };
+        self.paint(ctx, &own, 0, n)?;
+        // SAFETY: both textures are alive, same size and format; one mip, so subresource = slice.
+        unsafe { ctx.CopySubresourceRegion(tex, slice, 0, 0, 0, &own, 0, None) };
+        Ok(())
+    }
+
+    /// Clears the slice to black and paints the bits of `n` white. NV12: luma 16 / 235, chroma 128.
+    fn paint(
         &mut self,
         ctx: &ID3D11DeviceContext1,
         tex: &ID3D11Texture2D,

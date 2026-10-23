@@ -1,37 +1,43 @@
 //! FFmpeg hardware encoder fed with D3D11 textures from an FFmpeg pool. No CPU copy on any path:
 //! - NVENC: `AV_PIX_FMT_D3D11` frames from a pool on our device.
-//! - QSV, derived: QSV device + frames derived from our device and pool; frames mapped (direct).
-//! - QSV, owned (fallback when deriving fails): FFmpeg creates the QSV device with a D3D11 child on the
-//!   Intel adapter and a QSV pool; we draw into the D3D11 textures mapped (direct) from its surfaces.
+//! - QSV: QSV device + frames derived from a D3D11 device and fixed pool, frames mapped (direct).
+//!   Tried in order until one opens: our device / an FFmpeg-created device, pool with the render-target
+//!   bind flag / the decoder bind flag (then we draw into an own texture and the GPU copies it in).
 
 use std::ffi::{CString, c_void};
 use std::ptr;
 
 use ffmpeg_sys_next as ff;
-use windows::Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11Texture2D};
+use windows::Win32::Graphics::Direct3D11::{
+    D3D11_BIND_DECODER, D3D11_BIND_RENDER_TARGET, ID3D11Device, ID3D11Texture2D,
+};
 use windows::core::Interface;
 
-use crate::args::{Backend, EncodeArgs};
-use crate::platform::ff_hwctx::HwRefs;
+use crate::args::{Backend, EncodeArgs, Format};
+use crate::platform::ff_hwctx::{HwRefs, POOL_SIZE};
 use crate::platform::ff_util::{EAGAIN, Options, check};
 use crate::util::BoxResult;
+
+const BIND_RT: u32 = D3D11_BIND_RENDER_TARGET.0 as u32;
+const BIND_DECODER: u32 = D3D11_BIND_DECODER.0 as u32;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Feed {
     D3d11,
     QsvDerived,
-    QsvOwned,
 }
 
 pub struct HwEncoder {
     ctx: *mut ff::AVCodecContext,
     hw: HwRefs,
-    /// D3D11 frame we draw into (pool frame, or mapped from `qsv_frame` on the owned path).
+    /// D3D11 pool frame we draw into.
     frame: *mut ff::AVFrame,
-    /// QSV frame sent to the encoder (mapped from `frame`, or the pool frame on the owned path).
+    /// QSV frame mapped from `frame`, sent to the encoder (QSV only).
     qsv_frame: *mut ff::AVFrame,
     pkt: *mut ff::AVPacket,
     feed: Feed,
+    /// Pool textures lack the render-target flag: draw elsewhere and copy in (GPU).
+    copy_draw: bool,
     /// How frames reach the encoder, for the summary.
     pub path: String,
 }
@@ -58,7 +64,7 @@ fn options(a: &EncodeArgs) -> Vec<(&'static str, String)> {
 }
 
 impl HwEncoder {
-    /// `adapter_index`: DXGI enumeration index of the adapter (QSV owned path only).
+    /// `adapter_index`: DXGI enumeration index of the adapter (FFmpeg-created QSV device attempt).
     pub fn open(dev: &ID3D11Device, a: &EncodeArgs, adapter_index: u32) -> BoxResult<Self> {
         let mut enc = Self {
             ctx: ptr::null_mut(),
@@ -68,6 +74,7 @@ impl HwEncoder {
             qsv_frame: unsafe { ff::av_frame_alloc() },
             pkt: unsafe { ff::av_packet_alloc() },
             feed: Feed::D3d11,
+            copy_draw: false,
             path: "d3d11 frames".into(),
         };
         if enc.frame.is_null() || enc.qsv_frame.is_null() || enc.pkt.is_null() {
@@ -75,35 +82,83 @@ impl HwEncoder {
         }
         if a.backend == Backend::Nvenc {
             enc.hw.open_d3d11(dev)?;
-            enc.hw.open_d3d11_frames(a)?;
+            // NV12 array textures cannot carry the render-target bind flag (E_INVALIDARG on NVIDIA);
+            // pool size 0 makes FFmpeg allocate one single texture per frame instead.
+            let pool = if a.format == Format::Bgra {
+                POOL_SIZE
+            } else {
+                0
+            };
+            enc.hw.open_d3d11_frames(a, BIND_RT, pool)?;
         } else {
-            let derived = enc
-                .hw
-                .open_d3d11(dev)
-                .and_then(|_| enc.hw.open_d3d11_frames(a))
-                .and_then(|_| enc.hw.derive_qsv());
-            match derived {
-                Ok(()) => {
-                    enc.feed = Feed::QsvDerived;
-                    enc.path = "qsv derived from our d3d11 device, frames mapped (direct)".into();
-                }
-                Err(e) => {
-                    enc.hw.release();
-                    enc.hw.open_qsv_owned(a, adapter_index)?;
-                    enc.feed = Feed::QsvOwned;
-                    enc.path = format!(
-                        "qsv-owned device (d3d11 child, adapter {adapter_index}), d3d11 textures mapped (direct) from qsv surfaces; deriving from our device failed: {e}"
-                    );
-                }
-            }
+            enc.open_qsv(dev, a, adapter_index)?;
         }
         enc.open_codec(a)?;
         Ok(enc)
     }
 
+    fn open_qsv(
+        &mut self,
+        dev: &ID3D11Device,
+        a: &EncodeArgs,
+        adapter_index: u32,
+    ) -> BoxResult<()> {
+        let mut failures = Vec::new();
+        for (own_device, bind) in [
+            (true, BIND_RT),
+            (true, BIND_DECODER),
+            (false, BIND_RT),
+            (false, BIND_DECODER),
+        ] {
+            let label = format!(
+                "{} device, {} pool",
+                if own_device { "our" } else { "ffmpeg-created" },
+                if bind == BIND_RT {
+                    "render-target"
+                } else {
+                    "decoder"
+                }
+            );
+            self.hw.release();
+            let opened = if own_device {
+                self.hw.open_d3d11(dev)
+            } else {
+                self.hw.open_d3d11_ffmpeg(adapter_index)
+            };
+            let result = opened
+                .and_then(|_| self.hw.open_d3d11_frames(a, bind, POOL_SIZE))
+                .and_then(|_| self.hw.derive_qsv());
+            match result {
+                Ok(()) => {
+                    self.feed = Feed::QsvDerived;
+                    self.copy_draw = bind != BIND_RT;
+                    let copy = if self.copy_draw {
+                        ", drawn into own texture + GPU copy"
+                    } else {
+                        ""
+                    };
+                    self.path = format!("qsv derived ({label}), frames mapped (direct){copy}");
+                    if !failures.is_empty() {
+                        self.path
+                            .push_str(&format!("; failed before: {}", failures.join("; ")));
+                    }
+                    return Ok(());
+                }
+                Err(e) => failures.push(format!("{label}: {e}")),
+            }
+        }
+        self.hw.release();
+        Err(format!("no QSV setup opened: {}", failures.join("; ")).into())
+    }
+
     /// The D3D11 device the textures live on (draw with this one).
     pub fn device(&self) -> BoxResult<ID3D11Device> {
         self.hw.d3d11_device()
+    }
+
+    /// True when the pool textures cannot be drawn into directly (see `GridPainter` own target).
+    pub fn draws_via_copy(&self) -> bool {
+        self.copy_draw
     }
 
     fn open_codec(&mut self, a: &EncodeArgs) -> BoxResult<()> {
@@ -162,24 +217,10 @@ impl HwEncoder {
         // SAFETY: frames are ours; a D3D11 frame has the ID3D11Texture2D in data[0], the slice in data[1].
         unsafe {
             ff::av_frame_unref(self.frame);
-            if self.feed == Feed::QsvOwned {
-                ff::av_frame_unref(self.qsv_frame);
-                check(
-                    ff::av_hwframe_get_buffer(self.hw.qsv_frames, self.qsv_frame, 0),
-                    "av_hwframe_get_buffer (QSV)",
-                )?;
-                (*self.frame).format = ff::AVPixelFormat::AV_PIX_FMT_D3D11 as i32;
-                let flags = ff::AV_HWFRAME_MAP_WRITE as i32 | ff::AV_HWFRAME_MAP_DIRECT as i32;
-                check(
-                    ff::av_hwframe_map(self.frame, self.qsv_frame, flags),
-                    "map QSV surface to D3D11",
-                )?;
-            } else {
-                check(
-                    ff::av_hwframe_get_buffer(self.hw.frames, self.frame, 0),
-                    "av_hwframe_get_buffer",
-                )?;
-            }
+            check(
+                ff::av_hwframe_get_buffer(self.hw.frames, self.frame, 0),
+                "av_hwframe_get_buffer",
+            )?;
             let raw = (*self.frame).data[0] as *mut c_void;
             let tex = ID3D11Texture2D::from_raw_borrowed(&raw).ok_or("frame has no texture")?;
             Ok((tex.clone(), (*self.frame).data[1] as usize as u32))
@@ -207,13 +248,6 @@ impl HwEncoder {
                         ff::av_hwframe_map(self.qsv_frame, self.frame, flags),
                         "av_hwframe_map",
                     )?;
-                    (*self.qsv_frame).pts = pts;
-                    check(
-                        ff::avcodec_send_frame(self.ctx, self.qsv_frame),
-                        "avcodec_send_frame",
-                    )?;
-                }
-                Feed::QsvOwned => {
                     (*self.qsv_frame).pts = pts;
                     check(
                         ff::avcodec_send_frame(self.ctx, self.qsv_frame),

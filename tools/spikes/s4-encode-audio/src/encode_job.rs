@@ -51,7 +51,7 @@ pub fn run(
         Backend::Nvenc => VENDOR_NVIDIA,
         Backend::Qsv => VENDOR_INTEL,
     };
-    let (own_device, _, adapter) = device_for_vendor(vendor)?;
+    let (own_device, _, adapter) = device_for_vendor(vendor, a.backend == Backend::Qsv)?;
     log.line(&format!(
         "adapter {adapter}, encoder {}, format {:?}",
         a.encoder_name(),
@@ -62,10 +62,14 @@ pub fn run(
     let opened = HwEncoder::open(&own_device, a, adapter_index(vendor)?);
     ff_util::set_log_level(ff::AV_LOG_WARNING);
     let mut enc = opened?;
-    // Draw on the device the pool textures live on (ours, or the QSV-owned D3D11 child).
+    // Draw on the device the pool textures live on (ours, or one FFmpeg created for QSV).
     let device = enc.device()?;
     let ctx = immediate_context(&device)?;
-    let mut painter = GridPainter::new(&device, a.format)?;
+    let mut painter = GridPainter::new(
+        &device,
+        a.format,
+        enc.draws_via_copy().then_some((a.width, a.height)),
+    )?;
     let pacer = Pacer::new()?;
     log.line(&format!("encoder open, path: {}", enc.path));
 
