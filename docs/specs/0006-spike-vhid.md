@@ -192,6 +192,9 @@ Changes carried forward:
 - **T12 / T22:** triggers as Steam reads them (16-bit or Xbox-HID-like layout, or an SDL mapping); a real pad
   on the host takes player 1, so stream sessions must control pad order; games may ship with Steam
   Input off by default (E33).
+- **T20:** uninstall: `pnputil /remove-device` and `/disable-device` refuse the `vhid` node ("critical
+  device": it hosts a keyboard); `devcon remove @<instance>` removes it at once, no reboot
+  (`uninstall.ps1` falls back to it; log `20261023-163242-cleanup2-uninstall`: clean).
 - **T10 / phase 3:** budget the Raw Input / relative-mouse tail (~3 ms p99) in the input path; measure as
   elevated.
 

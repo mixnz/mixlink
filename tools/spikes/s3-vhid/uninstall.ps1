@@ -10,7 +10,11 @@ try {
     $pnputil = "$env:SystemRoot\System32\pnputil.exe"
     $devices = @(Get-S3Device -IncludeNotPresent)
     if ($devices.Count -eq 0) { Write-Host 'No device node to remove.' }
-    foreach ($dev in $devices) { Invoke-S1Native $pnputil @('/remove-device', $dev.InstanceId) | Out-Null }
+    foreach ($dev in $devices) {
+        $code = Invoke-S1Native $pnputil @('/remove-device', $dev.InstanceId)
+        # pnputil refuses a device that hosts a keyboard ("critical device"); devcon removes it.
+        if ($code -ne 0) { Invoke-S1Native (Get-S1Devcon) @('remove', "@$($dev.InstanceId)") | Out-Null }
+    }
 
     $packages = @(Get-S3DriverPackages)
     if ($packages.Count -eq 0) { Write-Host 'No driver package to delete.' }
