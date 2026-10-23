@@ -46,8 +46,8 @@
     Raw Input ~1.1, WGI 0.54, ViGEm 0.06 ms.
 
 ## In progress
-- Nothing. Test machine still has `vhid` and ViGEmBus installed (uninstall: `tools/spikes/s3-vhid/uninstall.ps1`,
-  ViGEmBus via Settings → Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
+- Nothing. Test machine: `vhid` removed (clean); ViGEmBus may still be installed (remove via Settings →
+  Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
