@@ -1,0 +1,30 @@
+# Spike S3 (spec 0006): throwaway, outside the main workspace.
+[package]
+name = "s3-vhid"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[workspace]
+
+[target.'cfg(windows)'.dependencies]
+vigem-client = "0.1.4"
+windows = { version = "0.62.2", features = [
+  "Foundation_Collections",
+  "Gaming_Input",
+  "Win32_Devices_DeviceAndDriverInstallation",
+  "Win32_Devices_HumanInterfaceDevice",
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Security",
+  "Win32_Storage_FileSystem",
+  "Win32_System_IO",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Performance",
+  "Win32_System_Threading",
+  "Win32_UI_Input",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_Input_XboxController",
+  "Win32_UI_WindowsAndMessaging",
+] }

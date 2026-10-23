@@ -17,7 +17,7 @@ its spec; a failed spike switches to the fallback its ADR names before dependent
 | T14 | Spike S1: UMDF driver signed by a per-machine cert installs and loads on Win11 24H2, Secure Boot on, no test-signing | drivers | — | [0003](../specs/0003-spike-umdf-signing.md) | done |
 | T15 | Spike S2: IddCx swapchain frame → shared texture + fence → another process; latency vs DDA | drivers, capture | T14 | [0004](../specs/0004-spike-iddcx-frames.md) | done |
 | T23 | Spike S2b: cut the IddCx frame-path tail (driver copy priority, zero-copy ring), re-measure vs DDA with the S2 harness | drivers, capture | T15 | [0005](../specs/0005-spike-iddcx-tail.md) | done |
-| T16 | Spike S3: UMDF HID keyboard, mouse, gamepad accepted by Windows and games; report latency | drivers, input | T14 | — | todo |
+| T16 | Spike S3: UMDF HID keyboard, mouse, gamepad accepted by Windows and games; report latency | drivers, input | T14 | [0006](../specs/0006-spike-vhid.md) | done |
 | T17 | Spike S4: NVENC/AMF/QSV encode and WASAPI loopback from a Session 0 service | codec, audio | — | — | todo |
 | T18 | Spike S5: Vanguard, EAC, BattlEye, FACEIT titles run and accept input with our drivers installed | drivers | T15, T16 | — | todo |
 | T2 | Core types: ids, config, errors, monotonic clock, per-stage timestamps | core | — | — | todo |

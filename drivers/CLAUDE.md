@@ -17,11 +17,16 @@
     surface itself), L4 `SwapChain12`/`FrameShare12` (D3D12 copy queue, compiled only for IddCx >= 1.11).
   - `RenderAdapter.{h,cpp}`: `PickRenderAdapter` (most VRAM; hybrid = >1 physical GPU by vendor/device/
     subsystem/revision, since DXGI can list one GPU twice). Not yet tested on an iGPU + dGPU machine.
+- `vhid/`: UMDF HID minidriver from `vhidmini2` (same samples commit, MS-PL, `vhid/LICENSE`), C, below inbox
+  `mshidumdf.sys`. Hardware ID `Root\MixLinkVHid`, VID/PID `DEED/FEED` (sample test IDs). Collections by report
+  ID: 1 keyboard, 2 mouse rel, 3 mouse abs, 4 gamepad, 5 vendor control (`Descriptor.c`). HOT PATH `Feed.c`:
+  control output report `[5][target][13 B]` completes the next pending read, else a 64-entry ring; feature 5 =
+  dropped count. Default queue is sequential (no lock). S3 spike, spec 0006: holds; Col05 shows as a 2nd pad.
 - `Directory.Build.props`: imports the NuGet WDK/SDK props from `drivers/packages/` (gitignored).
-- `build.ps1`: restore + build + Inf2Cat → `target/drivers/vdisplay/pkg/` (catalog unsigned).
+- `build.ps1 [-Driver vdisplay|vhid|all]`: restore + build + Inf2Cat → `target/drivers/<name>/pkg/` (catalog unsigned).
 
 ## Build
-- `powershell -NoProfile -ExecutionPolicy Bypass -File drivers/build.ps1 [-Configuration Debug]`
+- `powershell -NoProfile -ExecutionPolicy Bypass -File drivers/build.ps1 [-Driver vhid] [-Configuration Debug]`
 - Needs VS Build Tools with: C++ workload, "C++ Spectre-mitigated libraries for x64/x86 (Latest MSVC)",
   "Windows Driver Kit" (MSBuild toolset `WindowsUserModeDriver10.0`). No system WDK install.
 
