@@ -42,3 +42,10 @@ Standalone Cargo package (not in the main workspace). Output (logs, CSV, bitstre
    2 min, log in (case `E-boot`). Then `install-svc.ps1` again (demand start).
 2. `run-case.ps1 -Case E-lock -Job both -Minutes 1 -Frames 7200 -Tone -Rounds 1 -Sides A -Delay 15`, Win+L within 15 s.
 3. Same with `-Case E-uac`, opening a UAC prompt within 15 s.
+
+## Laptop (cases F, J)
+`pack.ps1` (no elevation) -> `out/s4-pack.zip`: exes, FFmpeg DLLs, `ffprobe.exe`, VC++ runtime DLLs, scripts.
+On the laptop: unzip, elevated PowerShell in that folder: `report.ps1`, `install-svc.ps1`, `.\s4-ctl.exe check`,
+`run-case.ps1 -Case F -Job encode -Backend qsv -Codec h264 -Rounds 3` (if it cannot keep up:
+`-Size 1920x1080 -Fps 60`), HEVC if `hevc_qsv` works, `run-case.ps1 -Case J -Job audio -Minutes 2 -Rounds 1`
+with `s4-tone.exe` playing, then `uninstall-svc.ps1`. Copy its `out\` back to `out/laptop/` here.
