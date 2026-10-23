@@ -1,6 +1,6 @@
 # 0006 — Spike S3: UMDF virtual HID keyboard, mouse and gamepad
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-23
 **Roadmap:** T16
 **Plan:** [0006-spike-vhid](../plans/0006-spike-vhid.md) (local only, written by writing-plans skill)
@@ -106,24 +106,99 @@ Measures the host injection stage only (feed call → input visible to apps). Ta
 2 ms input budget, leaving the rest for network and the service. No production hot path changes.
 
 ## Acceptance criteria
-- [ ] A: `vhid` signed per machine installs and loads (Secure Boot on, test-signing off) and survives reboot.
-- [ ] B: Windows lists the keyboard, both mice and the game controller; `s3-apis` table in Results.
-- [ ] C: events from `vhid` are not flagged injected (`sendinput` control is).
-- [ ] D: p99 ≤ 1 ms and 0 lost for HID keyboard, mouse relative, mouse absolute and gamepad.
-- [ ] E: `sendinput` and ViGEm latencies recorded; ViGEm p99 ≤ 1 ms.
-- [ ] F, G: input fed as LocalSystem from Session 0 reaches the UAC prompt and the lock screen.
-- [ ] H: keyboard and mouse work in all three games.
-- [ ] I–K: per-game table for the three pad paths, incl. whether Steam needed a manual mapping.
-- [ ] Results filled (cases table with Expected / Observed / Log) and the verdict: ADR-0007 holds,
+- [x] A: `vhid` signed per machine installs and loads (Secure Boot on, test-signing off) and survives reboot.
+- [x] B: Windows lists the keyboard, both mice and the game controller; `s3-apis` table in Results.
+- [x] C: events from `vhid` are not flagged injected (`sendinput` control is).
+- [ ] D: p99 ≤ 1 ms and 0 lost for HID keyboard, mouse relative, mouse absolute and gamepad. **Partly:** 0 lost
+  everywhere; keyboard, mouse absolute, gamepad via WGI pass; mouse relative ~3.3 ms and gamepad via Raw Input
+  ~1.1 ms fail, with `SendInput` relative mouse at ~3.0 ms too (Windows path, not the driver).
+- [x] E: `sendinput` and ViGEm latencies recorded; ViGEm p99 ≤ 1 ms (58 µs).
+- [x] F, G: input fed as LocalSystem from Session 0 reaches the UAC prompt and the lock screen.
+- [x] H: keyboard and mouse work in all three games.
+- [x] I–K: per-game table for the three pad paths, incl. whether Steam needed a manual mapping.
+- [x] Results filled (cases table with Expected / Observed / Log) and the verdict: ADR-0007 holds,
   holds with changes (named), or keyboard/mouse fall back to `SendInput` (ADR-0004 fallback).
 
 ## Results
-(filled after the runs)
+**Machine:** Windows 11 Pro 26H2 build 26300.9711, Secure Boot on, HVCI on, SAC off, test-signing off.
+Same PC as S1/S2 (RTX 5070). Driver signed and installed with `install.ps1` (pnputil 0, devcon 0).
+Logs: `tools/spikes/s3-vhid/out/` (local only). Latency runs: release build, 10 000 events, 2 ms apart,
+receiver run **elevated** (see Measurement notes).
+
+| Case | Expected | Observed | Log |
+|---|---|---|---|
+| A | loads, problem code 0, survives reboot | **Pass.** `ROOT\HIDCLASS\0000` OK, code 0 before and after reboot; catalog `Valid`, signer `CN=MixLink Input Driver (this PC)`, private key removed | `20261023-031512-A-install`, `-031720-A-reboot-report` |
+| B | kbd, 2 mice, pad listed | **Pass.** Children: HID Keyboard (Col01), 2× HID-compliant mouse (Col02/03), game controller (Col04), vendor device (Col05). APIs: table below | `1792730585-apis` |
+| C | no injected flag | **Pass.** LL hooks: 600 + 800 `vhid` keys, 0 injected; `SendInput` control 50/50 injected | hook runs (scratch) |
+| D | p99 ≤ 1 ms, 0 lost | **Partly.** Latency table below; 0 lost and 0 driver drops in every run | `17927306xx`–`1792731160` |
+| E | recorded; ViGEm ≤ 1 ms | **Pass.** Table below | `1792730683`, `-0901`, `1792745006` |
+| F | UAC focus moves | **Pass.** Mouse moved, Tab ×3 moved focus in the UAC prompt (task result 0) | `20261023-120058-UacTab` |
+| G | lock screen reacts | **Pass.** Lock screen lifted to the sign-in box (task result 0) | `20261023-120422-LockSpace` |
+| H | games react to kbd + mouse | **Pass.** Walk / Look / Menu in Elden Ring, Clair Obscur: Expedition 33, Wuchang | user |
+| I | pad via Steam Input | **Pass** with a manual layout (game matrix below) | user |
+| J | pad, Steam Input off | **As expected:** no game reacts (XInput-only) | user |
+| K | ViGEm, Steam Input off | **Pass** in Wuchang; Elden Ring not usable as a test (a real Xbox pad fails there too) | user |
+
+| Path (p50 / p99 / max) | Run 1 | Run 2 |
+|---|---|---|
+| `vhid` keyboard → Raw Input | 0.20 / **0.80** / 7.0 ms | — |
+| `vhid` mouse relative → Raw Input | 0.26 / **3.36** / 25.5 ms | 0.23 / **3.25** / 17.0 ms |
+| `vhid` mouse absolute → Raw Input | 0.15 / **0.62** / 6.6 ms | — |
+| `vhid` gamepad → Raw Input | 0.40 / **1.15** / 12.6 ms | 0.38 / **1.10** / 13.3 ms |
+| `vhid` gamepad → WGI `RawGameController` (polled) | 0.06 / **0.54** / 13.0 ms | — |
+| `SendInput` keyboard → Raw Input | 0.13 / **0.36** / 1.3 ms | — |
+| `SendInput` mouse relative → Raw Input | 0.08 / **2.98** / 5.8 ms | — |
+| ViGEm pad → XInput (polled; 14 / 10 000 states skipped) | 0.013 / **0.058** / 0.29 ms | — |
+
+| API (`s3-apis`) | Sees |
+|---|---|
+| Raw Input | Col01 keyboard, Col02 + Col03 mouse, Col04 pad (Col05 vendor is not listed) |
+| DirectInput 8 | "MixLink Virtual Input" **twice** (pad + vendor control collection), joy.cpl shows one |
+| WGI | `RawGameController` (6 axes, 16 buttons, 1 switch); `Gamepad` list empty |
+| XInput | nothing (`vhid` is not an XUSB device); ViGEm pad at index 0 |
+
+| Game | I: `vhid` pad + Steam Input | J: `vhid` pad, Steam Input off | K: ViGEm, Steam Input off |
+|---|---|---|---|
+| Elden Ring (offline) | Pass 3/3 launches | No reaction | No movement; **real Xbox pad also fails** → inconclusive |
+| Clair Obscur: Expedition 33 | Pass once Steam Input is enabled for the game (default was off: 0/4 before) | No reaction | not run |
+| Wuchang: Fallen Feathers | Pass 2/3 launches (1 no reaction, cause not found) | No reaction | **Pass** (real Xbox pad control also works) |
+
+Steam lists the pad twice and needs "Begin Setup". Buttons, D-pad and sticks map; **LT / RT analog axes
+(Z / Rz, 8-bit) are ignored by the wizard** even after priming and a 2 s hold, though joy.cpl shows them
+move; bound as spare buttons `b13` / `b14` instead. The wizard binds whatever input arrives first.
+
+Measurement notes:
+- **UIPI.** A non-elevated receiver (Raw Input sink, LL hook) gets nothing while an elevated window is in the
+  foreground (100 / 0 / 100 with normal / admin / normal focus); the input still reaches the elevated
+  window. Runs before this was found are discarded.
+- **Arrival matching.** The first harness unwrapped sequence numbers online; a stale first reading (XInput)
+  shifted every index (ViGEm 0 / 10 000). Fixed in `e1b8c49`: arrivals are matched to send times after the run.
+  The earlier `vhid` 10 000-event runs all received 10 000 / 10 000, so their numbers stand.
+- An LL hook in the loop adds ~1 ms to Raw Input p50 (kbd 0.16 → 1.15 ms); hooks were off for timing runs.
+- Driver path itself is fast: WGI sees the pad report 59 µs (p50) after `WriteFile`. Raw Input and the
+  relative-mouse path add the rest, for `SendInput` as well.
+
+### Verdict: ADR-0007 holds, with changes
+A per-machine signed UMDF HID minidriver gives Windows a keyboard, two mice and a gamepad that are treated
+as hardware: not flagged injected, delivered to the UAC secure desktop and the lock screen from Session 0,
+and used by all three games (keyboard / mouse directly, pad through Steam Input). Non-Steam XInput games
+need the ViGEm path, which works (Wuchang) as ADR-0007 planned. Latency: 0 lost; keyboard, absolute mouse
+and WGI pad within 1 ms p99; relative mouse and the Raw Input pad path exceed it by the same margin
+`SendInput` does, so the cost is Windows', not the driver's.
+
+Changes carried forward:
+- **T22:** move the feed off the HID vendor collection to a custom device interface (IOCTL) on the UMDF
+  device: it shows up as a second game controller (DirectInput, Steam) and any process can open it.
+- **T12 / T22:** triggers as Steam reads them (16-bit or Xbox-HID-like layout, or an SDL mapping); a real pad
+  on the host takes player 1, so stream sessions must control pad order; games may ship with Steam
+  Input off by default (E33).
+- **T10 / phase 3:** budget the Raw Input / relative-mouse tail (~3 ms p99) in the input path; measure as
+  elevated.
 
 ## Open questions
 - VID/PID for the shipped device: the sample's test IDs are fine for a spike; production needs IDs we may
   use (e.g. a pid.codes allocation). Decide in T22.
 - Who may open the control collection: any process that can open it can inject input. T22 decides how
   to restrict it to the service (custom device interface on the UMDF device instead of a HID collection).
-- Steam generic gamepad support may need a one-time manual mapping per pad; if so, T12 checks whether
+- (Answered 2026-10-23: yes, "Begin Setup" per pad, and the analog triggers are ignored.) Steam generic gamepad support may need a one-time manual mapping per pad; if so, T12 checks whether
   shipping an SDL mapping string (or a fixed descriptor layout Steam already knows) avoids it.

@@ -36,15 +36,24 @@
     them (`run-case.ps1 -Levers -Rounds`, `s2-ctl`), pattern always on top, covered rounds flagged.
   - Build `vdisplay` for IddCx 1.4: a 1.11 build breaks adapter init on 24H2 (IddCx 1.10). L4 (D3D12) untested.
   - Virtual monitor must be the main display (composition rate, lock/login, and the lower baseline).
+- T16 spike S3 (spec 0006): **ADR-0007 holds, with changes.**
+  - `drivers/vhid`: vhidmini2 UMDF HID minidriver, keyboard + 2 mice + gamepad + vendor control collection;
+    `build.ps1 -Driver vdisplay|vhid|all`. Not flagged injected; reaches UAC and lock screen from Session 0.
+  - `tools/spikes/s3-vhid/`: install/report scripts + Rust harness (`s3-latency`, `s3-feed`, `s3-apis`,
+    `s3-hook`, SYSTEM runner). Measure elevated (UIPI hides input from a non-elevated receiver).
+  - Games: kbd/mouse direct in all 3; pad via Steam Input (manual layout; analog LT/RT ignored); ViGEm for
+    Steam-Input-off XInput (Wuchang). p99: kbd 0.80, abs mouse 0.62, rel mouse ~3.3 (SendInput ~3.0), pad
+    Raw Input ~1.1, WGI 0.54, ViGEm 0.06 ms.
 
 ## In progress
-- Nothing. Test machine still has the S2b driver, service `MixLinkS2` and registry key installed, and the
-  virtual monitor as main display: clean-up commands in spec 0005 → Verdict (user runs them).
+- Nothing. Test machine still has `vhid` and ViGEmBus installed (uninstall: `tools/spikes/s3-vhid/uninstall.ps1`,
+  ViGEmBus via Settings → Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
-- Roadmap phase 1: T16 spike S3 (UMDF HID). T20 follows spec 0003 → Verdict; T21 follows spec 0004 and
-  0005 → Verdict constraints; T7 follows spec 0005 → Verdict (read the surface itself, encode within a frame).
+- Roadmap phase 1: T17 spike S4 next. T20 follows spec 0003 → Verdict; T21 follows spec 0004 and 0005 →
+  Verdict constraints; T7 follows spec 0005 → Verdict; T22 / T12 follow spec 0006 → Verdict (feed via IOCTL,
+  not a HID collection; trigger layout for Steam; pad order).
 
 ## Open questions
 - Roadmap row for the language switch (EN/VI setting + `vi` strings) not added yet.

@@ -21,7 +21,7 @@
   `mshidumdf.sys`. Hardware ID `Root\MixLinkVHid`, VID/PID `DEED/FEED` (sample test IDs). Collections by report
   ID: 1 keyboard, 2 mouse rel, 3 mouse abs, 4 gamepad, 5 vendor control (`Descriptor.c`). HOT PATH `Feed.c`:
   control output report `[5][target][13 B]` completes the next pending read, else a 64-entry ring; feature 5 =
-  dropped count. Default queue is sequential (no lock). S3 spike, spec 0006.
+  dropped count. Default queue is sequential (no lock). S3 spike, spec 0006: holds; Col05 shows as a 2nd pad.
 - `Directory.Build.props`: imports the NuGet WDK/SDK props from `drivers/packages/` (gitignored).
 - `build.ps1 [-Driver vdisplay|vhid|all]`: restore + build + Inf2Cat → `target/drivers/<name>/pkg/` (catalog unsigned).
 
