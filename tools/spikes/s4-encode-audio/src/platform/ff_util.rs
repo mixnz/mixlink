@@ -1,7 +1,12 @@
-//! FFmpeg error text and option dictionaries.
+//! FFmpeg error text, option dictionaries, and FFmpeg's own log lines routed into a file (a service
+//! has no stderr).
 
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{CStr, CString, c_char, c_int, c_void};
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 use std::ptr;
+use std::sync::Mutex;
 
 use ffmpeg_sys_next as ff;
 
@@ -9,6 +14,56 @@ use crate::util::BoxResult;
 
 /// `AVERROR(EAGAIN)`: EAGAIN is 11 in the MinGW CRT the FFmpeg build uses.
 pub const EAGAIN: i32 = -11;
+
+static LOG_FILE: Mutex<Option<File>> = Mutex::new(None);
+
+unsafe extern "C" fn log_callback(
+    avcl: *mut c_void,
+    level: c_int,
+    fmt: *const c_char,
+    vl: ff::va_list,
+) {
+    // SAFETY: FFmpeg's own formatter fills our buffer (NUL-terminated, truncated to its size).
+    let mut line = [0 as c_char; 1024];
+    let mut prefix = 1;
+    unsafe {
+        if level > ff::av_log_get_level() {
+            return;
+        }
+        ff::av_log_format_line2(
+            avcl,
+            level,
+            fmt,
+            vl,
+            line.as_mut_ptr(),
+            line.len() as c_int,
+            &mut prefix,
+        );
+    }
+    // SAFETY: `line` is NUL-terminated by av_log_format_line2.
+    let text = unsafe { CStr::from_ptr(line.as_ptr()) }.to_string_lossy();
+    if let Ok(mut guard) = LOG_FILE.lock()
+        && let Some(file) = guard.as_mut()
+    {
+        let _ = write!(file, "[{level}] {text}");
+    }
+}
+
+/// Sends FFmpeg's log lines (up to `level`, e.g. `ff::AV_LOG_VERBOSE`) to `path` from now on.
+pub fn log_to_file(path: &Path, level: c_int) -> BoxResult<()> {
+    *LOG_FILE.lock().map_err(|_| "log lock poisoned")? = Some(File::create(path)?);
+    // SAFETY: the callback is a plain function valid for the whole process.
+    unsafe {
+        ff::av_log_set_level(level);
+        ff::av_log_set_callback(Some(log_callback));
+    }
+    Ok(())
+}
+
+pub fn set_log_level(level: c_int) {
+    // SAFETY: plain setter.
+    unsafe { ff::av_log_set_level(level) };
+}
 
 pub fn err_text(code: i32) -> String {
     let mut buf = [0 as c_char; 128];

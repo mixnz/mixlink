@@ -5,8 +5,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::args::{Backend, EncodeArgs};
 use crate::log::RunLog;
-use crate::platform::d3d::{GridPainter, VENDOR_INTEL, VENDOR_NVIDIA, device_for_vendor};
+use ffmpeg_sys_next as ff;
+
+use crate::platform::d3d::{
+    GridPainter, VENDOR_INTEL, VENDOR_NVIDIA, adapter_index, device_for_vendor, immediate_context,
+};
 use crate::platform::ff_encode::HwEncoder;
+use crate::platform::ff_util;
 use crate::platform::pacer::Pacer;
 use crate::qpc;
 use crate::stats::percentiles;
@@ -46,13 +51,20 @@ pub fn run(
         Backend::Nvenc => VENDOR_NVIDIA,
         Backend::Qsv => VENDOR_INTEL,
     };
-    let (device, ctx, adapter) = device_for_vendor(vendor)?;
+    let (own_device, _, adapter) = device_for_vendor(vendor)?;
     log.line(&format!(
         "adapter {adapter}, encoder {}, format {:?}",
         a.encoder_name(),
         a.format
     ));
-    let mut enc = HwEncoder::open(&device, a)?;
+    // FFmpeg's own log lines (a service has no stderr): verbose while opening, warnings afterwards.
+    ff_util::log_to_file(&files.path("ffmpeg.log"), ff::AV_LOG_VERBOSE)?;
+    let opened = HwEncoder::open(&own_device, a, adapter_index(vendor)?);
+    ff_util::set_log_level(ff::AV_LOG_WARNING);
+    let mut enc = opened?;
+    // Draw on the device the pool textures live on (ours, or the QSV-owned D3D11 child).
+    let device = enc.device()?;
+    let ctx = immediate_context(&device)?;
     let mut painter = GridPainter::new(&device, a.format)?;
     let pacer = Pacer::new()?;
     log.line(&format!("encoder open, path: {}", enc.path));

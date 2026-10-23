@@ -1,5 +1,8 @@
-//! FFmpeg hardware encoder fed with D3D11 textures from FFmpeg's own pool on our device. No CPU copy:
-//! NVENC takes `AV_PIX_FMT_D3D11` frames; QSV takes QSV frames mapped (direct) from the same textures.
+//! FFmpeg hardware encoder fed with D3D11 textures from an FFmpeg pool. No CPU copy on any path:
+//! - NVENC: `AV_PIX_FMT_D3D11` frames from a pool on our device.
+//! - QSV, derived: QSV device + frames derived from our device and pool; frames mapped (direct).
+//! - QSV, owned (fallback when deriving fails): FFmpeg creates the QSV device with a D3D11 child on the
+//!   Intel adapter and a QSV pool; we draw into the D3D11 textures mapped (direct) from its surfaces.
 
 use std::ffi::{CString, c_void};
 use std::ptr;
@@ -15,6 +18,18 @@ use crate::platform::ff_util::{EAGAIN, Options, check};
 use crate::util::BoxResult;
 
 const POOL_SIZE: i32 = 8;
+/// `MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET` (mfxstructures.h): FFmpeg then creates the D3D11 child
+/// textures with the render-target bind flag.
+const MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET: i32 = 0x0020;
+const D3D11VA: ff::AVHWDeviceType = ff::AVHWDeviceType::AV_HWDEVICE_TYPE_D3D11VA;
+const QSV: ff::AVHWDeviceType = ff::AVHWDeviceType::AV_HWDEVICE_TYPE_QSV;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Feed {
+    D3d11,
+    QsvDerived,
+    QsvOwned,
+}
 
 pub struct HwEncoder {
     ctx: *mut ff::AVCodecContext,
@@ -22,11 +37,14 @@ pub struct HwEncoder {
     frames: *mut ff::AVBufferRef,
     qsv_device: *mut ff::AVBufferRef,
     qsv_frames: *mut ff::AVBufferRef,
+    /// D3D11 frame we draw into (pool frame, or mapped from `qsv_frame` on the owned path).
     frame: *mut ff::AVFrame,
-    mapped: *mut ff::AVFrame,
+    /// QSV frame sent to the encoder (mapped from `frame`, or the pool frame on the owned path).
+    qsv_frame: *mut ff::AVFrame,
     pkt: *mut ff::AVPacket,
+    feed: Feed,
     /// How frames reach the encoder, for the summary.
-    pub path: &'static str,
+    pub path: String,
 }
 
 fn options(a: &EncodeArgs) -> Vec<(&'static str, String)> {
@@ -51,7 +69,8 @@ fn options(a: &EncodeArgs) -> Vec<(&'static str, String)> {
 }
 
 impl HwEncoder {
-    pub fn open(dev: &ID3D11Device, a: &EncodeArgs) -> BoxResult<Self> {
+    /// `adapter_index`: DXGI enumeration index of the adapter (QSV owned path only).
+    pub fn open(dev: &ID3D11Device, a: &EncodeArgs, adapter_index: u32) -> BoxResult<Self> {
         let mut enc = Self {
             ctx: ptr::null_mut(),
             device: ptr::null_mut(),
@@ -60,26 +79,68 @@ impl HwEncoder {
             qsv_frames: ptr::null_mut(),
             // SAFETY: plain allocations, null-checked below.
             frame: unsafe { ff::av_frame_alloc() },
-            mapped: unsafe { ff::av_frame_alloc() },
+            qsv_frame: unsafe { ff::av_frame_alloc() },
             pkt: unsafe { ff::av_packet_alloc() },
-            path: "d3d11 frames",
+            feed: Feed::D3d11,
+            path: "d3d11 frames".into(),
         };
-        if enc.frame.is_null() || enc.mapped.is_null() || enc.pkt.is_null() {
+        if enc.frame.is_null() || enc.qsv_frame.is_null() || enc.pkt.is_null() {
             return Err("out of memory".into());
         }
-        enc.open_device(dev)?;
-        enc.open_frames(a)?;
-        if a.backend == Backend::Qsv {
-            enc.derive_qsv()?;
+        if a.backend == Backend::Nvenc {
+            enc.open_device(dev)?;
+            enc.open_frames(a)?;
+        } else {
+            let derived = enc
+                .open_device(dev)
+                .and_then(|_| enc.open_frames(a))
+                .and_then(|_| enc.derive_qsv());
+            match derived {
+                Ok(()) => {
+                    enc.feed = Feed::QsvDerived;
+                    enc.path = "qsv derived from our d3d11 device, frames mapped (direct)".into();
+                }
+                Err(e) => {
+                    enc.release_hw();
+                    enc.open_qsv_owned(a, adapter_index)?;
+                    enc.feed = Feed::QsvOwned;
+                    enc.path = format!(
+                        "qsv-owned device (d3d11 child, adapter {adapter_index}), d3d11 textures mapped (direct) from qsv surfaces; deriving from our device failed: {e}"
+                    );
+                }
+            }
         }
         enc.open_codec(a)?;
         Ok(enc)
     }
 
+    /// The D3D11 device the textures live on (draw with this one).
+    pub fn device(&self) -> BoxResult<ID3D11Device> {
+        // SAFETY: the device ref is alive; its hwctx holds a valid ID3D11Device pointer.
+        unsafe {
+            let hw = (*self.device).data as *mut ff::AVHWDeviceContext;
+            let d3d = (*hw).hwctx as *mut ff::AVD3D11VADeviceContext;
+            let raw = (*d3d).device as *mut c_void;
+            Ok(ID3D11Device::from_raw_borrowed(&raw)
+                .ok_or("no d3d11 device")?
+                .clone())
+        }
+    }
+
+    fn release_hw(&mut self) {
+        // SAFETY: owned refs (or null).
+        unsafe {
+            ff::av_buffer_unref(&mut self.qsv_frames);
+            ff::av_buffer_unref(&mut self.qsv_device);
+            ff::av_buffer_unref(&mut self.frames);
+            ff::av_buffer_unref(&mut self.device);
+        }
+    }
+
     fn open_device(&mut self, dev: &ID3D11Device) -> BoxResult<()> {
         // SAFETY: FFmpeg owns the device ref; it releases `device` on free, so we hand it an AddRef'd pointer.
         unsafe {
-            self.device = ff::av_hwdevice_ctx_alloc(ff::AVHWDeviceType::AV_HWDEVICE_TYPE_D3D11VA);
+            self.device = ff::av_hwdevice_ctx_alloc(D3D11VA);
             if self.device.is_null() {
                 return Err("av_hwdevice_ctx_alloc failed".into());
             }
@@ -125,9 +186,8 @@ impl HwEncoder {
     fn derive_qsv(&mut self) -> BoxResult<()> {
         // SAFETY: derives from our live D3D11 device/frames refs; out-pointers are fields of self.
         unsafe {
-            let qsv = ff::AVHWDeviceType::AV_HWDEVICE_TYPE_QSV;
             check(
-                ff::av_hwdevice_ctx_create_derived(&mut self.qsv_device, qsv, self.device, 0),
+                ff::av_hwdevice_ctx_create_derived(&mut self.qsv_device, QSV, self.device, 0),
                 "derive QSV device",
             )?;
             check(
@@ -141,7 +201,43 @@ impl HwEncoder {
                 "derive QSV frames",
             )?;
         }
-        self.path = "qsv frames mapped (direct) from d3d11 frames";
+        Ok(())
+    }
+
+    /// QSV fallback: FFmpeg creates the QSV device itself (D3D11 child on the Intel adapter) and the pool.
+    fn open_qsv_owned(&mut self, a: &EncodeArgs, adapter_index: u32) -> BoxResult<()> {
+        // The device string picks the MFX implementation; the adapter goes to the D3D11 child.
+        let opts = Options::new(&[
+            ("child_device_type", "d3d11va".into()),
+            ("child_device", adapter_index.to_string()),
+        ])?;
+        // SAFETY: refs created here are owned by self; fields set before av_hwframe_ctx_init.
+        unsafe {
+            check(
+                ff::av_hwdevice_ctx_create(&mut self.qsv_device, QSV, c"hw".as_ptr(), opts.0, 0),
+                "create QSV device (child d3d11va)",
+            )?;
+            check(
+                ff::av_hwdevice_ctx_create_derived(&mut self.device, D3D11VA, self.qsv_device, 0),
+                "get the QSV device's D3D11 child",
+            )?;
+            self.qsv_frames = ff::av_hwframe_ctx_alloc(self.qsv_device);
+            if self.qsv_frames.is_null() {
+                return Err("av_hwframe_ctx_alloc (QSV) failed".into());
+            }
+            let fc = (*self.qsv_frames).data as *mut ff::AVHWFramesContext;
+            (*fc).format = ff::AVPixelFormat::AV_PIX_FMT_QSV;
+            (*fc).sw_format = ff::AVPixelFormat::AV_PIX_FMT_NV12;
+            (*fc).width = a.width as i32;
+            (*fc).height = a.height as i32;
+            (*fc).initial_pool_size = POOL_SIZE;
+            let q = (*fc).hwctx as *mut ff::AVQSVFramesContext;
+            (*q).frame_type = MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET;
+            check(
+                ff::av_hwframe_ctx_init(self.qsv_frames),
+                "av_hwframe_ctx_init (QSV)",
+            )?;
+        }
         Ok(())
     }
 
@@ -176,16 +272,12 @@ impl HwEncoder {
             c.rc_buffer_size = (a.bitrate / u64::from(a.fps)) as i32;
             c.gop_size = a.fps as i32;
             c.max_b_frames = 0;
-            let src = if self.qsv_frames.is_null() {
-                self.frames
+            let (src, fmt) = if self.feed == Feed::D3d11 {
+                (self.frames, ff::AVPixelFormat::AV_PIX_FMT_D3D11)
             } else {
-                self.qsv_frames
+                (self.qsv_frames, ff::AVPixelFormat::AV_PIX_FMT_QSV)
             };
-            c.pix_fmt = if self.qsv_frames.is_null() {
-                ff::AVPixelFormat::AV_PIX_FMT_D3D11
-            } else {
-                ff::AVPixelFormat::AV_PIX_FMT_QSV
-            };
+            c.pix_fmt = fmt;
             c.hw_frames_ctx = ff::av_buffer_ref(src);
             // avcodec_open2 replaces the dictionary with the options it did not consume.
             check(
@@ -202,13 +294,27 @@ impl HwEncoder {
 
     /// Next free pool texture and its array slice (the encoder may still hold others).
     pub fn next_frame(&mut self) -> BoxResult<(ID3D11Texture2D, u32)> {
-        // SAFETY: frame is ours; data[0] is the pool's ID3D11Texture2D, data[1] the array index.
+        // SAFETY: frames are ours; a D3D11 frame has the ID3D11Texture2D in data[0], the slice in data[1].
         unsafe {
             ff::av_frame_unref(self.frame);
-            check(
-                ff::av_hwframe_get_buffer(self.frames, self.frame, 0),
-                "av_hwframe_get_buffer",
-            )?;
+            if self.feed == Feed::QsvOwned {
+                ff::av_frame_unref(self.qsv_frame);
+                check(
+                    ff::av_hwframe_get_buffer(self.qsv_frames, self.qsv_frame, 0),
+                    "av_hwframe_get_buffer (QSV)",
+                )?;
+                (*self.frame).format = ff::AVPixelFormat::AV_PIX_FMT_D3D11 as i32;
+                let flags = ff::AV_HWFRAME_MAP_WRITE as i32 | ff::AV_HWFRAME_MAP_DIRECT as i32;
+                check(
+                    ff::av_hwframe_map(self.frame, self.qsv_frame, flags),
+                    "map QSV surface to D3D11",
+                )?;
+            } else {
+                check(
+                    ff::av_hwframe_get_buffer(self.frames, self.frame, 0),
+                    "av_hwframe_get_buffer",
+                )?;
+            }
             let raw = (*self.frame).data[0] as *mut c_void;
             let tex = ID3D11Texture2D::from_raw_borrowed(&raw).ok_or("frame has no texture")?;
             Ok((tex.clone(), (*self.frame).data[1] as usize as u32))
@@ -219,27 +325,37 @@ impl HwEncoder {
     pub fn send(&mut self, pts: i64) -> BoxResult<()> {
         // SAFETY: frames are ours; the encoder takes its own references.
         unsafe {
-            (*self.frame).pts = pts;
-            if self.qsv_frames.is_null() {
-                return check(
-                    ff::avcodec_send_frame(self.ctx, self.frame),
-                    "avcodec_send_frame",
-                )
-                .map(|_| ());
+            match self.feed {
+                Feed::D3d11 => {
+                    (*self.frame).pts = pts;
+                    check(
+                        ff::avcodec_send_frame(self.ctx, self.frame),
+                        "avcodec_send_frame",
+                    )?;
+                }
+                Feed::QsvDerived => {
+                    ff::av_frame_unref(self.qsv_frame);
+                    (*self.qsv_frame).format = ff::AVPixelFormat::AV_PIX_FMT_QSV as i32;
+                    (*self.qsv_frame).hw_frames_ctx = ff::av_buffer_ref(self.qsv_frames);
+                    let flags = ff::AV_HWFRAME_MAP_READ as i32 | ff::AV_HWFRAME_MAP_DIRECT as i32;
+                    check(
+                        ff::av_hwframe_map(self.qsv_frame, self.frame, flags),
+                        "av_hwframe_map",
+                    )?;
+                    (*self.qsv_frame).pts = pts;
+                    check(
+                        ff::avcodec_send_frame(self.ctx, self.qsv_frame),
+                        "avcodec_send_frame",
+                    )?;
+                }
+                Feed::QsvOwned => {
+                    (*self.qsv_frame).pts = pts;
+                    check(
+                        ff::avcodec_send_frame(self.ctx, self.qsv_frame),
+                        "avcodec_send_frame",
+                    )?;
+                }
             }
-            ff::av_frame_unref(self.mapped);
-            (*self.mapped).format = ff::AVPixelFormat::AV_PIX_FMT_QSV as i32;
-            (*self.mapped).hw_frames_ctx = ff::av_buffer_ref(self.qsv_frames);
-            let flags = ff::AV_HWFRAME_MAP_READ as i32 | ff::AV_HWFRAME_MAP_DIRECT as i32;
-            check(
-                ff::av_hwframe_map(self.mapped, self.frame, flags),
-                "av_hwframe_map",
-            )?;
-            (*self.mapped).pts = pts;
-            check(
-                ff::avcodec_send_frame(self.ctx, self.mapped),
-                "avcodec_send_frame",
-            )?;
         }
         Ok(())
     }
@@ -283,13 +399,10 @@ impl Drop for HwEncoder {
         // SAFETY: every pointer is owned here (or null); FFmpeg's free functions accept null.
         unsafe {
             ff::avcodec_free_context(&mut self.ctx);
-            ff::av_frame_free(&mut self.mapped);
             ff::av_frame_free(&mut self.frame);
+            ff::av_frame_free(&mut self.qsv_frame);
             ff::av_packet_free(&mut self.pkt);
-            ff::av_buffer_unref(&mut self.qsv_frames);
-            ff::av_buffer_unref(&mut self.qsv_device);
-            ff::av_buffer_unref(&mut self.frames);
-            ff::av_buffer_unref(&mut self.device);
         }
+        self.release_hw();
     }
 }

@@ -57,6 +57,29 @@ fn hardware_adapters() -> BoxResult<Vec<(IDXGIAdapter1, String, u32, u64)>> {
     Ok(list)
 }
 
+/// Index of the first adapter of `vendor` in plain DXGI enumeration (what FFmpeg's d3d11va / QSV
+/// device strings mean).
+pub fn adapter_index(vendor: u32) -> BoxResult<u32> {
+    // SAFETY: enumeration stops at DXGI_ERROR_NOT_FOUND.
+    unsafe {
+        let factory: IDXGIFactory1 = CreateDXGIFactory1()?;
+        let mut i = 0;
+        while let Ok(adapter) = factory.EnumAdapters1(i) {
+            if adapter.GetDesc1()?.VendorId == vendor {
+                return Ok(i);
+            }
+            i += 1;
+        }
+    }
+    Err(format!("no adapter with vendor id {vendor:#06x}").into())
+}
+
+pub fn immediate_context(device: &ID3D11Device) -> BoxResult<ID3D11DeviceContext1> {
+    // SAFETY: the device is alive; GetImmediateContext returns an AddRef'd context.
+    let ctx = unsafe { device.GetImmediateContext()? };
+    Ok(ctx.cast()?)
+}
+
 /// Device (video support on, as FFmpeg's d3d11va and QSV need) on the first adapter of `vendor`.
 pub fn device_for_vendor(vendor: u32) -> BoxResult<(ID3D11Device, ID3D11DeviceContext1, String)> {
     let (adapter, name, _, _) = hardware_adapters()?
