@@ -1,5 +1,6 @@
 # Runs one S4 case: per round side A (service, Session 0) then side B (user session, not elevated),
-# or side C (SYSTEM in the console session, -Sides C); then pools the round CSVs. Run elevated.
+# or side C (SYSTEM in the console session, -Sides C or CB); then pools the round CSVs. Run elevated.
+# -Levers: encode priority levers (1 MMCSS, 2 GPU priority, 4 process priority class), same on every side.
 param(
     [Parameter(Mandatory)] [string] $Case,
     [ValidateSet('encode', 'audio', 'both')] [string] $Job = 'encode',
@@ -12,15 +13,16 @@ param(
     [int] $Minutes = 10,
     [switch] $Tone,
     [int] $Rounds = 3,
-    [ValidateSet('AB', 'A', 'B', 'C')] [string] $Sides = 'AB',
-    [int] $Delay = 0
+    [ValidateSet('AB', 'A', 'B', 'C', 'CB')] [string] $Sides = 'AB',
+    [int] $Delay = 0,
+    [int] $Levers = 0
 )
 . (Join-Path $PSScriptRoot 'common.ps1')
 Assert-S4Admin
 Copy-S4FfmpegDlls
 Assert-S4Built
 
-$jobArgs = "$Job --backend $Backend --codec $Codec --size $Size --fps $Fps --frames $Frames --minutes $Minutes"
+$jobArgs = "$Job --backend $Backend --codec $Codec --size $Size --fps $Fps --frames $Frames --minutes $Minutes --levers $Levers"
 if ($Format -ne '') { $jobArgs += " --format $Format" }
 if ($Tone) { $jobArgs += ' --tone' }
 $seconds = 0

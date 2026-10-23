@@ -2,9 +2,13 @@
 # results, bitstream checks and any job errors. Run elevated, with no game or GPU-heavy app open.
 #   main   (~60 min): report, install, A, B, C, D, G, then I, E-lock, E-uac (they ask you to act), uninstall.
 #   laptop (~25 min): report, install, F (QSV H.264; 1080p60 retry if 1440p120 fails), F-hevc, J, uninstall.
+#   main2  (~40 min): NVENC H.264 again, A+B without and with levers (7), then K: SYSTEM in the console
+#                     session (C) vs user session (B), without and with levers.
+#   laptop2 (~25 min): QSV at 1080p60 (the iGPU cannot keep up at 1440p120): H.264 A+B without and with
+#                     levers, HEVC A+B.
 # -NoInteractive skips the cases that need you (I, E-lock, E-uac). E-boot (reboot) stays separate: README.
 param(
-    [ValidateSet('main', 'laptop')] [string] $Machine = 'main',
+    [ValidateSet('main', 'laptop', 'main2', 'laptop2')] [string] $Machine = 'main',
     [switch] $NoInteractive
 )
 . (Join-Path $PSScriptRoot 'common.ps1')
@@ -77,7 +81,17 @@ Add-Line "S4 run-all on $Machine, started $started"
 Invoke-Step 'report' { & (Join-Path $PSScriptRoot 'report.ps1') | Out-Null; Add-Line (Get-Content -Raw (Get-ChildItem $S4OutDir -Filter '*-report.txt' | Sort-Object LastWriteTime | Select-Object -Last 1).FullName).TrimEnd() }
 Invoke-Step 'install service' { & (Join-Path $PSScriptRoot 'install-svc.ps1') | Out-Host }
 
-if ($Machine -eq 'main') {
+if ($Machine -eq 'main2') {
+    Invoke-Step 'B2 NVENC H.264, no levers (3 rounds A+B)' { & $runCase -Case B2 -Job encode -Codec h264 -Rounds 3 }
+    Invoke-Step 'B2-L7 NVENC H.264, levers 7 (3 rounds A+B)' { & $runCase -Case B2-L7 -Job encode -Codec h264 -Rounds 3 -Levers 7 }
+    Invoke-Step 'K NVENC H.264, console-session SYSTEM vs user (3 rounds C+B)' { & $runCase -Case K -Job encode -Codec h264 -Rounds 3 -Sides CB }
+    Invoke-Step 'K-L7 same with levers 7 (3 rounds C+B)' { & $runCase -Case K-L7 -Job encode -Codec h264 -Rounds 3 -Sides CB -Levers 7 }
+} elseif ($Machine -eq 'laptop2') {
+    $q = @{ Job = 'encode'; Backend = 'qsv'; Size = '1920x1080'; Fps = 60; Frames = 5000 }
+    Invoke-Step 'F2 QSV H.264 1080p60, no levers (3 rounds A+B)' { & $runCase -Case F2 @q -Codec h264 -Rounds 3 }
+    Invoke-Step 'F2-L7 QSV H.264 1080p60, levers 7 (3 rounds A+B)' { & $runCase -Case F2-L7 @q -Codec h264 -Rounds 3 -Levers 7 }
+    Invoke-Step 'F2-hevc QSV HEVC 1080p60 (1 round A+B)' { & $runCase -Case F2-hevc @q -Codec hevc -Rounds 1 }
+} elseif ($Machine -eq 'main') {
     Invoke-Step 'A smoke (encode 1200 frames, A+B)' { & $runCase -Case A -Job encode -Frames 1200 -Rounds 1 }
     Invoke-Step 'B NVENC H.264 (3 rounds A+B)' { & $runCase -Case B -Job encode -Codec h264 -Rounds 3 }
     Invoke-Step 'C NVENC HEVC (3 rounds A+B)' { & $runCase -Case C -Job encode -Codec hevc -Rounds 3 }

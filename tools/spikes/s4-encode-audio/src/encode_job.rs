@@ -11,8 +11,8 @@ use crate::platform::d3d::{
     GridPainter, VENDOR_INTEL, VENDOR_NVIDIA, adapter_index, device_for_vendor, immediate_context,
 };
 use crate::platform::ff_encode::HwEncoder;
-use crate::platform::ff_util;
 use crate::platform::pacer::Pacer;
+use crate::platform::{ff_util, levers};
 use crate::qpc;
 use crate::stats::percentiles;
 use crate::util::{BoxResult, RunFiles};
@@ -72,6 +72,9 @@ pub fn run(
     )?;
     let pacer = Pacer::new()?;
     log.line(&format!("encoder open, path: {}", enc.path));
+    // Held until the end of the run (MMCSS is reverted on drop).
+    let applied = levers::apply(a.levers, &device);
+    log.line(&format!("levers: {:?}", applied.notes));
 
     let n = a.frames as usize;
     let mut pending: Vec<Option<u64>> = vec![None; n];
@@ -136,6 +139,12 @@ pub fn run(
         a.bitrate
     );
     let _ = writeln!(summary, "path: {}", enc.path);
+    let _ = writeln!(
+        summary,
+        "levers: {} ({})",
+        levers::lever_names(a.levers),
+        applied.notes.join("; ")
+    );
     let _ = writeln!(
         summary,
         "frames sent {sent} received {} lost {lost}",

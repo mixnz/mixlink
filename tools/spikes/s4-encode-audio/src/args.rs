@@ -30,6 +30,8 @@ pub struct EncodeArgs {
     pub fps: u32,
     pub frames: u32,
     pub bitrate: u64,
+    /// Priority levers, `platform::levers` bits (encode only).
+    pub levers: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -116,6 +118,7 @@ fn parse_encode(args: &[String]) -> BoxResult<EncodeArgs> {
         fps: u32_arg(args, "--fps", 120)?,
         frames: u32_arg(args, "--frames", 10_000)?,
         bitrate: arg_u64(args, "--bitrate", 30_000_000)?,
+        levers: u32_arg(args, "--levers", 0)?,
     })
 }
 

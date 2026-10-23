@@ -13,7 +13,7 @@ use windows::Win32::Graphics::Direct3D11::{
 };
 use windows::core::Interface;
 
-use crate::args::{Backend, EncodeArgs, Format};
+use crate::args::{Backend, Codec, EncodeArgs, Format};
 use crate::platform::ff_hwctx::{HwRefs, POOL_SIZE};
 use crate::platform::ff_util::{EAGAIN, Options, check};
 use crate::util::BoxResult;
@@ -53,13 +53,19 @@ fn options(a: &EncodeArgs) -> Vec<(&'static str, String)> {
             ("intra-refresh", "1".into()),
             ("forced-idr", "0".into()),
         ],
-        Backend::Qsv => vec![
-            ("preset", "veryfast".into()),
-            ("low_power", "1".into()),
-            ("async_depth", "1".into()),
-            ("look_ahead", "0".into()),
-            ("int_ref_type", "vertical".into()),
-        ],
+        Backend::Qsv => {
+            let mut o = vec![
+                ("preset", "veryfast".into()),
+                ("low_power", "1".into()),
+                ("async_depth", "1".into()),
+                ("int_ref_type", "vertical".into()),
+            ];
+            // hevc_qsv has no look_ahead option (avcodec_open2 would leave it unconsumed).
+            if a.codec == Codec::H264 {
+                o.push(("look_ahead", "0".into()));
+            }
+            o
+        }
     }
 }
 

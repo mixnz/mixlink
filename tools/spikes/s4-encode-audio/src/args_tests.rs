@@ -91,3 +91,15 @@ fn parse_rejects_bad_backend_and_side() {
     assert!(parse(&strings(&["encode", "--side", "D"])).is_err());
     assert!(parse(&strings(&["encode", "--size", "1080p"])).is_err());
 }
+
+#[test]
+fn parse_levers_default_and_set() {
+    let Job::Encode(e) = parse(&strings(&["encode"])).unwrap().job else {
+        panic!("expected encode job")
+    };
+    assert_eq!(e.levers, 0);
+    let Job::Encode(e) = parse(&strings(&["encode", "--levers", "7"])).unwrap().job else {
+        panic!("expected encode job")
+    };
+    assert_eq!(e.levers, 7);
+}

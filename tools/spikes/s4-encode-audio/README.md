@@ -28,9 +28,10 @@ Standalone Cargo package (not in the main workspace). Output (logs, CSV, bitstre
   and the "not slower" rule (side A or C vs B). Saved as `out/<stamp>-<case>-pool-<job>.txt`.
 
 ## Scripts (elevated PowerShell)
-- `run-all.ps1 [-Machine main|laptop] [-NoInteractive]`: every case of that machine in one go (main: A, B, C,
+- `run-all.ps1 [-Machine main|laptop|main2|laptop2] [-NoInteractive]`: every case of that machine in one go (main: A, B, C,
   D, G, then I, E-lock, E-uac which ask you to act; laptop: F, F-hevc, J), tone started for you, service
   installed and removed. Writes `out/<stamp>-run-all-<machine>.txt` (pools, bitstream checks, job errors).
+  `main2` / `laptop2`: second round (levers, case K on the main PC; QSV at 1080p60 on the laptop).
 - `report.ps1`: Windows build, GPUs and drivers, HAGS, power plan, `nvidia-smi` state, `s4-ctl check`.
 - `install-svc.ps1 [-AutoJob "<job args>"]`: service `MixLinkS4` (LocalSystem, demand start; automatic with
   `-AutoJob` for the reboot run). Copies FFmpeg DLLs next to the exes. `uninstall-svc.ps1` removes it.

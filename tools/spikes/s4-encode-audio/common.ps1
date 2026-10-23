@@ -96,7 +96,8 @@ function Register-S4UserTask([string] $Name, [string] $Exe, [string] $TaskArgs, 
     Unregister-ScheduledTask -TaskName $Name -Confirm:$false -ErrorAction SilentlyContinue
     $action = New-ScheduledTaskAction -Execute $Exe -Argument $TaskArgs -WorkingDirectory $S4Bin
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
-    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::FromSeconds($TimeoutS)) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    # -Priority 4 = normal process priority (the task default 7 is below normal, unfair to side B).
+    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::FromSeconds($TimeoutS)) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Priority 4
     Register-ScheduledTask -TaskName $Name -Action $action -Principal $principal -Settings $settings | Out-Null
 }
 

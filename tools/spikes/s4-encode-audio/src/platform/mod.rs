@@ -6,6 +6,7 @@ pub mod ff_hwctx;
 pub mod ff_probe;
 pub mod ff_util;
 pub mod ff_verify;
+pub mod levers;
 pub mod notify;
 pub mod pacer;
 pub mod tone;
