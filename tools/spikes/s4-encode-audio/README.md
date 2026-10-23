@@ -34,3 +34,11 @@ Standalone Cargo package (not in the main workspace). Output (logs, CSV, bitstre
 - `run-case.ps1 -Case <c> -Job encode|audio|both [-Backend] [-Codec] [-Format] [-Size] [-Fps] [-Frames]
   [-Minutes] [-Tone] [-Rounds 3] [-Sides AB|A|B|C] [-Delay <s>]`: per round side A = service in Session 0,
   side B = same job as the logged-on user, not elevated (one-shot scheduled task); then `s4-ctl pool`.
+- `-Sides C` (fallback probe, case K): the service starts the same job as SYSTEM in the active console session
+  (`s4-svc --in-console`, ADR-0005 fallback layout).
+
+## Session states (cases E, H)
+1. `install-svc.ps1 -AutoJob "both --minutes 1 --tone --delay-seconds 30"`, reboot, wait at the login screen
+   2 min, log in (case `E-boot`). Then `install-svc.ps1` again (demand start).
+2. `run-case.ps1 -Case E-lock -Job both -Minutes 1 -Frames 7200 -Tone -Rounds 1 -Sides A -Delay 15`, Win+L within 15 s.
+3. Same with `-Case E-uac`, opening a UAC prompt within 15 s.

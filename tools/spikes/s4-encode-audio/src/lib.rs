@@ -3,6 +3,7 @@
 pub mod args;
 pub mod audio_job;
 pub mod compare;
+pub mod console_spawn;
 pub mod encode_job;
 pub mod grid;
 pub mod log;

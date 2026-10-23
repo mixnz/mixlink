@@ -1,11 +1,13 @@
 //! `s4-svc [--console] --case X --side A|B|C <encode|audio|both> [options]`: runs one job and exits.
 //! Without `--console` it must be started by the service manager: service `MixLinkS4` (LocalSystem,
 //! Session 0), args from its ImagePath (`install-svc.ps1`, `run-case.ps1`); it stops itself when done.
-//! `both` runs the encode job on a second thread next to the audio job.
+//! `both` runs the encode job on a second thread next to the audio job. `--in-console` (service only):
+//! the service starts the job as SYSTEM in the active console session instead (side C).
 
 use std::sync::atomic::AtomicBool;
 
 use s4_encode_audio::args::{AudioArgs, EncodeArgs, Job, RunArgs, parse};
+use s4_encode_audio::console_spawn::run_in_console;
 use s4_encode_audio::log::RunLog;
 use s4_encode_audio::util::{BoxResult, RunFiles};
 use s4_encode_audio::{audio_job, encode_job, service};
@@ -94,6 +96,33 @@ fn main() -> BoxResult<()> {
     }
     service::run(Box::new(move |stop| {
         // Errors are already in the run log; the service just stops.
-        let _ = run_job(&run, stop);
+        let _ = if run.in_console {
+            spawn_in_console(&args, &run, stop)
+        } else {
+            run_job(&run, stop)
+        };
     }))
+}
+
+/// Side C (ADR-0005 fallback layout): the same job as SYSTEM in the console session, waited for.
+fn spawn_in_console(args: &[String], run: &RunArgs, stop: &AtomicBool) -> BoxResult<()> {
+    let mut log = RunLog::create(&run.case, &format!("{}-svc-spawn", run.side))?;
+    let child: Vec<&str> = args
+        .iter()
+        .map(String::as_str)
+        .filter(|a| *a != "--in-console")
+        .collect();
+    let exe = std::env::current_exe()?;
+    let child_args = format!("--console {}", child.join(" "));
+    log.line(&format!("spawning in console session: {child_args}"));
+    match run_in_console(&exe.to_string_lossy(), &child_args, stop) {
+        Ok((code, session)) => {
+            log.line(&format!("child exited {code} in session {session}"));
+            Ok(())
+        }
+        Err(e) => {
+            log.line(&format!("spawn failed: {e}"));
+            Err(e)
+        }
+    }
 }
