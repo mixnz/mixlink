@@ -3,10 +3,10 @@
 use crate::report::PadState;
 
 /// Every control `control` knows, in the order a mapping wizard usually asks for them.
-pub const NAMES: [&str; 26] = [
+pub const NAMES: [&str; 30] = [
     "a", "b", "x", "y", "lb", "rb", "back", "start", "ls", "rs", "guide", "share", "up", "down",
     "left", "right", "lt", "rt", "ls-up", "ls-down", "ls-left", "ls-right", "rs-up", "rs-down",
-    "rs-left", "rs-right",
+    "rs-left", "rs-right", "b13", "b14", "b15", "b16",
 ];
 
 /// Pad state with only `name` pressed (buttons, D-pad, full trigger or a stick at its edge).
@@ -29,6 +29,11 @@ pub fn control(name: &str) -> Option<PadState> {
         "rs" => button(9),
         "guide" => button(10),
         "share" => button(11),
+        // Spare buttons: Steam can bind them to anything (e.g. LT / RT as digital triggers).
+        "b13" => button(12),
+        "b14" => button(13),
+        "b15" => button(14),
+        "b16" => button(15),
         "up" => PadState { hat: 0, ..c },
         "right" => PadState { hat: 2, ..c },
         "down" => PadState { hat: 4, ..c },

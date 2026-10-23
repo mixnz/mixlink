@@ -141,7 +141,7 @@ fn every_listed_name_is_mapped() {
     for name in NAMES {
         assert!(control(name).is_some(), "{name}");
     }
-    assert_eq!(NAMES.len(), 26);
+    assert_eq!(NAMES.len(), 30);
 }
 
 #[test]
@@ -199,4 +199,13 @@ fn prime_nudges_each_analog_once_and_ends_centered() {
     }
     let lt = &steps[0];
     assert!(lt.lt > 0 && lt.lt < 64, "small trigger nudge, not a press");
+}
+
+#[test]
+fn spare_buttons_13_to_16() {
+    for (name, bit) in [("b13", 12), ("b14", 13), ("b15", 14), ("b16", 15)] {
+        assert_eq!(pressed(name).buttons, 1 << bit, "{name}");
+    }
+    assert_eq!(control("b12"), None, "b12 is share");
+    assert_eq!(control("b17"), None, "the pad has 16 buttons");
 }
