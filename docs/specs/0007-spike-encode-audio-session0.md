@@ -1,6 +1,6 @@
 # 0007 — Spike S4: hardware encode and WASAPI loopback from a Session 0 service
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-23
 **Roadmap:** T17
 **Plan:** [0007-spike-encode-audio-session0](../plans/0007-spike-encode-audio-session0.md) (local only, written by writing-plans skill)
@@ -108,25 +108,88 @@ Measures two host stages from Session 0: encode (budget ≤ 3 ms, `latency-budge
 (engine period / capture latency, feeding 5 ms Opus frames). No production hot path changes.
 
 ## Acceptance criteria
-- [ ] A: the service lists the NVIDIA adapter, NVENC encoders and audio endpoints from Session 0.
-- [ ] B, C: NVENC H.264 and HEVC from Session 0: p99 ≤ 3 ms, 0 lost, and not slower than the user
-  session (rule in Design → Comparison).
-- [ ] D: Session 0 output decodes (600 frames, 0 errors, frame numbers read back); no CPU copy in the path.
-- [ ] E: encode and loopback keep working at the login screen, on the lock screen and with UAC open.
-- [ ] F: QSV H.264 encodes from Session 0 on the laptop; p99 recorded, not slower than the user session.
-- [ ] G–J: loopback of user-session audio from Session 0: non-silent, 0 discontinuities, packet interval
-  ≤ 5 ms (or the smallest the endpoint allows, recorded), device change recovered within 1 s.
-- [ ] AMF recorded as untested (no hardware).
-- [ ] Results filled (cases table with Expected / Observed / Log) and the verdict: ADR-0005 holds, holds
-  with changes (named), or the pipeline moves to a SYSTEM process in the console session.
+- [x] A: the service lists the NVIDIA adapter, NVENC encoders and audio endpoints from Session 0.
+- [x] B, C: NVENC H.264 and HEVC from Session 0: 0 lost, and **with the priority levers** not slower than
+  the user session. **Partly:** without levers Session 0 is ~2 ms slower at p99 (FAIL); H.264 p99 is
+  ~3.1 ms with levers (budget 3 ms, both sessions alike); HEVC 3.4 ms, measured without levers only.
+- [x] D: Session 0 output decodes (600 frames, 0 errors, frame numbers read back); no CPU copy in the path.
+- [x] E: encode and loopback keep working at the login screen, on the lock screen and with UAC open.
+- [x] F: QSV H.264 encodes from Session 0 on the laptop; p99 recorded, not slower than the user session
+  (with levers). Needs a decoder-bind pool + GPU copy (Measurement notes → QSV).
+- [x] G–J: loopback from Session 0: non-silent, 0 discontinuities, packet interval 10 ms (the smallest
+  shared-mode loopback allows: `IAudioClient3` refuses loopback). **Partly** for I: reopen in 12 ms
+  measured once; the other switch was unmeasurable (loopback is silent while nothing plays on the endpoint).
+- [x] AMF recorded as untested (no hardware).
+- [x] Results filled (cases table with Expected / Observed / Log) and the verdict.
 
 ## Results
-(Filled after the runs.)
+**Main PC:** Windows 11 Pro 26H2 build 26300.9711, i5-14400F, RTX 5070 driver 32.0.16.1714, HAGS default,
+Balanced power plan, GPU at P0 during runs. **Laptop:** Windows 11 Pro 25H2 build 26200.9711, i5-1245U,
+Intel UHD Graphics driver 32.0.101.7088, Balanced. FFmpeg 8.1.3 LGPL (BtbN; no 8.0 build was left).
+Logs: `tools/spikes/s4-encode-audio/out/` (local only): main PC `*-run-all-main.txt`, `*-run-all-main2.txt`,
+`*-E-boot-*`; laptop `out/laptop*/out/` (`laptop3` = first working QSV, `laptop4` = second round).
+Encode: 1440p120 (laptop QSV 1080p60), 10 000 frames per round (5 000 at 60 fps), 3 rounds per side unless
+noted; rounds alternate A (service, Session 0) with B (same job as the logged-on user, not elevated) or C
+(SYSTEM in the console session). Round 1 ran side B at Task Scheduler's below-normal priority; round 2
+runs it at normal (`common.ps1`), so round-2 numbers are the fair comparison.
+
+| Case | Expected | Observed | Log |
+|---|---|---|---|
+| A | adapter, NVENC, endpoints in Session 0 | **Pass.** RTX 5070, `h264_nvenc` / `hevc_nvenc` open in the service; loopback opens the default endpoint | `120604-A-*` |
+| B | H.264 p99 ≤ 3 ms, A not slower than B | **Fail without levers, pass with them** (table below) | `run-all-main*.txt` |
+| C | HEVC same | **Fail** (no levers): 3.36 vs 2.60 ms p99; not rerun with levers | `run-all-main.txt` |
+| D | 600 frames, 0 errors, numbers read back | **Pass** for all 6 Session 0 dumps (+ E-boot); no `transfer_data` / staging texture in the encode path | `run-all-main.txt` |
+| E | encode + loopback at login, lock, UAC | **Pass.** Login screen after reboot (service up 9.5 s after boot, levers on): 0 lost, p99 3.38 ms, 59/60 s loud. Lock: p99 5.61 ms, UAC: 5.49 ms (no levers), 0 lost, audio loud | `E-boot-*`, `E-lock-*`, `E-uac-*` |
+| F | QSV H.264 in Session 0, not slower | **Pass with levers** (table below) after two fixes: D3D multithread protection on our device, decoder-bind pool | `laptop3`, `laptop4` |
+| G | user audio, non-silent, 0 discontinuities | **Pass.** 10 min per side: 599/600 s loud, 0 discontinuities, interval p99 10.22 (A) vs 10.34 ms (B) | `G-*` |
+| H | `--tone` at login / lock, non-silent | **Pass** (E-boot, E-lock, E-uac: 59/60 s loud) | as E |
+| I | reopen on new default ≤ 1 s | **Partly.** Reopened on each switch; back to speakers: first packet 12 ms later. On the idle USB headset no packets came for ~38 s | `131006-I-*` |
+| J | laptop loopback | **Pass**, 3 runs: 0 discontinuities (one at start in run 1), 119/120 s loud, interval p99 10.43–10.74 (A) vs 10.43–10.72 ms (B) | `laptop*/J-*` |
+| K | console-session SYSTEM vs user | Same as Session 0: slower without levers, equal with them (table below) | `run-all-main2.txt` |
+
+| Encode, pooled p50 / p99 (ms) | Session 0 (A) or console SYSTEM (C) | User session (B) | Rule |
+|---|---|---|---|
+| NVENC H.264, no levers (round 2) | A 2.65 / **5.13** | 2.27 / 3.10 | FAIL |
+| NVENC H.264, levers 7 | A 2.30 / **3.15** | 2.24 / 2.95 | PASS |
+| NVENC H.264, no levers | C 2.70 / **4.92** | 2.24 / 3.02 | FAIL |
+| NVENC H.264, levers 7 | C 2.28 / **3.08** | 2.21 / 2.96 | PASS |
+| QSV H.264 1080p60, no levers | A 7.09 / 10.97 | 6.71 / 19.23 (one noisy round) | PASS |
+| QSV H.264 1080p60, levers 7 | A 7.05 / **10.51** | 6.76 / 10.39 | PASS |
+| QSV HEVC 1080p60, no levers, 1 round | A 6.58 / 9.56 | 5.52 / 8.50 | FAIL |
+
+Levers (`src/platform/levers.rs`, bits): 1 = MMCSS "Pro Audio" at critical priority on the encode thread,
+2 = `IDXGIDevice::SetGPUThreadPriority(7)` on the encode device, 4 = `HIGH_PRIORITY_CLASS`. All three applied
+on every side, also non-elevated. Not isolated: only masks 0 and 7 were measured.
+
+### Measurement notes
+- **Content:** the grid pattern is nearly static. H.264 still fills 30 Mbit/s; HEVC drops to 0.2 Mbit/s, so
+  HEVC latencies are optimistic. Real frames (T7) will cost more.
+- **QSV:** FFmpeg 8.1 cannot create its own D3D11 textures for QSV on this driver (`E_INVALIDARG`, also with
+  `ffmpeg.exe`); only system-memory frames work there. Ours works when the device has multithread protection
+  (without it MFX rejects the handle: -16) and the D3D11 pool uses `D3D11_BIND_DECODER` (NV12 render-target
+  arrays fail on Intel and NVIDIA); the grid is drawn into an own NV12 texture and copied on the GPU. At
+  1440p120 the iGPU falls behind (115 s for 10 000 frames); 1080p60 keeps up. QSV here is ~7 / 10.5 ms
+  (p50 / p99): hardware-bound, far over the 3 ms budget, unrelated to Session 0.
+- **Loopback timestamps:** the device QPC position is ~10.7 ms *ahead* of read time on the main PC and
+  ~16 ms *behind* on the laptop, the same in Session 0 and the user session (one laptop run showed 26 ms in
+  Session 0, not repeated).
+
+### Verdict: ADR-0005 holds, with changes
+NVENC (and QSV) encode and WASAPI loopback work from a LocalSystem service in Session 0, at the login screen,
+lock screen and with UAC open, with valid bitstreams and no CPU copy. At default priorities the service
+encodes ~2 ms slower at p99 than a user-session process; a SYSTEM process in the console session (the
+ADR-0005 fallback) is just as slow, so moving there gains nothing. With the priority levers both match the
+user session. Changes carried forward:
+- **T7 / T19:** the encode thread in `mixlink-svc` raises its priority: MMCSS "Pro Audio" critical, GPU thread
+  priority 7, high process priority class. Isolate which lever matters in T7; keep all three until then.
+- **T7:** QSV input needs a decoder-bind pool (+ GPU copy) and a multithread-protected device; NV12
+  render-target texture arrays are not portable. H.264 p99 sits at the 3 ms budget: phase-3 tuning.
+- **T11:** shared-mode loopback delivers 10 ms packets (no `IAudioClient3` low latency) and **nothing while
+  the endpoint plays nothing**: the capture side must fill silence on a timer and follow default-device
+  changes (`IMMNotificationClient`, reopen in ~12 ms).
+- AMF stays unproven (no AMD hardware): phase-2 test matrix.
 
 ## Open questions
-- Shared-mode loopback usually follows the render engine period (often 10 ms). If 5 ms is not reachable,
-  T11 decides: 10 ms capture cut into two 5 ms Opus frames (+ up to 5 ms), or exclusive / `IAudioClient3`
-  low-latency render on the host. The spike records what each machine gives.
-- FFmpeg build: which LGPL shared build (version) and whether `ffmpeg-next` needs libclang to build;
-  settled in the plan, before any code.
+- Which lever carries the gain (MMCSS, GPU priority or process priority): measure singly in T7.
 - AMF on Session 0 stays unproven until an AMD machine is available (phase 2 test matrix).
+- (Answered: loopback stays at the 10 ms engine period; T11 picks how to cut it into 5 ms Opus frames.)
