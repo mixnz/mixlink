@@ -3,10 +3,10 @@
 use crate::report::PadState;
 
 /// Every control `control` knows, in the order a mapping wizard usually asks for them.
-pub const NAMES: [&str; 24] = [
-    "a", "b", "x", "y", "lb", "rb", "back", "start", "ls", "rs", "up", "down", "left", "right",
-    "lt", "rt", "ls-up", "ls-down", "ls-left", "ls-right", "rs-up", "rs-down", "rs-left",
-    "rs-right",
+pub const NAMES: [&str; 26] = [
+    "a", "b", "x", "y", "lb", "rb", "back", "start", "ls", "rs", "guide", "share", "up", "down",
+    "left", "right", "lt", "rt", "ls-up", "ls-down", "ls-left", "ls-right", "rs-up", "rs-down",
+    "rs-left", "rs-right",
 ];
 
 /// Pad state with only `name` pressed (buttons, D-pad, full trigger or a stick at its edge).
@@ -27,6 +27,8 @@ pub fn control(name: &str) -> Option<PadState> {
         "start" => button(7),
         "ls" => button(8),
         "rs" => button(9),
+        "guide" => button(10),
+        "share" => button(11),
         "up" => PadState { hat: 0, ..c },
         "right" => PadState { hat: 2, ..c },
         "down" => PadState { hat: 4, ..c },

@@ -120,3 +120,21 @@ fn pad_to_xinput_buttons_and_hat() {
         0x0004
     );
 }
+
+#[test]
+fn pad_to_xinput_guide_and_share() {
+    let guide = PadState {
+        buttons: 1 << 10,
+        ..PadState::CENTERED
+    };
+    assert_eq!(pad_to_xinput(&guide).buttons, 0x0400, "XInput guide");
+    let share = PadState {
+        buttons: 1 << 11,
+        ..PadState::CENTERED
+    };
+    assert_eq!(
+        pad_to_xinput(&share).buttons,
+        0,
+        "XInput has no share button"
+    );
+}

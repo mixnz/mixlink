@@ -72,9 +72,10 @@ pub struct XinputPad {
     pub thumb_ry: i16,
 }
 
-/// HID button bit (Xbox order A, B, X, Y, LB, RB, Back, Start, LS, RS) -> XInput flag.
-const XINPUT_BUTTONS: [u16; 10] = [
-    0x1000, 0x2000, 0x4000, 0x8000, 0x0100, 0x0200, 0x0020, 0x0010, 0x0040, 0x0080,
+/// HID button bit (Xbox order A, B, X, Y, LB, RB, Back, Start, LS, RS, Guide) -> XInput flag.
+/// Bit 11 (Share) has no XInput flag.
+const XINPUT_BUTTONS: [u16; 11] = [
+    0x1000, 0x2000, 0x4000, 0x8000, 0x0100, 0x0200, 0x0020, 0x0010, 0x0040, 0x0080, 0x0400,
 ];
 /// Hat 0..7 clockwise from up -> D-pad flags (up 1, down 2, left 4, right 8).
 const XINPUT_HAT: [u16; 8] = [

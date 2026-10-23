@@ -131,7 +131,7 @@ fn names_ignore_case_and_spaces() {
 
 #[test]
 fn unknown_names_are_rejected() {
-    assert_eq!(control("guide"), None, "no guide button in the descriptor");
+    assert_eq!(control("home"), None, "the name is guide");
     assert_eq!(control(""), None);
     assert_eq!(control("ls-diagonal"), None);
 }
@@ -141,5 +141,11 @@ fn every_listed_name_is_mapped() {
     for name in NAMES {
         assert!(control(name).is_some(), "{name}");
     }
-    assert_eq!(NAMES.len(), 24);
+    assert_eq!(NAMES.len(), 26);
+}
+
+#[test]
+fn guide_and_share_use_buttons_11_and_12() {
+    assert_eq!(pressed("guide").buttons, 1 << 10);
+    assert_eq!(pressed("share").buttons, 1 << 11);
 }
