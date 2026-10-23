@@ -77,12 +77,7 @@ function Start-S4ServiceAndWait([int] $TimeoutS) {
 # Runs s4-svc --console as the interactive user, not elevated (one-shot scheduled task), and waits.
 function Start-S4UserRun([string] $JobArgs, [int] $TimeoutS) {
     $user = (Get-CimInstance Win32_ComputerSystem).UserName
-    if ([string]::IsNullOrEmpty($user)) { throw 'No interactive user is logged on.' }
-    Unregister-ScheduledTask -TaskName $S4UserTask -Confirm:$false -ErrorAction SilentlyContinue
-    $action = New-ScheduledTaskAction -Execute $S4Exe -Argument ('--console ' + $JobArgs) -WorkingDirectory $S4Bin
-    $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
-    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::FromSeconds($TimeoutS)) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-    Register-ScheduledTask -TaskName $S4UserTask -Action $action -Principal $principal -Settings $settings | Out-Null
+    Register-S4UserTask $S4UserTask $S4Exe ('--console ' + $JobArgs) $TimeoutS
     Start-ScheduledTask -TaskName $S4UserTask
     $deadline = (Get-Date).AddSeconds($TimeoutS)
     do {
@@ -94,8 +89,42 @@ function Start-S4UserRun([string] $JobArgs, [int] $TimeoutS) {
     Write-Host "User run finished (state $state, result $result) as $user."
 }
 
+# One-shot scheduled task that runs $Exe as the interactive user, not elevated.
+function Register-S4UserTask([string] $Name, [string] $Exe, [string] $TaskArgs, [int] $TimeoutS) {
+    $user = (Get-CimInstance Win32_ComputerSystem).UserName
+    if ([string]::IsNullOrEmpty($user)) { throw 'No interactive user is logged on.' }
+    Unregister-ScheduledTask -TaskName $Name -Confirm:$false -ErrorAction SilentlyContinue
+    $action = New-ScheduledTaskAction -Execute $Exe -Argument $TaskArgs -WorkingDirectory $S4Bin
+    $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::FromSeconds($TimeoutS)) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    Register-ScheduledTask -TaskName $Name -Action $action -Principal $principal -Settings $settings | Out-Null
+}
+
+$S4ToneTask = 'MixLinkS4Tone'
+
+# Starts the test tone in the user session (s4-tone, not elevated) and returns at once.
+function Start-S4UserTone([int] $Minutes) {
+    Register-S4UserTask $S4ToneTask (Join-Path $S4Bin 's4-tone.exe') "--minutes $Minutes" (($Minutes + 5) * 60)
+    Start-ScheduledTask -TaskName $S4ToneTask
+    Write-Host "Test tone playing for up to $Minutes min (user session)."
+}
+
+function Stop-S4UserTone {
+    if (Get-ScheduledTask -TaskName $S4ToneTask -ErrorAction SilentlyContinue) {
+        Stop-ScheduledTask -TaskName $S4ToneTask -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName $S4ToneTask -Confirm:$false
+    }
+    Get-Process s4-tone -ErrorAction SilentlyContinue | Stop-Process -Force
+}
+
 function Invoke-S4Ctl([string[]] $CtlArgs) {
     # PS 5.1 turns a native stderr line into a terminating error under 'Stop'.
     $ErrorActionPreference = 'Continue'
     & $S4Ctl @CtlArgs 2>&1 | ForEach-Object { "$_" } | Out-Host
+}
+
+# Same as Invoke-S4Ctl but returns the text (for the run-all summary).
+function Get-S4CtlText([string[]] $CtlArgs) {
+    $ErrorActionPreference = 'Continue'
+    return ((& $S4Ctl @CtlArgs 2>&1 | ForEach-Object { "$_" }) -join "`n")
 }
