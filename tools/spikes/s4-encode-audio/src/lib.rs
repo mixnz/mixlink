@@ -2,6 +2,7 @@
 
 pub mod args;
 pub mod compare;
+pub mod encode_job;
 pub mod grid;
 pub mod log;
 pub mod platform;

@@ -55,6 +55,44 @@ pub fn now_stamp() -> String {
     utc_stamp(secs)
 }
 
+/// Output files of one run: `out/<stamp>-<case>-<side>-<suffix>`.
+pub struct RunFiles {
+    pub stamp: String,
+    pub case: String,
+    pub side: char,
+}
+
+impl RunFiles {
+    pub fn new(case: &str, side: char) -> Self {
+        Self {
+            stamp: now_stamp(),
+            case: case.to_string(),
+            side,
+        }
+    }
+
+    pub fn path(&self, suffix: &str) -> PathBuf {
+        let dir = out_dir().unwrap_or_else(|_| PathBuf::from("."));
+        dir.join(format!(
+            "{}-{}-{}-{suffix}",
+            self.stamp, self.case, self.side
+        ))
+    }
+
+    /// Summary text file plus one µs sample per line in a CSV.
+    pub fn write_result(&self, job: &str, summary: &str, samples_us: &[u64]) -> BoxResult<()> {
+        std::fs::write(self.path(&format!("{job}.txt")), summary)?;
+        let mut csv = String::with_capacity(samples_us.len() * 6);
+        csv.push_str("# us\n");
+        for v in samples_us {
+            csv.push_str(&v.to_string());
+            csv.push('\n');
+        }
+        std::fs::write(self.path(&format!("{job}.csv")), csv)?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 #[path = "util_tests.rs"]
 mod tests;

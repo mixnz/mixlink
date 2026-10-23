@@ -15,3 +15,7 @@ Standalone Cargo package (not in the main workspace). Output (logs, CSV, bitstre
 
 ## Pieces
 - `s4-ctl check`: adapters, FFmpeg version, which hardware encoders the build has.
+- `s4-ctl verify <file>`: software-decodes a `.h264` / `.hevc` dump, counts frames and errors, reads the
+  frame-number grid of frames 0, 299, 599.
+- `s4-svc --console --case <c> --side B encode [--backend nvenc|qsv] [--codec h264|hevc] [--format bgra|nv12]
+  [--size WxH] [--fps N] [--frames N]`: encode job in this process. Writes `out/<stamp>-<case>-<side>-encode.{txt,csv,h264|hevc}`.
