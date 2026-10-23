@@ -13,4 +13,9 @@
 - (none yet — fill in names of exported traits/types, one line each)
 
 ## Notes
-- (gotchas an AI session must know before editing this module)
+- Spike S4 (spec 0007): loopback works from the Session 0 service, also before login.
+- Shared-mode loopback packets come every 10 ms: `IAudioClient3` refuses the loopback flag
+  (`AUDCLNT_E_INVALID_STREAM_FLAG`), so no low-latency period. Cut 10 ms into two 5 ms Opus frames.
+- Loopback delivers **no packets while nothing plays** on the endpoint: fill silence on a timer.
+- Follow default-device changes with `IMMNotificationClient` (flag only in the callback, reopen in the
+  capture loop; ~12 ms). The first packet after opening carries the discontinuity flag.

@@ -1,0 +1,13 @@
+//! Win32 and FFmpeg FFI. All `unsafe` of the package lives here (plus the copied service helpers).
+
+pub mod d3d;
+pub mod ff_encode;
+pub mod ff_hwctx;
+pub mod ff_probe;
+pub mod ff_util;
+pub mod ff_verify;
+pub mod levers;
+pub mod notify;
+pub mod pacer;
+pub mod tone;
+pub mod wasapi;

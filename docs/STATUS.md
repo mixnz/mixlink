@@ -44,16 +44,23 @@
   - Games: kbd/mouse direct in all 3; pad via Steam Input (manual layout; analog LT/RT ignored); ViGEm for
     Steam-Input-off XInput (Wuchang). p99: kbd 0.80, abs mouse 0.62, rel mouse ~3.3 (SendInput ~3.0), pad
     Raw Input ~1.1, WGI 0.54, ViGEm 0.06 ms.
+- T17 spike S4 (spec 0007): **ADR-0005 holds, with changes** (ADR amended: encode priority).
+  - `tools/spikes/s4-encode-audio/`: FFmpeg 8.1 (LGPL, `C:\tools\ffmpeg`, LLVM for bindgen) NVENC/QSV encode
+    job and WASAPI loopback job, as service `MixLinkS4` or in the user session; `run-all.ps1` per machine.
+  - NVENC 1440p120 in Session 0: p99 5.1 vs 3.1 ms (user) at default priority; with MMCSS + GPU priority 7 +
+    high process priority 3.15 vs 2.95 ms. Console-session SYSTEM (fallback) behaves the same. Works at login
+    (after reboot), lock, UAC; bitstreams valid, no CPU copy. QSV (laptop iGPU) works via decoder-bind pool.
+  - Loopback: 10 ms packets (`IAudioClient3` refuses loopback), nothing while the endpoint is idle.
 
 ## In progress
-- Nothing. Test machine: `vhid` removed (clean); ViGEmBus may still be installed (remove via Settings →
-  Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
+- Nothing. Main PC and laptop: `MixLinkS4` removed. Test machine: ViGEmBus may still be installed (remove
+  via Settings → Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
-- Roadmap phase 1: T17 spike S4 next. T20 follows spec 0003 → Verdict; T21 follows spec 0004 and 0005 →
-  Verdict constraints; T7 follows spec 0005 → Verdict; T22 / T12 follow spec 0006 → Verdict (feed via IOCTL,
-  not a HID collection; trigger layout for Steam; pad order).
+- Roadmap phase 1: T18 spike S5 next (or T2). T20 follows spec 0003 → Verdict; T21 follows spec 0004 and
+  0005 → Verdict constraints; T7 follows specs 0005 and 0007 → Verdict (encode levers, isolate them; QSV
+  pool); T11 follows spec 0007 (10 ms loopback, silence fill); T22 / T12 follow spec 0006 → Verdict.
 
 ## Open questions
 - Roadmap row for the language switch (EN/VI setting + `vi` strings) not added yet.
