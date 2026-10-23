@@ -14,11 +14,16 @@ Standalone Cargo package (not in the main workspace). Output (logs, CSV, bitstre
 - Copy `C:\tools\ffmpeg\bin\*.dll` next to the exes in `target/release/` (`install-svc.ps1` does it too).
 
 ## Pieces
-- `s4-ctl check`: adapters, FFmpeg version, which hardware encoders the build has.
+- `s4-ctl check`: adapters, FFmpeg version, which hardware encoders the build has, render endpoints.
 - `s4-ctl verify <file>`: software-decodes a `.h264` / `.hevc` dump, counts frames and errors, reads the
   frame-number grid of frames 0, 299, 599.
 - `s4-svc --console --case <c> --side B encode [--backend nvenc|qsv] [--codec h264|hevc] [--format bgra|nv12]
   [--size WxH] [--fps N] [--frames N]`: encode job in this process. Writes `out/<stamp>-<case>-<side>-encode.{txt,csv,h264|hevc}`.
+- `s4-svc --console --case <c> --side B audio [--minutes N] [--tone]`: WASAPI loopback of the default output
+  (MMCSS Pro Audio); reopens on a default-device change. `audio.csv` = packet interval (pooled A vs B); the
+  summary also has the signed offset of the device QPC position, loud/quiet seconds and reopen gaps.
+  `both` runs encode and audio at once. `--tone` plays the test tone from the same process.
+- `s4-tone [--minutes 30]`: 1 kHz at -12 dBFS on the default output (user session).
 - `s4-ctl pool <case> <encode|audio>`: pooled p50/p99/max per side (A, B, C) over `out/*-<case>-<side>-<job>.csv`
   and the "not slower" rule (side A or C vs B). Saved as `out/<stamp>-<case>-pool-<job>.txt`.
 

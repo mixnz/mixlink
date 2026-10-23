@@ -215,6 +215,7 @@ version = "0.0.0"
 dependencies = [
  "ffmpeg-sys-next",
  "windows",
+ "windows-core",
 ]
 
 [[package]]

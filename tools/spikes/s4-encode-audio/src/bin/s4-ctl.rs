@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use s4_encode_audio::compare;
-use s4_encode_audio::platform::{d3d, ff_probe, ff_verify};
+use s4_encode_audio::platform::{d3d, ff_probe, ff_verify, wasapi};
 use s4_encode_audio::util::{BoxResult, now_stamp, out_dir};
 
 fn check() -> BoxResult<()> {
@@ -16,6 +16,11 @@ fn check() -> BoxResult<()> {
     println!("encoders:");
     for (name, found) in ff_probe::encoders() {
         println!("  {name}: {}", if found { "found" } else { "missing" });
+    }
+    println!("render endpoints (* = default):");
+    match wasapi::endpoints() {
+        Ok(list) => list.iter().for_each(|e| println!("  {e}")),
+        Err(e) => println!("  error: {e}"),
     }
     Ok(())
 }
