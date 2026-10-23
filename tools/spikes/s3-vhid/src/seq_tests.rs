@@ -109,24 +109,3 @@ fn filter_holds_at_most_four() {
     assert!(!filter.add(5));
     assert!(!filter.accepts(5));
 }
-
-#[test]
-fn unwrap_never_goes_back() {
-    let mut u = Unwrapper::new(24);
-    assert_eq!(u.next(0), Some(0));
-    assert_eq!(u.next(1), Some(1));
-    assert_eq!(u.next(2), Some(2));
-    assert_eq!(u.next(1), None, "late event");
-    assert_eq!(u.next(2), None, "duplicate");
-    assert_eq!(u.next(3), Some(3));
-}
-
-#[test]
-fn unwrap_crosses_the_period() {
-    let mut u = Unwrapper::new(24);
-    for i in 0..24 {
-        assert_eq!(u.next(i), Some(i));
-    }
-    assert_eq!(u.next(0), Some(24));
-    assert_eq!(u.next(2), Some(26), "one lost event in between");
-}

@@ -16,7 +16,7 @@ use s3_vhid::platform::{
 };
 use s3_vhid::report::PadState;
 use s3_vhid::seq::{DeviceFilter, Probe, input_for};
-use s3_vhid::stats::{Samples, summary};
+use s3_vhid::stats::{Arrivals, Loss, Samples, assign_arrivals, passes, summary};
 
 const USAGE: &str = "usage: s3-latency <vhid|sendinput|vigem> <kbd|rel|abs|pad|wgi> [--count N]";
 const SPACING_US: i64 = 2_000;
@@ -90,7 +90,10 @@ fn run(args: &[String], lines: &mut Vec<String>) -> Result<(), String> {
         .join()
         .map_err(|_| "receiver panicked".to_string())?
         .map_err(err)?;
-    let sum = summary(&Samples::merge(sent, recv), qpc::freq());
+    let sum = summary(
+        &assign_arrivals(sent, probe.period(), recv.as_slice()),
+        qpc::freq(),
+    );
     lines.push(format!(
         "backend {backend:?}, probe {probe:?}, events {n}, spacing {SPACING_US} us"
     ));
@@ -101,7 +104,12 @@ fn run(args: &[String], lines: &mut Vec<String>) -> Result<(), String> {
             v.read_dropped().map_err(err)?
         ));
     }
-    let pass = sum.p99_us <= 1000.0 && (backend != Backend::Vhid || sum.lost == 0);
+    // Raw Input queues every event; XInput and WGI are polled state.
+    let loss = match (backend, probe) {
+        (Backend::Vigem, _) | (_, Probe::Wgi) => Loss::Allowed,
+        _ => Loss::Forbidden,
+    };
+    let pass = passes(&sum, loss);
     lines.push(format!("RESULT {}", if pass { "PASS" } else { "FAIL" }));
     match send_error {
         Some(e) => Err(e),
@@ -177,7 +185,7 @@ fn send_all(
     Ok((sent, send_error))
 }
 
-type Receiver = JoinHandle<Result<Samples, FeedError>>;
+type Receiver = JoinHandle<Result<Arrivals, FeedError>>;
 
 fn start_receiver(
     probe: Probe,

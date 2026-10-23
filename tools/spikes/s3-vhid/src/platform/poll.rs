@@ -9,12 +9,11 @@ use windows::Win32::UI::Input::XboxController::{XINPUT_STATE, XInputGetState};
 
 use super::{os_err, qpc};
 use crate::feed::FeedError;
-use crate::seq::{PAD_PERIOD, Unwrapper, decode_wgi_axis, decode_xinput_lx};
-use crate::stats::Samples;
+use crate::seq::{decode_wgi_axis, decode_xinput_lx};
+use crate::stats::Arrivals;
 
-pub fn xinput(user_index: u32, n: usize, stop: Arc<AtomicBool>) -> Samples {
-    let mut samples = Samples::with_capacity(n);
-    let mut unwrap = Unwrapper::new(PAD_PERIOD);
+pub fn xinput(user_index: u32, n: usize, stop: Arc<AtomicBool>) -> Arrivals {
+    let mut arrivals = Arrivals::with_capacity(n * 2 + 16);
     let mut last_packet = None;
     while !stop.load(Ordering::Relaxed) {
         // HOT PATH
@@ -28,11 +27,11 @@ pub fn xinput(user_index: u32, n: usize, stop: Arc<AtomicBool>) -> Samples {
         }
         let t = qpc::now();
         last_packet = Some(state.dwPacketNumber);
-        if let Some(i) = decode_xinput_lx(state.Gamepad.sThumbLX).and_then(|r| unwrap.next(r)) {
-            samples.record_recv(i as usize, t);
+        if let Some(residue) = decode_xinput_lx(state.Gamepad.sThumbLX) {
+            arrivals.push(residue, t);
         }
     }
-    samples
+    arrivals
 }
 
 /// Our pad as a `RawGameController` (matched by vendor/product id), waiting up to 3 s.
@@ -60,7 +59,7 @@ pub fn wgi(
     controller: RawGameController,
     n: usize,
     stop: Arc<AtomicBool>,
-) -> Result<Samples, FeedError> {
+) -> Result<Arrivals, FeedError> {
     let count = |r: windows::core::Result<i32>| {
         r.map(|v| v.max(0) as usize)
             .map_err(|e| os_err("RawGameController counts", e))
@@ -69,8 +68,7 @@ pub fn wgi(
     let mut switches =
         vec![GameControllerSwitchPosition::default(); count(controller.SwitchCount())?];
     let mut axes = vec![0f64; count(controller.AxisCount())?.max(1)];
-    let mut samples = Samples::with_capacity(n);
-    let mut unwrap = Unwrapper::new(PAD_PERIOD);
+    let mut arrivals = Arrivals::with_capacity(n * 2 + 16);
     let mut last_ts = None;
     while !stop.load(Ordering::Relaxed) {
         // HOT PATH
@@ -82,9 +80,9 @@ pub fn wgi(
         }
         let t = qpc::now();
         last_ts = Some(ts);
-        if let Some(i) = decode_wgi_axis(axes[0]).and_then(|r| unwrap.next(r)) {
-            samples.record_recv(i as usize, t);
+        if let Some(residue) = decode_wgi_axis(axes[0]) {
+            arrivals.push(residue, t);
         }
     }
-    Ok(samples)
+    Ok(arrivals)
 }

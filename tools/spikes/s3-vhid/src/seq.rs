@@ -172,42 +172,6 @@ impl DeviceFilter {
     }
 }
 
-/// Turns residues (`i mod period`) back into `i`. A residue that would jump more than
-/// half a period ahead is a late or duplicate event: ignored, never moves back.
-#[derive(Clone, Copy, Debug)]
-pub struct Unwrapper {
-    period: u32,
-    last: Option<u32>,
-}
-
-impl Unwrapper {
-    pub fn new(period: u32) -> Self {
-        Self { period, last: None }
-    }
-
-    // HOT PATH
-    pub fn next(&mut self, residue: u32) -> Option<u32> {
-        if residue >= self.period {
-            return None;
-        }
-        let candidate = match self.last {
-            None => residue,
-            Some(last) => {
-                let mut c = last - last % self.period + residue;
-                if c <= last {
-                    c += self.period;
-                }
-                if c - last > self.period / 2 {
-                    return None;
-                }
-                c
-            }
-        };
-        self.last = Some(candidate);
-        Some(candidate)
-    }
-}
-
 #[cfg(test)]
 #[path = "seq_tests.rs"]
 mod tests;

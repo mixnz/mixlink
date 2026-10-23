@@ -19,10 +19,8 @@ use windows::core::w;
 
 use super::{os_err, qpc};
 use crate::feed::FeedError;
-use crate::seq::{
-    DeviceFilter, Probe, Unwrapper, decode_abs, decode_key, decode_pad_lx, decode_rel,
-};
-use crate::stats::Samples;
+use crate::seq::{DeviceFilter, Probe, decode_abs, decode_key, decode_pad_lx, decode_rel};
+use crate::stats::Arrivals;
 
 /// Gamepad report: [ID 4][buttons 2][hat 1][LX 2]... -> LX at bytes 4..6.
 const PAD_LX_OFFSET: usize = 4;
@@ -46,7 +44,7 @@ pub fn receive(
     filter: DeviceFilter,
     n: usize,
     ready: Sender<u32>,
-) -> Result<Samples, FeedError> {
+) -> Result<Arrivals, FeedError> {
     let hwnd = create_window()?;
     let (page, use_) = usage(probe);
     let device = RAWINPUTDEVICE {
@@ -61,8 +59,7 @@ pub fn receive(
     // SAFETY: no arguments.
     let _ = ready.send(unsafe { GetCurrentThreadId() });
 
-    let mut samples = Samples::with_capacity(n);
-    let mut unwrap = Unwrapper::new(probe.period());
+    let mut arrivals = Arrivals::with_capacity(n * 2 + 16);
     let mut buf = [0u64; 128];
     let mut msg = MSG::default();
     // SAFETY: valid MSG out pointer; loop ends on WM_QUIT (0) or error (-1).
@@ -70,16 +67,14 @@ pub fn receive(
         if msg.message == WM_INPUT {
             // HOT PATH
             let t = qpc::now();
-            if let Some(residue) = read(msg.lParam, probe, &filter, &mut buf)
-                && let Some(i) = unwrap.next(residue)
-            {
-                samples.record_recv(i as usize, t);
+            if let Some(residue) = read(msg.lParam, probe, &filter, &mut buf) {
+                arrivals.push(residue, t);
             }
         }
         // SAFETY: message from GetMessageW; WM_INPUT needs DefWindowProc for cleanup.
         unsafe { DispatchMessageW(&msg) };
     }
-    Ok(samples)
+    Ok(arrivals)
 }
 
 /// Ends `receive` on thread `thread_id`.

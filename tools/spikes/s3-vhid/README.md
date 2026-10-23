@@ -16,7 +16,7 @@ Build once: `cargo build --release --manifest-path tools/spikes/s3-vhid/Cargo.to
 
 | Binary | What |
 |---|---|
-| `s3-latency <vhid\|sendinput\|vigem> <kbd\|rel\|abs\|pad\|wgi> [--count N]` | Feed call -> input seen by a receiver (Raw Input; XInput for `vigem pad`; `RawGameController` for `wgi`). 10 000 events, 2 ms apart; p50/p99/max, lost, driver drops. PASS = p99 <= 1 ms (+ 0 lost for vhid) |
+| `s3-latency <vhid\|sendinput\|vigem> <kbd\|rel\|abs\|pad\|wgi> [--count N]` | Feed call -> input seen by a receiver (Raw Input; XInput for `vigem pad`; `RawGameController` for `wgi`). 10 000 events, 2 ms apart; p50/p99/max, lost, driver drops. PASS = something received, p99 <= 1 ms, and 0 lost on Raw Input paths (XInput / WGI are polled state and may skip one). Arrivals are matched to send times after the run, so stale readings are ignored |
 | `s3-feed <backend> <scenario> [--delay s]` | Scripted input after a countdown: `Walk`, `Look`, `Menu`, `PadWalk`, `PadLook`, `PadMenu` |
 | `s3-feed vhid --raw <hex>` | One raw control output report (driver validation) |
 | `s3-feed <vhid\|vigem> --pad-interactive` | Type `<control> [hold_ms]` + Enter (`a`, `lb`, `guide`, `share`, `b13`-`b16`, `up`, `lt`, `ls-up`, ...): pressed for 0.5 s or `hold_ms`. `prime` nudges each trigger / stick off rest and back first. For mapping wizards such as Steam "Begin Setup" |
