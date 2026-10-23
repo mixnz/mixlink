@@ -16,6 +16,8 @@
   outside the workspace; see its README.
 - `spikes/s4-encode-audio/`: spike S4 (T17) Rust package outside the workspace (FFmpeg NVENC/QSV encode and
   WASAPI loopback jobs as service `MixLinkS4` or in the user session, pooling) + scripts; see its README.
+- `spikes/s5-anticheat/`: spike S5 (T18) PowerShell `run-all.ps1` (Apex / EAC launch cases A-D, resumes after reboot)
+  + read-only `report.ps1`; see its README.
 
 ## Public API
 - (none yet — fill in names of exported traits/types, one line each)

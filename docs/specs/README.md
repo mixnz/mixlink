@@ -9,5 +9,6 @@
 | 0005 | [0005-spike-iddcx-tail](0005-spike-iddcx-tail.md) | done |
 | 0006 | [0006-spike-vhid](0006-spike-vhid.md) | done |
 | 0007 | [0007-spike-encode-audio-session0](0007-spike-encode-audio-session0.md) | done |
+| 0008 | [0008-spike-anticheat-launch](0008-spike-anticheat-launch.md) | in-progress |
 
 Rules: `../conventions/docs-writing.md`. Template: `_template.md`.
