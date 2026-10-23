@@ -10,41 +10,47 @@ use std::time::{Duration, Instant};
 use s3_vhid::feed::{Backend, Feeder, parse_hex};
 use s3_vhid::input::Input;
 use s3_vhid::log;
-use s3_vhid::padmap;
+use s3_vhid::padmap::{self, Command};
 use s3_vhid::platform::{self, hid::VhidFeeder};
 use s3_vhid::report::PadState;
 use s3_vhid::scenario::{Scenario, steps};
 
 const USAGE: &str = "usage: s3-feed <vhid|sendinput|vigem> <Walk|Look|Menu|PadWalk|PadLook|PadMenu|UacTab|LockSpace> [--delay <s>]\n       s3-feed vhid --raw <hex>\n       s3-feed <vhid|vigem> --pad-interactive";
-/// Long enough for a mapping wizard to notice the control.
-const HOLD: Duration = Duration::from_millis(500);
+/// Time each prime step is held, long enough for a reader to see the change.
+const PRIME_STEP: Duration = Duration::from_millis(100);
 
-/// Reads control names from stdin and presses each for `HOLD`, then centers the pad.
+/// Reads commands from stdin (`padmap::parse_command`): presses a control for its hold time,
+/// or primes the analogs, then centers the pad.
 fn pad_interactive(feeder: &mut dyn Feeder, lines: &mut Vec<String>) -> Result<(), String> {
     println!("controls: {}", padmap::NAMES.join(" "));
-    println!("type a control name + Enter to press it; 'skip' to do nothing; 'q' to quit");
+    println!("type '<control> [hold_ms]' + Enter to press it (default 500 ms);");
+    println!("'prime' nudges every trigger/stick once; 'skip' does nothing; 'q' quits");
     let send =
         |f: &mut dyn Feeder, state: PadState| f.send(&Input::Pad(state)).map_err(|e| e.to_string());
     send(feeder, PadState::CENTERED)?;
     for line in std::io::stdin().lock().lines() {
         let line = line.map_err(|e| e.to_string())?;
-        let name = line.trim().to_ascii_lowercase();
-        match name.as_str() {
-            "q" | "quit" => break,
-            "skip" | "" => println!("(nothing pressed)"),
-            _ => match padmap::control(&name) {
-                Some(state) => {
+        match padmap::parse_command(&line) {
+            Command::Quit => break,
+            Command::Skip => println!("(nothing pressed)"),
+            Command::Prime => {
+                for state in padmap::prime_steps() {
                     send(feeder, state)?;
-                    std::thread::sleep(HOLD);
-                    send(feeder, PadState::CENTERED)?;
-                    println!("pressed {name}");
-                    lines.push(format!("pressed {name}"));
+                    std::thread::sleep(PRIME_STEP);
                 }
-                None => println!(
-                    "unknown control '{name}'; controls: {}",
-                    padmap::NAMES.join(" ")
-                ),
-            },
+                println!("primed triggers and sticks");
+                lines.push("primed".into());
+            }
+            Command::Press { state, hold_ms } => {
+                send(feeder, state)?;
+                std::thread::sleep(Duration::from_millis(u64::from(hold_ms)));
+                send(feeder, PadState::CENTERED)?;
+                println!("pressed '{}' for {hold_ms} ms", line.trim());
+                lines.push(format!("pressed '{}' for {hold_ms} ms", line.trim()));
+            }
+            Command::Unknown(text) => {
+                println!("unknown '{text}'; controls: {}", padmap::NAMES.join(" "))
+            }
         }
     }
     Ok(())

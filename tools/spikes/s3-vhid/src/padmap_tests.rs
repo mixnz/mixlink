@@ -149,3 +149,54 @@ fn guide_and_share_use_buttons_11_and_12() {
     assert_eq!(pressed("guide").buttons, 1 << 10);
     assert_eq!(pressed("share").buttons, 1 << 11);
 }
+
+#[test]
+fn parse_press_with_default_and_custom_hold() {
+    assert_eq!(
+        parse_command("lt"),
+        Command::Press {
+            state: pressed("lt"),
+            hold_ms: DEFAULT_HOLD_MS
+        }
+    );
+    assert_eq!(
+        parse_command("  LT 2000 "),
+        Command::Press {
+            state: pressed("lt"),
+            hold_ms: 2000
+        }
+    );
+}
+
+#[test]
+fn parse_rejects_bad_hold() {
+    assert!(matches!(parse_command("lt 0"), Command::Unknown(_)));
+    assert!(matches!(parse_command("lt 20000"), Command::Unknown(_)));
+    assert!(matches!(parse_command("lt soon"), Command::Unknown(_)));
+    assert!(matches!(parse_command("lt 500 extra"), Command::Unknown(_)));
+}
+
+#[test]
+fn parse_keywords() {
+    assert_eq!(parse_command("q"), Command::Quit);
+    assert_eq!(parse_command("quit"), Command::Quit);
+    assert_eq!(parse_command(""), Command::Skip);
+    assert_eq!(parse_command("skip"), Command::Skip);
+    assert_eq!(parse_command("Prime"), Command::Prime);
+    assert!(matches!(parse_command("home"), Command::Unknown(_)));
+}
+
+#[test]
+fn prime_nudges_each_analog_once_and_ends_centered() {
+    let steps = prime_steps();
+    assert_eq!(steps.len(), 12, "six analogs x (nudge, rest)");
+    assert_eq!(*steps.last().unwrap(), PadState::CENTERED);
+    for pair in steps.chunks(2) {
+        assert_ne!(pair[0], PadState::CENTERED, "nudge must differ from rest");
+        assert_eq!(pair[1], PadState::CENTERED, "each nudge returns to rest");
+        assert_eq!(pair[0].buttons, 0);
+        assert_eq!(pair[0].hat, 8);
+    }
+    let lt = &steps[0];
+    assert!(lt.lt > 0 && lt.lt < 64, "small trigger nudge, not a press");
+}

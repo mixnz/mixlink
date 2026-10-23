@@ -47,6 +47,63 @@ pub fn control(name: &str) -> Option<PadState> {
     })
 }
 
+pub const DEFAULT_HOLD_MS: u32 = 500;
+const MAX_HOLD_MS: u32 = 10_000;
+
+/// One line typed in `s3-feed --pad-interactive`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Command {
+    Quit,
+    Skip,
+    /// Nudge every analog off rest and back (see `prime_steps`).
+    Prime,
+    Press {
+        state: PadState,
+        hold_ms: u32,
+    },
+    Unknown(String),
+}
+
+/// `<control> [hold_ms]`, `prime`, `skip` / empty, `q` / `quit`.
+pub fn parse_command(line: &str) -> Command {
+    let lower = line.trim().to_ascii_lowercase();
+    let words: Vec<&str> = lower.split_whitespace().collect();
+    match words.as_slice() {
+        [] | ["skip"] => Command::Skip,
+        ["q"] | ["quit"] => Command::Quit,
+        ["prime"] => Command::Prime,
+        [name] => match control(name) {
+            Some(state) => Command::Press {
+                state,
+                hold_ms: DEFAULT_HOLD_MS,
+            },
+            None => Command::Unknown(lower),
+        },
+        [name, hold] => match (control(name), hold.parse::<u32>()) {
+            (Some(state), Ok(ms)) if (1..=MAX_HOLD_MS).contains(&ms) => {
+                Command::Press { state, hold_ms: ms }
+            }
+            _ => Command::Unknown(lower),
+        },
+        _ => Command::Unknown(lower),
+    }
+}
+
+/// Moves each trigger and stick axis a little off rest and back, one at a time, so a
+/// reader that learns an axis' rest value from its first change (SDL / Steam) sees rest.
+pub fn prime_steps() -> Vec<PadState> {
+    let c = PadState::CENTERED;
+    let nudges = [
+        PadState { lt: 16, ..c },
+        PadState { rt: 16, ..c },
+        PadState { lx: 0x9000, ..c },
+        PadState { ly: 0x9000, ..c },
+        PadState { rx: 0x9000, ..c },
+        PadState { ry: 0x9000, ..c },
+    ];
+    nudges.iter().flat_map(|n| [*n, c]).collect()
+}
+
 #[cfg(test)]
 #[path = "padmap_tests.rs"]
 mod tests;
