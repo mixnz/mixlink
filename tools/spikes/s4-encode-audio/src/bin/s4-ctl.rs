@@ -1,9 +1,11 @@
-//! `s4-ctl check`: adapters, FFmpeg build and encoders. `s4-ctl verify <file>`: decode a dump.
+//! `s4-ctl check`: adapters, FFmpeg build, encoders. `verify <file>`: decode a dump. `pool <case> <job>`:
+//! pooled stats per side over the round CSVs in `out/`.
 
 use std::path::Path;
 
+use s4_encode_audio::compare;
 use s4_encode_audio::platform::{d3d, ff_probe, ff_verify};
-use s4_encode_audio::util::BoxResult;
+use s4_encode_audio::util::{BoxResult, now_stamp, out_dir};
 
 fn check() -> BoxResult<()> {
     println!("adapters:");
@@ -32,11 +34,49 @@ fn verify(path: &str) -> BoxResult<()> {
     Ok(())
 }
 
+/// Pools every round CSV of `case` / `job` in `out/` per side; prints and saves the result.
+fn pool(case: &str, job: &str) -> BoxResult<()> {
+    let dir = out_dir()?;
+    let names: Vec<String> = std::fs::read_dir(&dir)?
+        .filter_map(|e| e.ok()?.file_name().into_string().ok())
+        .collect();
+    let mut sides = Vec::new();
+    let mut listing = String::new();
+    for (side, files) in compare::side_files(&names, case, job) {
+        let mut rounds = Vec::new();
+        for f in &files {
+            rounds.push(compare::parse_samples_csv(&std::fs::read_to_string(
+                dir.join(f),
+            )?)?);
+            listing.push_str(&format!("  {side}: {f}\n"));
+        }
+        sides.push((side, rounds));
+    }
+    if sides.is_empty() {
+        return Err(format!("no {job} CSVs for case {case} in {}", dir.display()).into());
+    }
+    let text = format!(
+        "pool case {case} job {job}\n{listing}{}",
+        compare::pool(&sides)
+    );
+    std::fs::write(
+        dir.join(format!("{}-{case}-pool-{job}.txt", now_stamp())),
+        &text,
+    )?;
+    print!("{text}");
+    Ok(())
+}
+
 fn main() -> BoxResult<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    match (args.first().map(String::as_str), args.get(1)) {
-        (Some("check"), _) => check(),
-        (Some("verify"), Some(path)) => verify(path),
-        _ => Err("usage: s4-ctl check | verify <file.h264|file.hevc>".into()),
+    let arg = |i: usize| args.get(i).map(String::as_str);
+    match (arg(0), arg(1), arg(2)) {
+        (Some("check"), _, _) => check(),
+        (Some("verify"), Some(path), _) => verify(path),
+        (Some("pool"), Some(case), Some(job)) => pool(case, job),
+        _ => Err(
+            "usage: s4-ctl check | verify <file.h264|file.hevc> | pool <case> <encode|audio>"
+                .into(),
+        ),
     }
 }

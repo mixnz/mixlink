@@ -32,3 +32,34 @@ fn pool_without_side_b_says_so() {
     let text = pool(&[('C', vec![vec![5]])]);
     assert!(text.contains("rule: no side B"));
 }
+
+#[test]
+fn side_files_groups_by_side_and_exact_case() {
+    let names: Vec<String> = [
+        "20261023-120000-B-A-encode.csv",
+        "20261023-110000-B-A-encode.csv",
+        "20261023-110500-B-B-encode.csv",
+        "20261023-110500-B-B-encode.txt",
+        "20261023-110500-E-lock-A-encode.csv",
+        "20261023-110500-B-A-audio.csv",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    let groups = side_files(&names, "B", "encode");
+    assert_eq!(groups.len(), 2);
+    assert_eq!(groups[0].0, 'A');
+    assert_eq!(
+        groups[0].1,
+        vec![
+            "20261023-110000-B-A-encode.csv",
+            "20261023-120000-B-A-encode.csv"
+        ]
+    );
+    assert_eq!(
+        groups[1],
+        ('B', vec!["20261023-110500-B-B-encode.csv".to_string()])
+    );
+    assert_eq!(side_files(&names, "E-lock", "encode")[0].1.len(), 1);
+    assert!(side_files(&names, "lock", "encode").is_empty());
+}

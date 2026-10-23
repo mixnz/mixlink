@@ -23,6 +23,25 @@ pub fn parse_samples_csv(text: &str) -> BoxResult<Vec<u64>> {
         .collect()
 }
 
+/// Groups `<stamp>-<case>-<side>-<job>.csv` file names of one case and job by side (A, B, C), each
+/// list sorted by name (= by stamp). The stamp is `yyyyMMdd-HHmmss`, so `E-lock` cases match exactly.
+pub fn side_files(names: &[String], case: &str, job: &str) -> Vec<(char, Vec<String>)> {
+    let mut out = Vec::new();
+    for side in ['A', 'B', 'C'] {
+        let tail = format!("-{case}-{side}-{job}.csv");
+        let mut files: Vec<String> = names
+            .iter()
+            .filter(|n| n.len() == 15 + tail.len() && n.ends_with(&tail))
+            .cloned()
+            .collect();
+        files.sort();
+        if !files.is_empty() {
+            out.push((side, files));
+        }
+    }
+    out
+}
+
 /// `sides`: (side letter, rounds of samples). Pooled stats per side, per-round p99, then the rule
 /// for every side against B.
 pub fn pool(sides: &[(char, Vec<Vec<u64>>)]) -> String {

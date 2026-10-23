@@ -18,9 +18,15 @@ pub fn arg_u64(args: &[String], name: &str, default: u64) -> BoxResult<u64> {
     }
 }
 
-/// `tools/spikes/s4-encode-audio/out/` (absolute, baked in at build time; the service runs from anywhere).
+/// `tools/spikes/s4-encode-audio/out/` (baked in at build time) while the exe runs from `target\`;
+/// `<exe folder>\out\` for a packed copy (laptop runs). The service runs from anywhere either way.
 pub fn out_dir() -> BoxResult<PathBuf> {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("out");
+    let exe = std::env::current_exe()?;
+    let in_target = exe.components().any(|c| c.as_os_str() == "target");
+    let dir = match exe.parent() {
+        Some(folder) if !in_target => folder.join("out"),
+        _ => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("out"),
+    };
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }

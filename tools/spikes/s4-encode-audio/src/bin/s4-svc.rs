@@ -1,11 +1,13 @@
 //! `s4-svc [--console] --case X --side A|B|C <encode|audio|both> [options]`: runs one job and exits.
-//! Without `--console` it must be started by the service manager (service `MixLinkS4`, Task 3).
+//! Without `--console` it must be started by the service manager: service `MixLinkS4` (LocalSystem,
+//! Session 0), args from its ImagePath (`install-svc.ps1`, `run-case.ps1`); it stops itself when done.
 
 use std::sync::atomic::AtomicBool;
 
 use s4_encode_audio::args::{Job, RunArgs, parse};
 use s4_encode_audio::encode_job;
 use s4_encode_audio::log::RunLog;
+use s4_encode_audio::service;
 use s4_encode_audio::util::{BoxResult, RunFiles};
 
 fn run_job(run: &RunArgs, stop: &AtomicBool) -> BoxResult<()> {
@@ -39,8 +41,11 @@ fn run_job(run: &RunArgs, stop: &AtomicBool) -> BoxResult<()> {
 fn main() -> BoxResult<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let run = parse(&args)?;
-    if !run.console {
-        return Err("service mode comes in Task 3; use --console".into());
+    if run.console {
+        return run_job(&run, &AtomicBool::new(false));
     }
-    run_job(&run, &AtomicBool::new(false))
+    service::run(Box::new(move |stop| {
+        // Errors are already in the run log; the service just stops.
+        let _ = run_job(&run, stop);
+    }))
 }

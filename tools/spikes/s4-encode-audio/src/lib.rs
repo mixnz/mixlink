@@ -7,5 +7,6 @@ pub mod grid;
 pub mod log;
 pub mod platform;
 pub mod qpc;
+pub mod service;
 pub mod stats;
 pub mod util;
