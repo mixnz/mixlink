@@ -4,6 +4,7 @@ pub mod feed;
 pub mod ident;
 pub mod input;
 pub mod log;
+pub mod padmap;
 #[cfg(windows)]
 pub mod platform;
 pub mod report;
