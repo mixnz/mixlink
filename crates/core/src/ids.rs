@@ -10,7 +10,7 @@ use serde::Serializer;
 
 use crate::error::IdParseError;
 
-/// One streaming session. The value is chosen by the caller (random in T6).
+/// One streaming session. The value is chosen by the caller (random once pairing lands).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct SessionId(u32);

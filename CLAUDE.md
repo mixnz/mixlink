@@ -48,6 +48,9 @@ Crates at the same level must not depend on each other; wire them in `apps/`.
 - App UI languages: English (default) + Vietnamese. Every user-visible string goes through the
   keyed i18n layer, never hard-coded (ADR-0003).
 - LF line endings everywhere.
+- Code never names roadmap tasks/spikes (`T6`, `S2`) or links `docs/roadmap/`; those ids get
+  renumbered. Name the feature instead, or cite a spec (`spec 0004`) or ADR (`ADR-0005`).
+  Checked by `scripts/check-refs.sh` (`tools/spikes/` exempt).
 
 ## Project skills (`.claude/skills/`) — invoke, do not skip
 - `safe-coding`: every time you write or change code.

@@ -1,4 +1,4 @@
-//! Client side of the T3 handshake: send `Hello` on the control lane until `Welcome` / `Reject`.
+//! Client handshake (spec 0010): send `Hello` on the control lane until `Welcome` / `Reject`.
 //! Control plane (blocking, allocation ok); runs on the client's control thread.
 
 use std::net::SocketAddrV4;

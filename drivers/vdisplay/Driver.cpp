@@ -29,7 +29,7 @@ using namespace Microsoft::WRL;
 
 #pragma region SampleMonitors
 
-// MixLink spike S2: one virtual monitor (spec 0004).
+// MixLink: one virtual monitor (spec 0004).
 static constexpr DWORD IDD_SAMPLE_MONITOR_COUNT = 1; // If monitor count > ARRAYSIZE(s_SampleMonitors), we create edid-less monitors
 
 // Default modes reported for edid-less monitors. The first mode is set as preferred
@@ -55,7 +55,7 @@ static const struct IndirectSampleMonitor s_SampleMonitors[] =
             0x9B,0xFA,0xFA,0x40,0x01,0x0A,0x20,0x20,0x20,0x20,0x20,0x20,0x00,0x2C
         },
         {
-            // MixLink spike S2: 2560x1440@120 is the preferred mode (index 0).
+            // MixLink (spec 0004): 2560x1440@120 is the preferred mode (index 0).
             { 2560, 1440, 120 },
             { 2560, 1440, 144 },
             { 1920, 1080,  60 },
@@ -359,7 +359,7 @@ void SwapChainProcessor::Run()
 {
     // For improved performance, make use of the Multimedia Class Scheduler Service, which will intelligently
     // prioritize this thread for improved throughput in high CPU-load scenarios.
-    // MixLink spike S2b: levers are read once per swapchain (spec 0005); L1 picks the MMCSS task.
+    // MixLink: levers are read once per swapchain (spec 0005); L1 picks the MMCSS task.
     m_Levers = ReadLeverMask();
     HANDLE AvTaskHandle = EnterFrameThreadPriority(m_Levers, &m_L1Hr);
 
@@ -378,7 +378,7 @@ void SwapChainProcessor::Run()
 
 void SwapChainProcessor::RunCore()
 {
-    // MixLink spike S2b, L4: D3D12 swapchain with our own copy queue. L2/L3 are D3D11-only.
+    // MixLink lever L4 (spec 0005): D3D12 swapchain with our own copy queue. L2/L3 are D3D11-only.
     HRESULT L4Hr = S_OK;
     if ((m_Levers & S2_LEVER_L4_D3D12) != 0)
     {
@@ -412,7 +412,7 @@ void SwapChainProcessor::RunCore()
         return;
     }
 
-    // MixLink spike S2: frames go to another process through FrameShare (spec 0004).
+    // MixLink: frames go to another process through FrameShare (spec 0004).
     FrameShare Share;
     LeverReport Levers;
     Levers.Requested = m_Levers;
@@ -467,7 +467,7 @@ void SwapChainProcessor::RunCore()
             // We have new frame to process, the surface has a reference on it that the driver has to release
             AcquiredBuffer.Attach(Buffer.MetaData.pSurface);
 
-            // MixLink spike S2b, L3: share the surface itself; the first failure drops L3 for this swapchain.
+            // MixLink lever L3 (spec 0005): share the surface itself; the first failure drops L3 for this swapchain.
             HANDLE SurfaceHandle = nullptr;
             if ((Levers.Active & S2_LEVER_L3_NO_COPY) != 0)
             {
@@ -705,7 +705,7 @@ NTSTATUS IddSampleAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG_I
     auto* pDeviceContextWrapper = WdfObjectGet_IndirectDeviceContextWrapper(AdapterObject);
     if (NT_SUCCESS(pInArgs->AdapterInitStatus))
     {
-        // MixLink spike S2: on iGPU + dGPU machines, render on the dGPU (ADR-0006).
+        // MixLink: on iGPU + dGPU machines, render on the dGPU (ADR-0006).
         LUID RenderLuid = {};
         bool bHybrid = false;
         if (SUCCEEDED(PickRenderAdapter(&RenderLuid, &bHybrid)) && bHybrid)

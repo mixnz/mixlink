@@ -1,6 +1,6 @@
 #pragma once
 
-// MixLink spikes S2/S2b (specs 0004, 0005): shared-memory header that tells the receiver service where
+// MixLink (specs 0004, 0005): shared-memory header that tells the receiver service where
 // the frames are. Layout is mirrored by tools/spikes/s2-iddcx-frames/src/header.rs; change both together.
 
 #include "Driver.h"

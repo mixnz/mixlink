@@ -16,6 +16,7 @@ Bash scripts (Git Bash on Windows). Each script <= 150 lines; shared helpers in 
 | `check-links.sh` | Markdown links and `` `docs/...md` `` references exist (plans exempt). |
 | `check-docs.sh` | Doc index, spec/ADR headers, module cards, `docs/plans/` ignored. |
 | `check-deps.sh` | Crate dependency direction (allow-table mirrors `CLAUDE.md`), all dependency sections. |
+| `check-refs.sh` | Code comments cite specs/ADRs, never roadmap task/spike ids or `docs/roadmap/` (`tools/spikes/` exempt). |
 | `setup-hooks.sh` | Enables `.githooks/` (pre-push: branch name check only; the gate runs in `/land`). |
 
 Run from anywhere: `bash scripts/gate.sh`. Scripts `cd` to the repo root themselves.

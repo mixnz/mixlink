@@ -1,6 +1,6 @@
 #pragma once
 
-// MixLink spike S2b, lever L3 (spec 0005): shares the IddCx surface itself with the receiver instead of
+// MixLink lever L3 (spec 0005): shares the IddCx surface itself with the receiver instead of
 // copying it into the ring. Probe first: the OS may refuse a shared handle on its own surfaces.
 
 #include "Driver.h"

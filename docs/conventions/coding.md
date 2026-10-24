@@ -39,6 +39,13 @@ src/
 - No business logic in the UI: discovery, pairing, session state live in Rust and arrive as events.
 - Styling: plain CSS modules (`Name.module.css`); no UI framework until a spec decides one.
 
+## References in code
+- Comments cite stable docs only: `spec 0004`, `ADR-0005`, or a `docs/specs/` / `docs/decisions/` path.
+- Never a roadmap task or spike id (`T6`, `S2b`) or a `docs/roadmap/` link: rows get renumbered,
+  split and closed, and the reader has to look them up.
+- Future work is named by feature: "room for the GCM tag" not "(T6)", "reserved for FEC" not "for T13".
+- `scripts/check-refs.sh` (in the gate) enforces this; `tools/spikes/` is throwaway and exempt.
+
 ## Naming
 - Crates `mixlink-<name>`, folders `crates/<name>`.
 - Types `PascalCase`, functions `snake_case`, constants `SCREAMING_SNAKE_CASE`.

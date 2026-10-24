@@ -1,6 +1,6 @@
 #pragma once
 
-// MixLink spike S2b, lever L4 (spec 0005): FrameShare for a D3D12 swapchain. Same header, slots and
+// MixLink lever L4 (spec 0005): FrameShare for a D3D12 swapchain. Same header, slots and
 // ring semantics as FrameShare, so the receiver opens it unchanged; the copy runs on our own
 // high-priority copy queue.
 

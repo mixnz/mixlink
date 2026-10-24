@@ -1,6 +1,6 @@
 #pragma once
 
-// MixLink spike S2b (spec 0005): latency levers switched at runtime through the registry, so each one
+// MixLink (spec 0005): latency levers switched at runtime through the registry, so each one
 // can be measured without reinstalling the driver. Bits match tools/spikes/s2-iddcx-frames/src/levers.rs.
 
 #include "SharedHeader.h"
@@ -14,7 +14,7 @@ namespace Microsoft
         constexpr UINT32 S2_LEVER_L3_NO_COPY = 0x4; // share the IddCx surface itself
         constexpr UINT32 S2_LEVER_L4_D3D12 = 0x8;   // D3D12 swapchain + high-priority copy queue
 
-        // HKLM\SOFTWARE\MixLink\S2b, value Levers (REG_DWORD). 0 when the key or value is missing.
+        // REG_DWORD value Levers under the HKLM key named in Levers.cpp. 0 when the key or value is missing.
         // Read once per swapchain assignment, never per frame.
         UINT32 ReadLeverMask();
 

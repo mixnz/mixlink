@@ -20,7 +20,7 @@ namespace Microsoft
                 return hr;
             }
 
-            // One GPU can be listed more than once (seen in spike S2: a second LUID for the same RTX 5070
+            // One GPU can be listed more than once (seen while testing spec 0004: a second LUID for the same RTX 5070
             // until reboot), so "hybrid" counts distinct physical GPUs, not DXGI entries.
             struct GpuId
             {

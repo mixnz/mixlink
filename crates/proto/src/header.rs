@@ -9,7 +9,7 @@ use crate::error::DecodeError;
 
 pub const WIRE_VERSION: u8 = 1;
 pub const HEADER_LEN: usize = 16;
-/// Payload bytes per datagram; with header and GCM tag (T6) the UDP payload stays ≤ 1232.
+/// Payload bytes per datagram; with header and AES-GCM tag the UDP payload stays ≤ 1232.
 pub const MAX_PAYLOAD: usize = 1200;
 /// Largest datagram before encryption.
 pub const MAX_DATAGRAM: usize = HEADER_LEN + MAX_PAYLOAD;
@@ -20,7 +20,7 @@ pub struct Flags(u16);
 
 impl Flags {
     pub const KEYFRAME: Flags = Flags(1 << 0);
-    /// FEC parity shard; reserved for T13.
+    /// FEC parity shard; reserved until FEC lands.
     pub const PARITY: Flags = Flags(1 << 1);
     pub const KNOWN: Flags = Flags(Self::KEYFRAME.0 | Self::PARITY.0);
 

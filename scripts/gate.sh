@@ -40,6 +40,7 @@ if ((checks)); then
   run_step "check-links" bash scripts/check-links.sh
   run_step "check-docs" bash scripts/check-docs.sh
   run_step "check-deps" bash scripts/check-deps.sh
+  run_step "check-refs" bash scripts/check-refs.sh
 fi
 
 ((ui)) && run_step "check-ui" bash scripts/check-ui.sh

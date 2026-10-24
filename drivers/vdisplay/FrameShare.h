@@ -1,6 +1,6 @@
 #pragma once
 
-// MixLink spike S2 (spec 0004): shares each IddCx frame with another process through a ring of
+// MixLink (spec 0004): shares each IddCx frame with another process through a ring of
 // shared textures, a shared fence and a small shared-memory header (SharedHeader.h).
 
 #include "SharedHeader.h"

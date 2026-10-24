@@ -1,4 +1,4 @@
-//! Message -> datagrams, pulled one at a time by the sender (the T4 pacer spreads them out).
+//! Message -> datagrams, pulled one at a time by the sender (a pacer spreads them out).
 
 use mixlink_core::ids::{FrameId, Seq};
 

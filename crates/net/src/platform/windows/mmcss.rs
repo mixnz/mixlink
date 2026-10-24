@@ -1,4 +1,4 @@
-//! MMCSS "Pro Audio" at critical priority for the send / recv threads (as in S2b / S4).
+//! MMCSS "Pro Audio" at critical priority for send / recv threads (specs 0005, 0007).
 
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::System::Threading::{

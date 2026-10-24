@@ -17,7 +17,7 @@ use rtrb::{Consumer, Producer, RingBuffer};
 
 use crate::stats::LaneCounters;
 
-/// One datagram buffer: a full v1 datagram plus 16 bytes of room for the GCM tag (T6).
+/// One datagram buffer: a full v1 datagram plus 16 bytes of room for the AES-GCM tag.
 pub const SLOT_LEN: usize = MAX_DATAGRAM + 16;
 
 #[derive(Debug)]

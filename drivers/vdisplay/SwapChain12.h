@@ -1,6 +1,6 @@
 #pragma once
 
-// MixLink spike S2b, lever L4 (spec 0005): IddCx 1.11 D3D12 swapchain loop. The OS hands us
+// MixLink lever L4 (spec 0005): IddCx 1.11 D3D12 swapchain loop. The OS hands us
 // ID3D12Resource surfaces and syncs them against our own copy queue (D3D12_COMMAND_QUEUE_PRIORITY_HIGH).
 
 #include "SharedHeader.h"

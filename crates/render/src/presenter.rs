@@ -8,7 +8,7 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use crate::RenderError;
 use crate::platform::windows::d3d11::D3d11Swapchain;
 
-/// Clears and presents into one window. Redraw-driven in T1; the per-frame loop comes with T8.
+/// Clears and presents into one window. Redraw-driven until video decode adds a frame loop.
 pub struct Presenter {
     swapchain: D3d11Swapchain,
     // Keeps the window (and its HWND) alive for as long as the swapchain uses it.

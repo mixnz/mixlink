@@ -16,7 +16,7 @@ pub struct CursorPosition {
     pub x: i32,
     pub y: i32,
     pub visible: bool,
-    /// A shape the client has not received means that shape was lost (recovery: T9).
+    /// A shape the client has not received means that shape was lost (recovery: not built yet).
     pub shape_id: u32,
 }
 

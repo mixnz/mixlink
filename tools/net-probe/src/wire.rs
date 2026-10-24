@@ -1,4 +1,4 @@
-//! Probe-only payloads (input / feedback bodies are not defined until T10 / T13).
+//! Probe-only payloads (input / feedback bodies are not defined yet).
 //! Byte 0 is the kind: 1 ping `{seq: u32, sent: u64 ticks}`, 2 frame ack `{frame: u32}`; LE.
 
 const PING: u8 = 1;
