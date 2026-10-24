@@ -16,8 +16,8 @@
 - `clock`: `Ticks` (`ZERO`, `from_raw`, `raw`, `duration_since`), `now()`, `ticks_per_sec()`.
 - `stage`: `Stage` (8 stages, `COUNT`, `ALL`, `index`), `StageStamps` (`new`, `frame`, `mark`, `mark_at`,
   `get`, `span`).
-- `config`: `CONFIG_VERSION`, `HostConfig`, `ClientConfig` (`from_json`, `to_json_pretty`, `validate`),
-  `NetConfig`, `VideoConfig`.
+- `config`: `CONFIG_VERSION`, `MAX_NAME_BYTES` (63, shared with `proto::control`), `HostConfig`,
+  `ClientConfig` (`from_json`, `to_json_pretty`, `validate`), `NetConfig`, `VideoConfig`.
 - `error`: `IdParseError`, `ConfigError`.
 - `ipc`: launcher <-> stream JSON-lines contract — `IPC_VERSION`, `StreamToLauncher`, `LauncherToStream`,
   `CloseReason`, `IpcError`, `encode_line`, `decode_line`.

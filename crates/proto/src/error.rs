@@ -27,3 +27,26 @@ pub enum PacketizeError {
     #[error("message is {len} bytes, more than 65535 fragments")]
     TooLarge { len: usize },
 }
+
+/// A control message that cannot be parsed or breaks a handshake rule.
+#[derive(Debug, thiserror::Error)]
+pub enum ControlError {
+    #[error("failed to parse control message: {0}")]
+    Parse(#[source] serde_json::Error),
+    #[error("failed to encode control message: {0}")]
+    Encode(#[source] serde_json::Error),
+    #[error("hello lists no displays")]
+    NoDisplays,
+    #[error("hello lists {count} displays, at most 8 allowed")]
+    TooManyDisplays { count: usize },
+    #[error("stream display {index} is out of range for {count} displays")]
+    StreamDisplay { index: u8, count: usize },
+    #[error("display size {width}x{height} is outside 1-16384")]
+    DisplaySize { width: u32, height: u32 },
+    #[error("refresh {mhz} mHz is outside 1-1000 Hz")]
+    Refresh { mhz: u32 },
+    #[error("name is empty")]
+    EmptyName,
+    #[error("name is {len} bytes, at most 63 allowed")]
+    NameTooLong { len: usize },
+}
