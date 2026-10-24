@@ -174,9 +174,26 @@ client's `Hello` is resent until the host answers. A dev tool proves it between 
       on the third; a `Reject` is returned as such; no reply → `Timeout`; `cancel` → `Cancelled`;
       a reply from another address is ignored.
 - [x] Loopback one-datagram latency (commit → rx `at`) p99 ≤ 250 µs in release, value recorded.
-- [ ] `net-probe` between main PC and laptop on wired LAN: handshake works, 30 s at 50 Mbps / 120 fps
+- [x] `net-probe` between main PC and laptop on wired LAN: handshake works, 30 s at 50 Mbps / 120 fps
       with ≤ 0.1 % video frames lost; RTT p50 / p99 recorded here (user runs it, two machines).
-      Not run yet (user runs it on two machines); loopback smoke test: 0 % lost, RTT p50 46 µs, p99 224 µs.
+      Wired (2026-10-24, direct cable 1 Gbps, link-local 169.254.x.x), 0 % frames lost and 0 errors in all runs:
+
+      | Laptop power | Load | RTT p50 | p99 | max |
+      |---|---|---|---|---|
+      | charger / Best power efficiency | 50 Mbps | 0.77 ms | 4.1 ms | 15.7 ms |
+      | charger / Best power efficiency | 1 Mbps | 0.47 ms | 1.36 ms | 5.7 ms |
+      | charger / Best performance | 1 Mbps | 0.36 ms | 1.12 ms | 6.8 ms |
+      | charger / Best performance | 50 Mbps | 0.31 ms | 0.76 ms | 3.6 ms |
+
+      The p99 tail comes mostly from laptop power saving, not from the video bursts: with Best performance
+      the 50 Mbps run is the fastest (load keeps CPU / NIC awake), the light run keeps ~1.1 ms p99 (idle
+      wake-up). Balanced (the default) not measured. Phase 3: measure all three modes, keep the stream
+      threads / NIC awake while streaming, then pacing + per-stage timing.
+      Handshake took ~520 ms on two runs: the first 2 `Hello`s after an idle gap never reached the host
+      (likely ARP on the direct link); the resend recovered every time.
+      Wi-Fi (same day, main PC ↔ laptop, same AP, 30 s at 50 Mbps / 120 fps):
+      3600 / 3600 frames acked (0 % lost), 0 lane-full, 0 errors; handshake 37 ms; ping RTT p50 5.3 ms,
+      p99 11.6 ms, max 26.9 ms (Wi-Fi airtime; loopback RTT p50 46 µs, p99 224 µs).
 - [x] `crates/net/CLAUDE.md` lists the public API; `protocol.md` names the resend values;
       `tools/CLAUDE.md` lists `net-probe`.
 

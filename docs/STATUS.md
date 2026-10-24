@@ -6,62 +6,23 @@
 **Phase:** 1 — LAN MVP
 
 ## Done
-- Repo structure, AI working rules, architecture docs; ADR-0001/0002/0003 accepted.
-- Quality gate (`scripts/gate.sh`): text, lines, links, docs, crate deps, UI (npm), fmt, clippy, tests.
-- CI: `ci.yml` (docs/lint/test, Node from `.nvmrc`) on dispatch via `scripts/ask-ci.sh`; `/execute`, `/land`, `/watch-ci`.
-- Cargo workspace (spec 0001): toolchain 1.99.1, lib crates + apps, workspace lints, profiles.
-- T1 app shells (spec 0002):
-  - `mixlink-core::ipc`: launcher <-> stream JSON-lines contract.
-  - `mixlink-render::Presenter`: D3D11 flip-model swapchain (WARP fallback, debug layer in debug).
-  - `apps/stream`: winit window, solid color, `Ready`/`Closed` over stdout, closes on stdin EOF.
-  - `apps/client`: Tauri launcher, spawns/supervises the stream, closes its webview while streaming.
-  - `apps/host`: Tauri tray shell (Open / Quit, close hides).
-  - npm workspace: `@mixlink/i18n` + both React UIs; `bash scripts/build.sh release` → 3 exes in `dist/`.
-- Host architecture ADRs accepted: 0004 UMDF-only drivers signed per machine, 0005 host pipeline in
-  `mixlink-svc` service, 0006 always stream from IddCx virtual display, 0007 input via virtual HID.
-- Skill `natural-copy` for user-facing text; UI languages EN (default) + VI (ADR-0003, `en` only so far).
-- T14 spike S1 (spec 0003): **ADR-0004 holds.**
-  - `drivers/vdisplay`: IddSampleDriver renamed; `drivers/build.ps1` builds it from NuGet WDK
-    `10.0.28000.2526` (needs VS Build Tools components: C++, Spectre libs, Windows Driver Kit).
-  - `tools/spikes/s1-signing/`: install/uninstall/report scripts (user runs them elevated).
-  - Win11 26H2, Secure Boot on: per-machine signed catalog installs, loads, survives reboot, HVCI on/off;
-    untrusted signer refused; tampered DLL flagged at install but not re-checked at load.
-- T15 spike S2 (spec 0004): IddCx frames reach a Session 0 service (≤ 0.1 % lost, no CPU copy, UAC/lock/
-  login screens, new swapchains); p99 1.8–2.7 ms failed the latency criterion → T23.
-  - `drivers/vdisplay`: one virtual monitor 2560x1440@120, `FrameShare` ring + fence + shared header.
-  - `tools/spikes/s2-iddcx-frames/`: pattern app, receiver service `MixLinkS2`, DDA probe, scripts.
-- T23 spike S2b (spec 0005): **ADR-0006 holds.** With L1 (MMCSS "Pro Audio" critical) + L3 (share the IddCx
-  surface itself, no 14.7 MB copy): IddCx p99 256 µs vs DDA 422 µs, 0 lost over 5 rounds.
-  - Driver levers switchable at runtime (registry), header v2; harness runs A/B rounds unattended and pools
-    them (`run-case.ps1 -Levers -Rounds`, `s2-ctl`), pattern always on top, covered rounds flagged.
-  - Build `vdisplay` for IddCx 1.4: a 1.11 build breaks adapter init on 24H2 (IddCx 1.10). L4 (D3D12) untested.
-  - Virtual monitor must be the main display (composition rate, lock/login, and the lower baseline).
-- T16 spike S3 (spec 0006): **ADR-0007 holds, with changes.**
-  - `drivers/vhid`: vhidmini2 UMDF HID minidriver, keyboard + 2 mice + gamepad + vendor control collection;
-    `build.ps1 -Driver vdisplay|vhid|all`. Not flagged injected; reaches UAC and lock screen from Session 0.
-  - `tools/spikes/s3-vhid/`: install/report scripts + Rust harness (`s3-latency`, `s3-feed`, `s3-apis`,
-    `s3-hook`, SYSTEM runner). Measure elevated (UIPI hides input from a non-elevated receiver).
-  - Games: kbd/mouse direct in all 3; pad via Steam Input (manual layout; analog LT/RT ignored); ViGEm for
-    Steam-Input-off XInput (Wuchang). p99: kbd 0.80, abs mouse 0.62, rel mouse ~3.3 (SendInput ~3.0), pad
-    Raw Input ~1.1, WGI 0.54, ViGEm 0.06 ms.
-- T17 spike S4 (spec 0007): **ADR-0005 holds, with changes** (ADR amended: encode priority).
-  - `tools/spikes/s4-encode-audio/`: FFmpeg 8.1 (LGPL, `C:\tools\ffmpeg`, LLVM for bindgen) NVENC/QSV encode
-    job and WASAPI loopback job, as service `MixLinkS4` or in the user session; `run-all.ps1` per machine.
-  - NVENC 1440p120 in Session 0: p99 5.1 vs 3.1 ms (user) at default priority; with MMCSS + GPU priority 7 +
-    high process priority 3.15 vs 2.95 ms. Console-session SYSTEM (fallback) behaves the same. Works at login
-    (after reboot), lock, UAC; bitstreams valid, no CPU copy. QSV (laptop iGPU) works via decoder-bind pool.
-  - Loopback: 10 ms packets (`IAudioClient3` refuses loopback), nothing while the endpoint is idle.
-- T18 spike S5 (spec 0008): **launch risk passes** for EA Javelin (Apex Legends) and EAC (Elden Ring), with
-  our drivers installed, virtual monitor main, and after removal (8/8). Vanguard, BattlEye, FACEIT, gameplay
-  and input untested: user warning in `docs/compat/anti-cheat.md`. `tools/spikes/s5-anticheat/run-all.ps1`.
-- T2 core types (spec 0009): `mixlink-core` ids (`SessionId`/`FrameId`/`Seq` u32, `DeviceId`), QPC clock
-  (`Ticks`, ~20 ns per `now()`), `StageStamps` (8 stages), `HostConfig`/`ClientConfig` JSON + validation.
-- T3 protocol (spec 0010, ADR-0008 header v1): `mixlink-proto` 16 B header, 6 channels, pull packetizer,
-  allocation-free reassembler (1 MiB frame: 41 µs release), JSON control handshake with client displays,
-  cursor position / shape messages.
-- T4 UDP transport (spec 0011): `mixlink-net` socket (4 MiB buffers, `SIO_UDP_CONNRESET` off), send / recv
-  threads (MMCSS), per-channel `rtrb` slot lanes with send priority, `Hello` resend + client handshake;
-  loopback commit → rx p99 27 µs. `tools/net-probe` (`serve` / `run`) for two-PC tests.
+Details live in each spec; one line per item here.
+- Phase 0: repo rules, architecture docs, gate (`scripts/gate.sh`), CI on dispatch (`scripts/ask-ci.sh`),
+  `/execute` `/land` `/watch-ci`, Cargo workspace (toolchain 1.99.1). ADRs 0001–0008 accepted.
+- T1 app shells (0002): Tauri launcher + host tray, `apps/stream` winit + D3D11 `Presenter`, launcher ↔
+  stream JSON-lines IPC, npm workspace with `@mixlink/i18n` (`en` only); `build.sh release` → `dist/`.
+- T14 spike S1 (0003): ADR-0004 holds; `drivers/build.ps1` (NuGet WDK `10.0.28000.2526`), per-machine signing.
+- T15 / T23 spikes S2 / S2b (0004 / 0005): ADR-0006 holds; IddCx p99 256 µs vs DDA 422 µs with MMCSS +
+  shared surface. Build `vdisplay` for IddCx 1.4; the virtual monitor must be the main display.
+- T16 spike S3 (0006): ADR-0007 holds with changes; `drivers/vhid` works in games (pad via Steam Input,
+  ViGEm for XInput-only). Measure input elevated (UIPI).
+- T17 spike S4 (0007): ADR-0005 holds (amended: encode priority); NVENC p99 3.15 ms in Session 0 with
+  levers; QSV via decoder-bind pool; loopback gives 10 ms packets. FFmpeg 8.1 in `C:\tools\ffmpeg`.
+- T18 spike S5 (0008): EA Javelin and EAC titles launch with our drivers; warning in `docs/compat/anti-cheat.md`.
+- T2 core types (0009): ids, QPC clock (`Ticks`), `StageStamps`, host / client config.
+- T3 protocol (0010): 16 B header v1, 6 channels, packetizer / reassembler, control handshake, cursor messages.
+- T4 UDP transport (0011): `mixlink-net` socket, send / recv threads, per-channel lanes, `Hello` resend;
+  `tools/net-probe`. Wired 0 % loss, RTT p99 0.76 ms (laptop Best performance) to 4.1 ms (power saving).
 
 ## In progress
 - Nothing. Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
@@ -69,11 +30,12 @@
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
-- User: `net-probe` main PC ↔ laptop, wired, 30 s at 50 Mbps / 120 fps; record RTT / loss in spec 0011.
-- Roadmap phase 1: T19 and T8 unblocked; T5 after T19 (discovery on `mixlink-net`). T20 follows specs 0003 and 0008 → Verdict (`vhid` held open by Steam blocks uninstall);
-  T21 follows spec 0004 and 0005 → Verdict constraints, 0008 (main display via `SetDisplayConfig`); T7
-  follows specs 0005 and 0007 → Verdict (encode levers, isolate them; QSV pool); T11 follows spec 0007
-  (10 ms loopback, silence fill); T22 / T12 follow spec 0006 → Verdict; T9 decides cursor shape recovery.
+- Roadmap phase 1: T19 and T8 unblocked; T5 after T19 (discovery on `mixlink-net`).
+- Inputs for later rows: T20 ← specs 0003, 0008 Verdict (`vhid` held open by Steam blocks uninstall);
+  T21 ← 0004, 0005 Verdict, 0008 (main display via `SetDisplayConfig`); T7 ← 0005, 0007 Verdict (encode
+  levers, QSV pool); T11 ← 0007 (10 ms loopback, silence fill); T22 / T12 ← 0006 Verdict; T9 decides
+  cursor shape recovery.
+- Phase 3 notes: keep CPU / NIC awake while streaming, pacing, measure all power modes (spec 0011).
 
 ## Open questions
 - Roadmap row for the language switch (EN/VI setting + `vi` strings) not added yet.
