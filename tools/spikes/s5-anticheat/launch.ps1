@@ -55,7 +55,7 @@ function Show-S5Console {
 # Runs one game in one case end to end; returns the verdict string and appends it to the summary.
 function Invoke-S5Launch([string] $Case, $Game) {
     $label = "$Case-$($Game.Key)"
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $S5Dir 'report.ps1') -Case $label
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $S5Dir 'report.ps1') -Case $label | Out-Host
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     [console]::Beep(880, 300)
     Write-Host ''
@@ -86,7 +86,7 @@ function Invoke-S5Launch([string] $Case, $Game) {
     [console]::Beep(660, 300)
     $menu = Read-S5YesNo "Case ${Case}, $($Game.Name): did it reach the main menu with no anti-cheat message?"
     $note = Read-Host 'Any anti-cheat / error message, word for word (Enter if none)'
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $S5Dir 'report.ps1') -Case "$label-after"
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $S5Dir 'report.ps1') -Case "$label-after" | Out-Host
     $verdict = ConvertTo-S5LaunchVerdict ([bool] $proc) $alive $S5WatchSeconds $acSeen $menu
     $line = "case=$Case game=$($Game.Key) verdict=$verdict watched=${alive}s ac=$acSeen menu=$menu note=`"$note`" time=$stamp"
     Add-Content -Path $S5SummaryPath -Value $line

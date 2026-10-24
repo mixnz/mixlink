@@ -19,7 +19,7 @@ function Save-S5State($State) { $State | ConvertTo-Json | Set-Content -Path $S5S
 
 function Invoke-S5Child([string] $Script, [string[]] $Arguments) {
     Write-Host "-> $Script $($Arguments -join ' ')"
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $Script @Arguments
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $Script @Arguments | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "$Script exited with $LASTEXITCODE; see its log in its out/ folder." }
 }
 
