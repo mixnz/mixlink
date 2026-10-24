@@ -5,6 +5,7 @@ use mixlink_core::ids::{FrameId, Seq};
 
 use crate::channel::Channel;
 use crate::header::{Flags, MAX_PAYLOAD, PacketHeader};
+use crate::slot::{Insert, Slot};
 
 /// Slot count and largest message for one channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,18 +70,6 @@ pub struct ReassemblerStats {
 }
 
 #[derive(Debug)]
-struct Slot {
-    busy: bool,
-    frame: FrameId,
-    flags: Flags,
-    count: u16,
-    received: u16,
-    len: usize,
-    bitmap: Vec<u64>,
-    buf: Vec<u8>,
-}
-
-#[derive(Debug)]
 pub struct Reassembler {
     max_message_len: usize,
     slots: Vec<Slot>,
@@ -92,18 +81,8 @@ pub struct Reassembler {
 
 impl Reassembler {
     pub fn new(config: ReassemblerConfig) -> Self {
-        let max_frags = config.max_message_len.div_ceil(MAX_PAYLOAD).max(1);
         let slots = (0..config.slots.max(1))
-            .map(|_| Slot {
-                busy: false,
-                frame: FrameId::new(0),
-                flags: Flags::empty(),
-                count: 0,
-                received: 0,
-                len: 0,
-                bitmap: vec![0; max_frags.div_ceil(64)],
-                buf: vec![0; config.max_message_len],
-            })
+            .map(|_| Slot::new(config.max_message_len))
             .collect();
         Self {
             max_message_len: config.max_message_len,
@@ -154,31 +133,22 @@ impl Reassembler {
             Ok(index) => index,
             Err(reason) => return Push::Dropped(reason),
         };
-        let slot = &mut self.slots[index];
-        let word = usize::from(header.frag_index / 64);
-        let bit = 1u64 << (header.frag_index % 64);
-        if slot.bitmap[word] & bit != 0 {
-            self.stats.duplicate += 1;
-            return Push::Dropped(DropReason::Duplicate);
+        match self.slots[index].insert(header, payload) {
+            Insert::Duplicate => {
+                self.stats.duplicate += 1;
+                Push::Dropped(DropReason::Duplicate)
+            }
+            Insert::Pending => Push::Pending,
+            Insert::Complete => {
+                self.finish(header.frame);
+                let slot = &self.slots[index];
+                Push::Complete(Message {
+                    frame: slot.frame,
+                    flags: slot.flags,
+                    data: slot.data(),
+                })
+            }
         }
-        slot.bitmap[word] |= bit;
-        slot.received += 1;
-        let offset = usize::from(header.frag_index) * MAX_PAYLOAD;
-        slot.buf[offset..offset + payload.len()].copy_from_slice(payload);
-        if is_last {
-            slot.len = offset + payload.len();
-        }
-        if slot.received < slot.count {
-            return Push::Pending;
-        }
-        slot.busy = false;
-        let (frame, flags, len) = (slot.frame, slot.flags, slot.len);
-        self.finish(frame);
-        Push::Complete(Message {
-            frame,
-            flags,
-            data: &self.slots[index].buf[..len],
-        })
     }
 
     fn track_seq(&mut self, seq: Seq) {
@@ -199,8 +169,7 @@ impl Reassembler {
             .iter()
             .position(|s| s.busy && s.frame == header.frame)
         {
-            let slot = &self.slots[index];
-            if slot.count != header.frag_count || slot.flags != header.flags {
+            if !self.slots[index].matches(header) {
                 self.stats.malformed += 1;
                 return Err(DropReason::Malformed);
             }
@@ -222,14 +191,7 @@ impl Reassembler {
                 oldest
             }
         };
-        let slot = &mut self.slots[index];
-        slot.busy = true;
-        slot.frame = header.frame;
-        slot.flags = header.flags;
-        slot.count = header.frag_count;
-        slot.received = 0;
-        slot.len = 0;
-        slot.bitmap.fill(0);
+        self.slots[index].start(header);
         Ok(index)
     }
 
@@ -243,11 +205,12 @@ impl Reassembler {
         oldest
     }
 
-    /// Frame completed: count it and give up every pending frame older than it.
+    /// Frame completed: count it and give up every pending frame not newer than it (the same frame
+    /// can still hold a slot when a single packet completed it).
     fn finish(&mut self, frame: FrameId) {
         self.stats.completed += 1;
         for slot in &mut self.slots {
-            if slot.busy && frame.is_newer_than(slot.frame) {
+            if slot.busy && !slot.frame.is_newer_than(frame) {
                 slot.busy = false;
                 self.stats.evicted += 1;
             }
@@ -265,3 +228,7 @@ impl Reassembler {
 #[cfg(test)]
 #[path = "reassembler_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "reassembler_stress_tests.rs"]
+mod stress_tests;

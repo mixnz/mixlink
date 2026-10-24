@@ -7,8 +7,10 @@
 **Hot path:** yes — packetize/depacketize every packet; zero-copy, preallocated buffers.
 
 ## Layout
-- `header.rs`, `channel.rs`, `packetizer.rs`, `reassembler.rs`, `control.rs`, `cursor.rs`, `error.rs`
-  (each + `<name>_tests.rs`); `tests/no_alloc.rs` (counting allocator, test-only `unsafe`).
+- `header.rs`, `channel.rs`, `packetizer.rs`, `reassembler.rs` (+ private `slot.rs`), `control.rs`,
+  `cursor.rs`, `error.rs` (each + `<name>_tests.rs`; `reassembler_stress_tests.rs` fuzz + timing;
+  `test_util.rs` helpers);
+  `tests/no_alloc.rs` (counting allocator, test-only `unsafe`).
 - Planned: `fec.rs` (T13), `crypto.rs` (T6).
 
 ## Public API

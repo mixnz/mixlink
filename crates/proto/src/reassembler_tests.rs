@@ -1,43 +1,6 @@
-use std::time::Instant;
-
 use super::*;
-use crate::header::{HEADER_LEN, MAX_DATAGRAM};
 use crate::packetizer::Packetizer;
-
-/// Deterministic xorshift64; no `rand` dependency.
-struct Rng(u64);
-
-impl Rng {
-    fn next(&mut self) -> u64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 7;
-        self.0 ^= self.0 << 17;
-        self.0
-    }
-
-    fn below(&mut self, n: usize) -> usize {
-        (self.next() % n as u64) as usize
-    }
-
-    fn shuffle<T>(&mut self, items: &mut [T]) {
-        for i in (1..items.len()).rev() {
-            items.swap(i, self.below(i + 1));
-        }
-    }
-}
-
-type Datagram = (PacketHeader, Vec<u8>);
-
-fn datagrams(p: &mut Packetizer, frame: u32, flags: Flags, message: &[u8]) -> Vec<Datagram> {
-    let mut fragments = p.packetize(FrameId::new(frame), flags, message).unwrap();
-    let mut buf = [0u8; MAX_DATAGRAM];
-    let mut out = Vec::new();
-    while let Some(len) = fragments.next_into(&mut buf) {
-        let (h, body) = PacketHeader::decode(&buf[..len]).unwrap();
-        out.push((h, body.to_vec()));
-    }
-    out
-}
+use crate::test_util::{Datagram, Rng, datagrams};
 
 /// Outcome of one push, owned so the reassembler can be pushed again.
 #[derive(Debug, PartialEq)]
@@ -284,67 +247,6 @@ fn seq_gaps_counted() {
 }
 
 #[test]
-fn random_datagrams_never_panic() {
-    let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
-    let mut r = video();
-    let mut buf = [0u8; 1232];
-    let mut decoded = 0;
-    for _ in 0..100_000 {
-        // Half full-size (valid non-last fragments), half any length.
-        let len = if rng.below(2) == 0 {
-            MAX_DATAGRAM
-        } else {
-            rng.below(buf.len() + 1)
-        };
-        for b in &mut buf[..len] {
-            *b = rng.next() as u8;
-        }
-        // 90 %: a plausible header (mostly valid fields, small frame ids) to reach `push`.
-        if len >= HEADER_LEN && rng.below(10) != 0 {
-            let count = 1 + rng.below(6) as u16;
-            buf[0] = 1;
-            buf[1] = rng.below(8) as u8;
-            buf[2..4].copy_from_slice(&(rng.below(5) as u16).to_le_bytes());
-            buf[8..12].copy_from_slice(&(rng.below(16) as u32).to_le_bytes());
-            buf[12..14].copy_from_slice(&(rng.below(usize::from(count) + 1) as u16).to_le_bytes());
-            buf[14..16].copy_from_slice(&count.to_le_bytes());
-        }
-        if let Ok((h, payload)) = PacketHeader::decode(&buf[..len]) {
-            decoded += 1;
-            let _ = r.push(&h, payload);
-        }
-    }
-    assert!(decoded > 10_000, "only {decoded} datagrams decoded");
-    assert!(r.stats().completed > 0);
-}
-
-#[test]
-fn perf_one_mib_frame() {
-    let message = vec![0x5Au8; 1 << 20];
-    let mut p = Packetizer::new(Channel::Video);
-    let mut r = video();
-    let mut buf = [0u8; MAX_DATAGRAM];
-    let rounds = 1000u32;
-    let start = Instant::now();
-    for frame in 0..rounds {
-        let mut fragments = p
-            .packetize(FrameId::new(frame), Flags::empty(), &message)
-            .unwrap();
-        let mut complete = false;
-        while let Some(len) = fragments.next_into(&mut buf) {
-            let (h, body) = PacketHeader::decode(&buf[..len]).unwrap();
-            complete |= matches!(r.push(&h, body), Push::Complete(_));
-        }
-        assert!(complete);
-    }
-    let per_frame = start.elapsed() / rounds;
-    eprintln!(
-        "packetize + reassemble 1 MiB: {} us per frame",
-        per_frame.as_micros()
-    );
-}
-
-#[test]
 fn header_not_from_decode_is_malformed() {
     let mut r = video();
     let mut h = datagrams(
@@ -375,4 +277,22 @@ fn frame_older_than_every_slot_does_not_evict_newer() {
     assert_eq!(r.stats().evicted, 0);
     assert_eq!(completes(&mut r, &f2[1..]).len(), 1);
     assert_eq!(completes(&mut r, &f3[1..]).len(), 1);
+}
+
+#[test]
+fn single_packet_completion_frees_slot_of_same_frame() {
+    let mut p = Packetizer::new(Channel::Video);
+    let partial = datagrams(&mut p, 1, Flags::empty(), &[1; 3000]);
+    let single = datagrams(&mut p, 1, Flags::empty(), &[9]);
+    let mut r = Reassembler::new(ReassemblerConfig {
+        slots: 1,
+        max_message_len: 65_536,
+    });
+    completes(&mut r, &partial[..1]);
+    assert_eq!(completes(&mut r, &single).len(), 1);
+    // The partial copy of frame 1 is given up (and counted) when frame 1 completes.
+    assert_eq!(r.stats().evicted, 1);
+    let f2 = datagrams(&mut p, 2, Flags::empty(), &[2; 3000]);
+    assert_eq!(completes(&mut r, &f2).len(), 1);
+    assert_eq!(r.stats().evicted, 1);
 }
