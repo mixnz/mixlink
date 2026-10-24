@@ -59,10 +59,6 @@ impl Wake {
 }
 
 /// Builds one lane of `capacity` slots (at least 1).
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired into Transport by the next task")
-)]
 pub(crate) fn pair(
     capacity: usize,
     consumer_wake: Arc<Wake>,

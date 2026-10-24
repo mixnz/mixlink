@@ -154,6 +154,7 @@ client's `Hello` is resent until the host answers. A dev tool proves it between 
 - Measured by: an integration test sending 10 000 single datagrams over loopback through the
   lanes, one at a time, `at` (rx) minus commit time, printing p50 / p99 / max (`--nocapture`);
   and `net-probe` RTT on the real LAN (main PC ↔ laptop, wired). Results go in this section.
+- Measured (loopback, release, main PC): one datagram commit → rx `at` p50 14 µs, p99 27 µs, max 238 µs.
 
 ## Acceptance criteria
 - [ ] Loopback: datagrams of 0, 1, 1216 and 1232 B on every channel arrive on the right rx lane
