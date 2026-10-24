@@ -17,7 +17,7 @@ Target: < 10 ms extra latency on wired LAN at 120 fps (see `docs/architecture/la
 ## Module map
 | Path | Package | Responsibility |
 |---|---|---|
-| `crates/core` | mixlink-core | Shared types: ids, config, errors, clock. No platform code. |
+| `crates/core` | mixlink-core | Shared types: ids, config, errors, clock. Only platform code: QPC clock (`platform/windows`). |
 | `crates/proto` | mixlink-proto | Wire format, packet headers, FEC, encryption framing. |
 | `crates/net` | mixlink-net | UDP transport, pacing, bitrate control, LAN discovery, (later) ICE. |
 | `crates/capture` | mixlink-capture | Host frames from the IddCx shared texture (DDA fallback) into GPU textures. |

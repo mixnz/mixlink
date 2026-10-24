@@ -20,7 +20,7 @@ its spec; a failed spike switches to the fallback its ADR names before dependent
 | T16 | Spike S3: UMDF HID keyboard, mouse, gamepad accepted by Windows and games; report latency | drivers, input | T14 | [0006](../specs/0006-spike-vhid.md) | done |
 | T17 | Spike S4: NVENC/AMF/QSV encode and WASAPI loopback from a Session 0 service | codec, audio | — | [0007](../specs/0007-spike-encode-audio-session0.md) | done |
 | T18 | Spike S5: Apex Legends (EA Javelin) and Elden Ring (EAC) launch to the main menu with our drivers installed (gameplay: user warning only) | drivers | T15, T16 | [0008](../specs/0008-spike-anticheat-launch.md) | done |
-| T2 | Core types: ids, config, errors, monotonic clock, per-stage timestamps | core | — | — | todo |
+| T2 | Core types: ids, config, errors, monotonic clock, per-stage timestamps | core | — | [0009](../specs/0009-core-types.md) | wip |
 | T3 | Protocol: packet header + channels (incl. cursor), handshake with client displays, packetizer / reassembler (payload ≤ 1200 B) | proto | T2 | — | todo |
 | T4 | UDP layer: socket setup, send/recv threads, SPSC queues | net | T3 | — | todo |
 | T19 | Service shell: `apps/svc` as service + `--console`, install/uninstall, named pipe to host tray | svc, host, core | T1, T2, T17 | — | todo |
