@@ -1,7 +1,9 @@
 //! UDP socket setup, send pacer, bitrate/congestion controller, LAN discovery (mDNS + broadcast), pairing handshake. Later: ICE/STUN/TURN.
 
 pub mod error;
+pub mod handshake;
 pub mod lane;
+pub mod resend;
 pub mod socket;
 pub mod stats;
 pub mod transport;
