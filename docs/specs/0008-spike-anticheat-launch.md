@@ -66,8 +66,43 @@ Content to cover, final copy written with `natural-copy`:
 None. No hot path is touched.
 
 ## Acceptance criteria
-- [ ] A–D run for Apex Legends and Elden Ring; table in Results.
-- [ ] Every refusal recorded word for word with the anti-cheat log name (if any).
-- [ ] D shows the machine clean and both games still launching after uninstall.
+- [x] A–D run for Apex Legends and Elden Ring; table in Results.
+- [x] Every refusal recorded word for word with the anti-cheat log name (if any).
+- [x] D shows the machine clean and both games still launching after uninstall.
 - [ ] `docs/compat/` `anti-cheat.md` holds the launch table and the warning text.
-- [ ] Verdict per anti-cheat (Javelin, EAC): launch risk of ADR-0007 S5 passes or fails; others untested.
+- [x] Verdict per anti-cheat (Javelin, EAC): launch risk of ADR-0007 S5 passes or fails; others untested.
+
+## Results
+**Machine:** Windows 11 Pro 26H2 build 26300.9711, Secure Boot on, HVCI on, SAC off, test-signing off; the
+user's main PC (RTX 5070, one 3840x2160 monitor). Games from Steam, current builds on 2026-10-24.
+EA Javelin service `EAAntiCheatService` 1.0.16199215.0; EAC `EasyAntiCheat_EOS`. Drivers installed and
+removed by `run-all.ps1` with the S1 / S3 scripts. Logs: `tools/spikes/s5-anticheat/out/` (local only).
+
+| Case | Expected | Observed | Log |
+|---|---|---|---|
+| A | both reach the menu, anti-cheat runs | **Pass.** Apex: Javelin service ran, menu, 300 s. Elden Ring: EAC "loaded successfully" (code 301), menu, 300 s | `20261024-153056-all-run-all` |
+| B | same, drivers installed, after reboot | **Pass.** `vhid` and `vdisplay` OK, problem code 0, our certificate trusted; both games as in A, no message | `20261024-155056-all-run-all` |
+| C | same, virtual monitor main | **Pass.** `\.\DISPLAY5` (MixLink Virtual Display, 2560x1440@120) main; both games as in A, no message | same |
+| D | machine clean, both still launch | **Pass.** `RESULT CLEAN` for S3 and S1; both games as in A | `20261024-162158-all-run-all` |
+
+All 8 launches: game alive the full 300 s, anti-cheat service seen running, main menu reached, no
+anti-cheat or error message (`out/s5-summary.txt`). Javelin wrote no log file to `%ProgramData%\eaanticheat`.
+
+Notes:
+- **Uninstall while Steam runs:** the first D attempt failed: `pnputil /remove-device` refused the `vhid` node
+  ("The device cannot be disabled") and `devcon remove` failed too. With Steam closed, `pnputil` removed it at
+  once. Steam Input holds the HID gamepad open; S3's "critical device" refusal was likely the same cause.
+- **Main display switch:** `ChangeDisplaySettingsEx` with `CDS_SET_PRIMARY` returned `DISP_CHANGE_FAILED` (-1)
+  for the virtual monitor (user switched in Settings); switching back to the physical one worked (0).
+- With the virtual monitor main, the physical monitor ran at 120 Hz instead of 160 Hz; back to 160 Hz after.
+
+### Verdict: launch risk passes for EA Javelin and Easy Anti-Cheat
+With our per-machine signed `vdisplay` and `vhid` drivers and their certificates installed, Apex Legends
+(EA Javelin) and Elden Ring (Easy Anti-Cheat) start their anti-cheat and reach the main menu, also with the
+virtual monitor as main display, and leave no trace after uninstall. Vanguard, BattlEye and FACEIT are
+untested. Gameplay, input from `vhid` and delayed bans are not tested: the user warning covers them.
+
+Carried forward:
+- **T20:** uninstall must handle a `vhid` node held open (ask to close Steam and other pad readers, or remove
+  on next boot), not rely on `devcon`.
+- **T21:** set the main display with `SetDisplayConfig` (topology API), not `ChangeDisplaySettingsEx`.
