@@ -2,6 +2,7 @@
 
 pub mod channel;
 pub mod control;
+pub mod cursor;
 pub mod error;
 pub mod header;
 pub mod packetizer;

@@ -50,3 +50,22 @@ pub enum ControlError {
     #[error("name is {len} bytes, at most 63 allowed")]
     NameTooLong { len: usize },
 }
+
+/// A cursor message that does not follow the fixed layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum CursorError {
+    #[error("cursor message is {len} bytes, too short")]
+    TooShort { len: usize },
+    #[error("unknown cursor message kind {byte}")]
+    Kind { byte: u8 },
+    #[error("unknown cursor shape kind {byte}")]
+    ShapeKind { byte: u8 },
+    #[error("cursor visible byte is {byte}, expected 0 or 1")]
+    Visible { byte: u8 },
+    #[error("cursor shape has {found} pixel bytes, pitch x height is {expected}")]
+    PixelLen { expected: usize, found: usize },
+    #[error("monochrome cursor height {height} is odd (AND + XOR masks)")]
+    MonochromeHeight { height: u16 },
+    #[error("output buffer is {have} bytes, cursor shape needs {need}")]
+    BufferTooSmall { need: usize, have: usize },
+}
