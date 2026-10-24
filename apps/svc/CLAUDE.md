@@ -9,7 +9,10 @@ the tray pipe; later it owns discovery, pairing, drivers, capture -> encode -> n
 
 ## Layout
 - `main.rs` (mode dispatch, exit codes), `args.rs`, `stop.rs` (`StopSignal`), `error.rs` (`SvcError`),
-  `log_setup.rs`, `pipe/session.rs` (pure per-connection handling); each with `<name>_tests.rs`.
+  `log_setup.rs`, `run.rs` (`run`, `RunOptions`: shared by service and console), `pipe/session.rs` (pure
+  per-connection handling), `pipe/server.rs` (listener + one thread per client); each with `<name>_tests.rs`.
+- `platform/windows/`: `pipe.rs` (instances), `security.rs` (pipe ACL), `console.rs` (Ctrl+C): all `unsafe` here.
+- `tests/console_mode.rs`: the binary with `--console --pipe <name>` serves the pipe.
 
 ## Modes (process contract)
 - No args: started by the service manager. `--console [--pipe <name>]`: same work in this session.

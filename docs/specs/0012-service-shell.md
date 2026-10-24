@@ -79,8 +79,10 @@ None new. `windows` 0.62.2 (workspace) gains features in `apps/svc`: `Win32_Foun
   use a unique name per run).
 - `CreateNamedPipeW`: duplex, byte mode, `PIPE_REJECT_REMOTE_CLIENTS`, `FILE_FLAG_FIRST_PIPE_INSTANCE` on the
   first instance (start fails if another process already owns the name), max 4 instances, 4 KiB buffers.
-- Security descriptor from SDDL `D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)`: SYSTEM and Administrators full,
-  interactive users read / write, nobody else (no network logons, no services under other accounts).
+- Security descriptor from SDDL `D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;OW)(A;;0x12008b;;;IU)`: SYSTEM, Administrators
+  and the pipe owner (the creating account: SYSTEM, or the user in `--console`) full; interactive users
+  `FILE_GENERIC_READ | FILE_WRITE_DATA` only (no `FILE_CREATE_PIPE_INSTANCE`, so they cannot add a server instance),
+  nobody else (no network logons, no services under other accounts).
 - Threads (control plane, blocking I/O is fine; no tokio):
   - `svc-pipe-listen`: creates an instance, `ConnectNamedPipe`, hands the handle (as `std::fs::File`) to
     a new `svc-pipe-conn` thread, repeats. A fifth client gets "pipe busy" (seen as not running) and the tray retries.
@@ -102,7 +104,8 @@ None new. `windows` 0.62.2 (workspace) gains features in `apps/svc`: `Win32_Foun
   (so the tray can show both versions), then closes. Any other first message → `Error`, close.
 - `SvcPipe` client helper (std `File` opened on the pipe path, `BufReader` for lines; no `unsafe`):
   `connect(name) -> Result<SvcPipe, SvcPipeError>` (does the `Hello` exchange), `status()`,
-  `request(&TrayToSvc) -> SvcToTray`. `SvcPipeError`: `NotRunning` (pipe missing / busy), `Io`, `Ipc`,
+  `request(&TrayToSvc) -> SvcToTray`; a busy pipe is retried for 250 ms (the server may be between instances).
+  `SvcPipeError`: `NotRunning` (pipe missing / still busy), `Io`, `Ipc`,
   `VersionMismatch { ours, theirs, svc_version }`.
 
 ### Host tray (`apps/host/src/service_link.rs`)
@@ -143,7 +146,7 @@ will host those threads later (T7, T9, T10, T11); this spec adds no priority cha
       running within 3 s; `sc start MixLink` → connected again within 3 s, no tray restart.
 - [ ] Manual: `install` run twice updates without error; `uninstall` removes it, run again exits 0;
       `install` without admin prints the admin hint and exits 1.
-- [ ] Manual: pipe ACL from `Get-Acl \\.\pipe\mixlink-svc` (or accesschk) shows only SYSTEM, Administrators,
+- [ ] Manual: pipe ACL from `Get-Acl \\.\pipe\mixlink-svc` (or accesschk) shows only SYSTEM, Administrators, Owner Rights,
       Interactive; the tray running as a standard user connects.
 - [ ] `dist/` from `build.sh release` contains `mixlink-svc.exe`.
 - [ ] `apps/svc/CLAUDE.md`, `apps/host/CLAUDE.md`, `crates/core/CLAUDE.md` describe the new API; root

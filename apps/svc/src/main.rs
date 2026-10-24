@@ -5,6 +5,9 @@ mod args;
 mod error;
 mod log_setup;
 mod pipe;
+mod platform;
+#[cfg(windows)]
+mod run;
 mod stop;
 
 use std::process::ExitCode;
@@ -35,10 +38,32 @@ fn main() -> ExitCode {
     }
 }
 
+#[cfg(windows)]
 fn run_mode(mode: Mode) -> Result<(), SvcError> {
     match mode {
-        Mode::Service | Mode::Console { .. } | Mode::Install | Mode::Uninstall => {
+        Mode::Console { pipe } => run_console(pipe),
+        Mode::Service | Mode::Install | Mode::Uninstall => {
             Err(SvcError::Usage("not implemented yet".to_owned()))
         }
     }
+}
+
+#[cfg(not(windows))]
+fn run_mode(_mode: Mode) -> Result<(), SvcError> {
+    Err(SvcError::Io(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "mixlink-svc runs on Windows only",
+    )))
+}
+
+#[cfg(windows)]
+fn run_console(pipe: String) -> Result<(), SvcError> {
+    use std::sync::Arc;
+
+    log_setup::init_console_log();
+    let stop = Arc::new(stop::StopSignal::new());
+    platform::windows::console::install_ctrl_handler(Arc::clone(&stop))?;
+    run::run(&stop, &run::RunOptions { pipe }, || {
+        log::info!("running in console mode; press Ctrl+C to stop");
+    })
 }

@@ -3,6 +3,8 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -17,8 +19,12 @@ pub const PIPE_NAME: &str = r"\\.\pipe\mixlink-svc";
 /// Longest accepted line in bytes, `\n` included. The service drops a client that sends more.
 pub const MAX_LINE: usize = 64 * 1024;
 
-/// Windows `ERROR_PIPE_BUSY`: every pipe instance is taken.
+/// Windows `ERROR_PIPE_BUSY`: no free instance right now (all taken, or the server is between two).
 const ERROR_PIPE_BUSY: i32 = 231;
+
+/// How long `SvcPipe::connect` retries a busy pipe before reporting `NotRunning`.
+const BUSY_WAIT: Duration = Duration::from_millis(250);
+const BUSY_RETRY: Duration = Duration::from_millis(10);
 
 /// Sent by the tray. `Hello` must come first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -125,11 +131,7 @@ pub struct SvcPipe {
 impl SvcPipe {
     /// Opens the pipe and exchanges `Hello`; returns the service's version.
     pub fn connect(name: &str) -> Result<(SvcPipe, String), SvcPipeError> {
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(name)
-            .map_err(open_error)?;
+        let file = open_pipe(name)?;
         let writer = file.try_clone().map_err(SvcPipeError::Io)?;
         let mut pipe = SvcPipe {
             reader: BufReader::new(file),
@@ -184,11 +186,23 @@ impl SvcPipe {
     }
 }
 
-fn open_error(error: io::Error) -> SvcPipeError {
-    if error.kind() == io::ErrorKind::NotFound || error.raw_os_error() == Some(ERROR_PIPE_BUSY) {
-        SvcPipeError::NotRunning
-    } else {
-        SvcPipeError::Io(error)
+/// Opens the pipe, retrying briefly while it is busy.
+fn open_pipe(name: &str) -> Result<File, SvcPipeError> {
+    let deadline = Instant::now() + BUSY_WAIT;
+    loop {
+        match OpenOptions::new().read(true).write(true).open(name) {
+            Ok(file) => return Ok(file),
+            Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY) => {
+                if Instant::now() >= deadline {
+                    return Err(SvcPipeError::NotRunning);
+                }
+                thread::sleep(BUSY_RETRY);
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Err(SvcPipeError::NotRunning);
+            }
+            Err(error) => return Err(SvcPipeError::Io(error)),
+        }
     }
 }
 
