@@ -2291,6 +2291,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mixlink-svc"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "log",
+ "mixlink-core",
+ "thiserror 2.0.21",
+ "windows",
+]
+
+[[package]]
 name = "muda"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
