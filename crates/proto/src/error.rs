@@ -20,3 +20,10 @@ pub enum DecodeError {
     #[error("fragment {index} is {len} bytes; every fragment but the last must be 1200")]
     ShortFragment { index: u16, len: usize },
 }
+
+/// A message the packetizer cannot split.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum PacketizeError {
+    #[error("message is {len} bytes, more than 65535 fragments")]
+    TooLarge { len: usize },
+}
