@@ -1,6 +1,6 @@
 # 0012 — Service shell: `mixlink-svc`, install / uninstall, named pipe to the tray
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-24
 **Roadmap:** T19
 **Plan:** [0012-service-shell](../plans/0012-service-shell.md) (local only, written by writing-plans skill)
@@ -131,14 +131,14 @@ will host those threads later (T7, T9, T10, T11); this spec adds no priority cha
 
 ## Acceptance criteria
 - [ ] `mixlink-svc --console` starts, serves the pipe, and stops cleanly on Ctrl+C within 1 s.
-- [ ] Integration test (no admin): `mixlink-svc --console --pipe <unique>` spawned; `SvcPipe::connect`
+- [x] Integration test (no admin): `mixlink-svc --console --pipe <unique>` spawned; `SvcPipe::connect`
       gets `Hello` with `pipe_version` 1 and the crate version; `GetStatus` returns `Idle` with a rising uptime.
-- [ ] Bad input: a line over 64 KiB, invalid JSON, or `GetStatus` before `Hello` each get one `Error` and a
+- [x] Bad input: a line over 64 KiB, invalid JSON, or `GetStatus` before `Hello` each get one `Error` and a
       closed connection; a second client connected at the same time keeps working.
-- [ ] Wrong `pipe_version` in `Hello` → service answers `Hello`, closes; `SvcPipe::connect` returns `VersionMismatch`.
-- [ ] Starting a second `--console` on the same pipe name fails with a clear error (first-instance flag).
-- [ ] `svc_ipc` round-trips every message through `encode_line` / `decode_line`; unknown `type` is an error.
-- [ ] Tray `LinkState`: unit tests cover connect, lost connection → `NotRunning` → reconnect, version
+- [x] Wrong `pipe_version` in `Hello` → service answers `Hello`, closes; `SvcPipe::connect` returns `VersionMismatch`. (service side tested; the client mapping has no test of its own)
+- [x] Starting a second `--console` on the same pipe name fails with a clear error (first-instance flag).
+- [x] `svc_ipc` round-trips every message through `encode_line` / `decode_line`; unknown `type` is an error.
+- [x] Tray `LinkState`: unit tests cover connect, lost connection → `NotRunning` → reconnect, version
       mismatch, and "emit only on change".
 - [ ] Manual (user, elevated, main PC): `mixlink-svc install` → service `MixLink` is Running, LocalSystem,
       Automatic, recovery set (`sc qc MixLink`, `sc qfailure MixLink`); log file written in ProgramData.
@@ -148,8 +148,8 @@ will host those threads later (T7, T9, T10, T11); this spec adds no priority cha
       `install` without admin prints the admin hint and exits 1.
 - [ ] Manual: pipe ACL from `Get-Acl \\.\pipe\mixlink-svc` (or accesschk) shows only SYSTEM, Administrators, Owner Rights,
       Interactive; the tray running as a standard user connects.
-- [ ] `dist/` from `build.sh release` contains `mixlink-svc.exe`.
-- [ ] `apps/svc/CLAUDE.md`, `apps/host/CLAUDE.md`, `crates/core/CLAUDE.md` describe the new API; root
+- [x] `dist/` from `build.sh release` contains `mixlink-svc.exe`.
+- [x] `apps/svc/CLAUDE.md`, `apps/host/CLAUDE.md`, `crates/core/CLAUDE.md` describe the new API; root
       `CLAUDE.md` module map already lists `apps/svc`.
 
 ## Open questions

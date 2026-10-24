@@ -1,6 +1,8 @@
-//! Host tray app: PIN display and status (later); wires capture -> codec -> net (later).
+//! Host tray app: control UI for the `mixlink-svc` service (ADR-0005); status now, PIN and devices later.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod commands;
+mod service_link;
 mod strings;
 mod tray;
 
@@ -8,10 +10,18 @@ use std::process::ExitCode;
 
 use tauri::WindowEvent;
 
+use crate::service_link::SvcStatus;
+
 fn main() -> ExitCode {
     env_logger::init();
     let result = tauri::Builder::default()
-        .setup(|app| Ok(tray::build_tray(app)?))
+        .manage(SvcStatus::default())
+        .invoke_handler(tauri::generate_handler![commands::get_svc_status])
+        .setup(|app| {
+            tray::build_tray(app)?;
+            service_link::spawn_link(app.handle().clone())?;
+            Ok(())
+        })
         .on_window_event(|window, event| {
             // Closing the window keeps the host running in the tray.
             if let WindowEvent::CloseRequested { api, .. } = event

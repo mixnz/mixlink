@@ -2224,6 +2224,8 @@ dependencies = [
  "mixlink-net",
  "mixlink-proto",
  "mixlink-render",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
 ]
