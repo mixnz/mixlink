@@ -4,3 +4,4 @@ pub mod channel;
 pub mod error;
 pub mod header;
 pub mod packetizer;
+pub mod reassembler;
