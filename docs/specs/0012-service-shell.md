@@ -131,7 +131,7 @@ None: control plane only, not on any per-frame / per-packet / per-input path. Th
 will host those threads later (T7, T9, T10, T11); this spec adds no priority changes.
 
 ## Acceptance criteria
-- [ ] `mixlink-svc --console` starts, serves the pipe, and stops cleanly on Ctrl+C within 1 s.
+- [x] `mixlink-svc --console` starts, serves the pipe, and stops cleanly on Ctrl+C within 1 s.
 - [x] Integration test (no admin): `mixlink-svc --console --pipe <unique>` spawned; `SvcPipe::connect`
       gets `Hello` with `pipe_version` 1 and the crate version; `GetStatus` returns `Idle` with a rising uptime.
 - [x] Bad input: a line over 64 KiB, invalid JSON, or `GetStatus` before `Hello` each get one `Error` and a
@@ -141,14 +141,14 @@ will host those threads later (T7, T9, T10, T11); this spec adds no priority cha
 - [x] `svc_ipc` round-trips every message through `encode_line` / `decode_line`; unknown `type` is an error.
 - [x] Tray `LinkState`: unit tests cover connect, lost connection → `NotRunning` → reconnect, version
       mismatch, and "emit only on change".
-- [ ] Manual (user, elevated, main PC): `mixlink-svc install` → service `MixLink` is Running, LocalSystem,
+- [x] Manual (user, elevated, main PC): `mixlink-svc install` → service `MixLink` is Running, LocalSystem,
       Automatic, recovery set (`sc qc MixLink`, `sc qfailure MixLink`); log file written in ProgramData.
-- [ ] Manual: host tray shows connected with the service version; `sc stop MixLink` → tray shows not
+- [x] Manual: host tray shows connected with the service version; `sc stop MixLink` → tray shows not
       running within 3 s; `sc start MixLink` → connected again within 3 s, no tray restart.
-- [ ] Manual: `install` run twice updates without error; `uninstall` removes it, run again exits 0;
+- [x] Manual: `install` run twice updates without error; `uninstall` removes it, run again exits 0;
       `install` without admin prints the admin hint and exits 1.
-- [ ] Manual: pipe ACL from `Get-Acl \\.\pipe\mixlink-svc` (or accesschk) shows only SYSTEM, Administrators, Owner Rights,
-      Interactive; the tray running as a standard user connects.
+- [x] Manual: pipe SDDL (`GetNamedSecurityInfoW`, `Get-Acl` cannot read pipes) shows only SYSTEM, Administrators,
+      Owner Rights, Interactive; the tray running as a standard user connects. Seen: `O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;OW)(A;;0x12008b;;;IU)`.
 - [x] `dist/` from `build.sh release` contains `mixlink-svc.exe`.
 - [x] `apps/svc/CLAUDE.md`, `apps/host/CLAUDE.md`, `crates/core/CLAUDE.md` describe the new API; root
       `CLAUDE.md` module map already lists `apps/svc`.

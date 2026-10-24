@@ -27,9 +27,7 @@ Details live in each spec; one line per item here.
   pipe `\\.\pipe\mixlink-svc` (ACL, strict lines, `core::svc_ipc`); host tray shows the service link state.
 
 ## In progress
-- T19 manual checks (elevated, main PC): spec 0012 Acceptance → the unticked lines (install, recovery,
-  tray reconnect, ACL, Ctrl+C in `--console`). Not run by the agent (no elevation).
-- Nothing else. Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
+- Nothing. Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
   machine: ViGEmBus may still be installed (Settings → Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
 
 ## Next
