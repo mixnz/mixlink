@@ -7,7 +7,7 @@
 **Hot path:** `clock::now` and `StageStamps::mark`/`mark_at` are called per frame: allocation-free.
 
 ## Layout
-- `ids.rs`, `clock.rs`, `stage.rs`, `config.rs`, `ipc.rs`, `error.rs` (each + `<name>_tests.rs`)
+- `ids.rs`, `clock.rs`, `stage.rs`, `config.rs`, `ipc.rs`, `svc_ipc.rs`, `error.rs` (each + `<name>_tests.rs`)
 - `platform/windows/qpc.rs` (QPC), `platform/fallback.rs` (`Instant`, non-Windows): the only platform code.
 
 ## Public API
@@ -21,6 +21,9 @@
 - `error`: `IdParseError`, `ConfigError`.
 - `ipc`: launcher <-> stream JSON-lines contract — `IPC_VERSION`, `StreamToLauncher`, `LauncherToStream`,
   `CloseReason`, `IpcError`, `encode_line`, `decode_line`.
+- `svc_ipc`: tray <-> service pipe contract (spec 0012) — `PIPE_VERSION`, `PIPE_NAME`, `MAX_LINE`, `TrayToSvc`,
+  `SvcToTray`, `SvcState`, `read_line_limited` / `LineRead`, blocking client `SvcPipe` (`connect`, `request`,
+  `status`), `SvcPipeError` (`NotRunning` = pipe missing or busy).
 
 ## Notes
 - `clock` ticks are raw QPC on Windows, same clock as `vdisplay` frame stamps; never subtract host
