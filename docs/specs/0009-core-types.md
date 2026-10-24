@@ -1,6 +1,6 @@
 # 0009 — Core types
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-24
 **Roadmap:** T2
 **Plan:** [0009-core-types](../plans/0009-core-types.md) (local only, written by writing-plans skill)
@@ -63,17 +63,17 @@ shape, one monotonic clock and one per-frame stage record, so T3+ never invent t
 
 ## Latency impact
 Adds `now()` and `StageStamps::mark` to every stage later: one QPC read (~20–30 ns) and an array
-store each, no allocation. Measured by a unit test timing 1M `now()` calls (informational, printed with
+store each, no allocation (measured: ~20 ns per `now()` call, debug build). Measured by a unit test timing 1M `now()` calls (informational, printed with
 `--nocapture`), not a criterion bench (no new dependency).
 
 ## Acceptance criteria
-- [ ] `Seq` / `FrameId` ordering is correct across wrap (`u32::MAX` → 0) in unit tests.
-- [ ] `DeviceId` round-trips through `Display` / `FromStr` and serde; bad hex / length is an error.
-- [ ] `now()` never goes backwards over 1M calls; `duration_since` matches `ticks_per_sec`.
-- [ ] `StageStamps`: unmarked stage → `None`; `span` of two marked stages is their difference.
-- [ ] Default `HostConfig` / `ClientConfig` round-trip through JSON; `{}` loads as defaults;
+- [x] `Seq` / `FrameId` ordering is correct across wrap (`u32::MAX` → 0) in unit tests.
+- [x] `DeviceId` round-trips through `Display` / `FromStr` and serde; bad hex / length is an error.
+- [x] `now()` never goes backwards over 1M calls; `duration_since` matches `ticks_per_sec`.
+- [x] `StageStamps`: unmarked stage → `None`; `span` of two marked stages is their difference.
+- [x] Default `HostConfig` / `ClientConfig` round-trip through JSON; `{}` loads as defaults;
       each validation rule rejects its bad value with a typed `ConfigError`.
-- [ ] `crates/core/CLAUDE.md` lists the new public API; no new dependency in `mixlink-core`
+- [x] `crates/core/CLAUDE.md` lists the new public API; no new dependency in `mixlink-core`
       besides `windows` (QPC, `cfg(windows)` only).
 
 ## Open questions
