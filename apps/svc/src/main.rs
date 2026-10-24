@@ -9,11 +9,14 @@ mod platform;
 #[cfg(windows)]
 mod run;
 mod stop;
+mod strings;
 
 use std::process::ExitCode;
 
 use crate::args::{Mode, USAGE, parse_args};
 use crate::error::SvcError;
+#[cfg(windows)]
+use crate::platform::windows::install::{InstallOutcome, UninstallOutcome};
 
 const EXIT_USAGE: u8 = 2;
 
@@ -41,9 +44,23 @@ fn main() -> ExitCode {
 #[cfg(windows)]
 fn run_mode(mode: Mode) -> Result<(), SvcError> {
     match mode {
+        Mode::Service => platform::windows::service::dispatch(),
         Mode::Console { pipe } => run_console(pipe),
-        Mode::Service | Mode::Install | Mode::Uninstall => {
-            Err(SvcError::Usage("not implemented yet".to_owned()))
+        Mode::Install => {
+            let message = match platform::windows::install::install()? {
+                InstallOutcome::Created => strings::INSTALLED,
+                InstallOutcome::Updated => strings::UPDATED,
+            };
+            eprintln!("{message}");
+            Ok(())
+        }
+        Mode::Uninstall => {
+            let message = match platform::windows::install::uninstall()? {
+                UninstallOutcome::Removed => strings::REMOVED,
+                UninstallOutcome::NotInstalled => strings::NOT_INSTALLED,
+            };
+            eprintln!("{message}");
+            Ok(())
         }
     }
 }

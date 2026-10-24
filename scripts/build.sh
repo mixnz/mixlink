@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the workspace.
 #   scripts/build.sh                 debug build of the whole workspace
-#   scripts/build.sh release         UI + release build (UI embedded), copies the 3 app exes to dist/
+#   scripts/build.sh release         UI + release build (UI embedded), copies the 4 app exes to dist/
 #   scripts/build.sh debug -p NAME   build one package (e.g. mixlink-net)
 source "$(dirname "$0")/lib.sh"
 
@@ -31,7 +31,7 @@ esac || exit 1
 
 if [[ "$profile" == "release" ]]; then
   mkdir -p dist
-  for bin in mixlink-host mixlink-client mixlink-stream; do
+  for bin in mixlink-host mixlink-client mixlink-stream mixlink-svc; do
     for ext in ".exe" ""; do
       src="target/release/$bin$ext"
       if [[ -f "$src" ]]; then

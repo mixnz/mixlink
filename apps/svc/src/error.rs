@@ -13,8 +13,10 @@ pub enum SvcError {
     },
     #[error("another process already owns the service pipe")]
     PipeTaken,
-    #[error("administrator rights are needed")]
+    #[error("This needs administrator rights. Run it from an administrator terminal.")]
     NotAdmin,
+    #[error("the MixLink service did not stop within 10 seconds")]
+    StopTimeout,
     #[error("{0}")]
     Usage(String),
 }
