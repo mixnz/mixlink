@@ -64,6 +64,7 @@ Async runtime (tokio) is allowed only for control plane: discovery, pairing, set
   open-source IddCx driver, SendInput for input.
 - Unsigned `.exe`: SmartScreen warns; Smart App Control (Win11) blocks the app. Documented only.
 - XInput-only games need ViGEmBus (optional, author-signed, retired, flagged by some anti-cheats).
-- Anti-cheat acceptance of our drivers is unproven (spike S5); keep a per-game compatibility list.
+- Anti-cheat: EA Javelin and EAC launch with our drivers (spike S5); gameplay and other anti-cheats
+  untested. List and user warning: `compat/anti-cheat.md`.
 - Encode and loopback from Session 0 unproven (spike S4); fallback: SYSTEM process in the console session.
 - Wi-Fi adds jitter: UI must warn and recommend wired / 5 GHz+.

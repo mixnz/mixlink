@@ -1,6 +1,6 @@
 # 0008 — Spike S5: anti-cheat titles launch with our drivers installed
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-23
 **Roadmap:** T18
 **Plan:** [0008-spike-anticheat-launch](../plans/0008-spike-anticheat-launch.md) (local only, written by writing-plans skill)
@@ -69,7 +69,7 @@ None. No hot path is touched.
 - [x] A–D run for Apex Legends and Elden Ring; table in Results.
 - [x] Every refusal recorded word for word with the anti-cheat log name (if any).
 - [x] D shows the machine clean and both games still launching after uninstall.
-- [ ] `docs/compat/` `anti-cheat.md` holds the launch table and the warning text.
+- [x] `docs/compat/` `anti-cheat.md` holds the launch table and the warning text.
 - [x] Verdict per anti-cheat (Javelin, EAC): launch risk of ADR-0007 S5 passes or fails; others untested.
 
 ## Results

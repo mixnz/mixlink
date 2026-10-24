@@ -23,7 +23,8 @@ A UMDF 2 HID minidriver (`vhidmini2` sample) exposes devices that Windows treats
 ## Consequences
 - Input is not flagged as injected and is not blocked by UIPI; works on UAC and login screens.
 - Risks to prove: spike S3 (UMDF HID keyboard/mouse collections are accepted and fast),
-  spike S5 (Vanguard, EAC, BattlEye, FACEIT run and accept input with our drivers installed).
+  spike S5 (anti-cheat launch: EA Javelin and EAC pass, spec 0008; gameplay and input untested, user
+  warning in `docs/compat/anti-cheat.md`).
 - Without ViGEmBus, XInput-only games get no gamepad. Shown in the per-game compatibility list.
 - Replaces "SendInput + virtual gamepad" of ADR-0001; `mixlink-input` host side becomes a HID
   report builder plus `SendInput` fallback.

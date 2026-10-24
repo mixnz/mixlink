@@ -19,7 +19,7 @@ its spec; a failed spike switches to the fallback its ADR names before dependent
 | T23 | Spike S2b: cut the IddCx frame-path tail (driver copy priority, zero-copy ring), re-measure vs DDA with the S2 harness | drivers, capture | T15 | [0005](../specs/0005-spike-iddcx-tail.md) | done |
 | T16 | Spike S3: UMDF HID keyboard, mouse, gamepad accepted by Windows and games; report latency | drivers, input | T14 | [0006](../specs/0006-spike-vhid.md) | done |
 | T17 | Spike S4: NVENC/AMF/QSV encode and WASAPI loopback from a Session 0 service | codec, audio | — | [0007](../specs/0007-spike-encode-audio-session0.md) | done |
-| T18 | Spike S5: Apex Legends (EA Javelin) and Elden Ring (EAC) launch to the main menu with our drivers installed (gameplay: user warning only) | drivers | T15, T16 | [0008](../specs/0008-spike-anticheat-launch.md) | wip |
+| T18 | Spike S5: Apex Legends (EA Javelin) and Elden Ring (EAC) launch to the main menu with our drivers installed (gameplay: user warning only) | drivers | T15, T16 | [0008](../specs/0008-spike-anticheat-launch.md) | done |
 | T2 | Core types: ids, config, errors, monotonic clock, per-stage timestamps | core | — | — | todo |
 | T3 | Protocol: packet header + channels (incl. cursor), handshake with client displays, packetizer / reassembler (payload ≤ 1200 B) | proto | T2 | — | todo |
 | T4 | UDP layer: socket setup, send/recv threads, SPSC queues | net | T3 | — | todo |

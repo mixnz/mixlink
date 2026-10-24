@@ -51,15 +51,18 @@
     high process priority 3.15 vs 2.95 ms. Console-session SYSTEM (fallback) behaves the same. Works at login
     (after reboot), lock, UAC; bitstreams valid, no CPU copy. QSV (laptop iGPU) works via decoder-bind pool.
   - Loopback: 10 ms packets (`IAudioClient3` refuses loopback), nothing while the endpoint is idle.
+- T18 spike S5 (spec 0008): **launch risk passes** for EA Javelin (Apex Legends) and EAC (Elden Ring), with
+  our drivers installed, virtual monitor main, and after removal (8/8). Vanguard, BattlEye, FACEIT, gameplay
+  and input untested: user warning in `docs/compat/anti-cheat.md`. `tools/spikes/s5-anticheat/run-all.ps1`.
 
 ## In progress
-- Nothing. Main PC and laptop: `MixLinkS4` removed. Test machine: ViGEmBus may still be installed (remove
-  via Settings → Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
+- Nothing. Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
+  machine: ViGEmBus may still be installed (Settings → Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
-- Roadmap phase 1: T18 spike S5 next (or T2). T20 follows spec 0003 → Verdict; T21 follows spec 0004 and
-  0005 → Verdict constraints; T7 follows specs 0005 and 0007 → Verdict (encode levers, isolate them; QSV
+- Roadmap phase 1: T2 next. T20 follows specs 0003 and 0008 → Verdict (`vhid` held open by Steam blocks
+  uninstall); T21 follows spec 0004 and 0005 → Verdict constraints, 0008 (main display via `SetDisplayConfig`); T7 follows specs 0005 and 0007 → Verdict (encode levers, isolate them; QSV
   pool); T11 follows spec 0007 (10 ms loopback, silence fill); T22 / T12 follow spec 0006 → Verdict.
 
 ## Open questions
