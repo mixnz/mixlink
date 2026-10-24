@@ -21,7 +21,7 @@ its spec; a failed spike switches to the fallback its ADR names before dependent
 | T17 | Spike S4: NVENC/AMF/QSV encode and WASAPI loopback from a Session 0 service | codec, audio | — | [0007](../specs/0007-spike-encode-audio-session0.md) | done |
 | T18 | Spike S5: Apex Legends (EA Javelin) and Elden Ring (EAC) launch to the main menu with our drivers installed (gameplay: user warning only) | drivers | T15, T16 | [0008](../specs/0008-spike-anticheat-launch.md) | done |
 | T2 | Core types: ids, config, errors, monotonic clock, per-stage timestamps | core | — | [0009](../specs/0009-core-types.md) | done |
-| T3 | Protocol: packet header + channels (incl. cursor), handshake with client displays, packetizer / reassembler (payload ≤ 1200 B) | proto | T2 | — | todo |
+| T3 | Protocol: packet header + channels (incl. cursor), handshake with client displays, packetizer / reassembler (payload ≤ 1200 B) | proto | T2 | [0010](../specs/0010-protocol-packets.md) | wip |
 | T4 | UDP layer: socket setup, send/recv threads, SPSC queues | net | T3 | — | todo |
 | T19 | Service shell: `apps/svc` as service + `--console`, install/uninstall, named pipe to host tray | svc, host, core | T1, T2, T17 | — | todo |
 | T20 | Driver install tooling: per-machine cert, sign catalog, install/uninstall `vdisplay` + `vhid`, WDK build in gate/CI | drivers, svc | T14, T19 | — | todo |
