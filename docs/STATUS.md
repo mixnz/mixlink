@@ -56,6 +56,9 @@
   and input untested: user warning in `docs/compat/anti-cheat.md`. `tools/spikes/s5-anticheat/run-all.ps1`.
 - T2 core types (spec 0009): `mixlink-core` ids (`SessionId`/`FrameId`/`Seq` u32, `DeviceId`), QPC clock
   (`Ticks`, ~20 ns per `now()`), `StageStamps` (8 stages), `HostConfig`/`ClientConfig` JSON + validation.
+- T3 protocol (spec 0010, ADR-0008 header v1): `mixlink-proto` 16 B header, 6 channels, pull packetizer,
+  allocation-free reassembler (1 MiB frame: 41 µs release), JSON control handshake with client displays,
+  cursor position / shape messages.
 
 ## In progress
 - Nothing. Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
@@ -63,9 +66,11 @@
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
-- Roadmap phase 1: T3 next (protocol, uses `core::ids`); T19 and T8 are also unblocked. T20 follows specs 0003 and 0008 → Verdict (`vhid` held open by Steam blocks
-  uninstall); T21 follows spec 0004 and 0005 → Verdict constraints, 0008 (main display via `SetDisplayConfig`); T7 follows specs 0005 and 0007 → Verdict (encode levers, isolate them; QSV
-  pool); T11 follows spec 0007 (10 ms loopback, silence fill); T22 / T12 follow spec 0006 → Verdict.
+- Roadmap phase 1: T4 next (UDP layer on `mixlink-proto`; owns the `Hello` resend timer); T19 and T8 are
+  also unblocked. T20 follows specs 0003 and 0008 → Verdict (`vhid` held open by Steam blocks uninstall);
+  T21 follows spec 0004 and 0005 → Verdict constraints, 0008 (main display via `SetDisplayConfig`); T7
+  follows specs 0005 and 0007 → Verdict (encode levers, isolate them; QSV pool); T11 follows spec 0007
+  (10 ms loopback, silence fill); T22 / T12 follow spec 0006 → Verdict; T9 decides cursor shape recovery.
 
 ## Open questions
 - Roadmap row for the language switch (EN/VI setting + `vi` strings) not added yet.

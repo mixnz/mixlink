@@ -9,7 +9,8 @@ use crate::error::ConfigError;
 /// Bumped on any breaking change to the config shape.
 pub const CONFIG_VERSION: u32 = 1;
 
-const MAX_NAME_BYTES: usize = 63;
+/// Device name limit in UTF-8 bytes (mDNS label); config and the control handshake share it.
+pub const MAX_NAME_BYTES: usize = 63;
 const FPS_RANGE: std::ops::RangeInclusive<u32> = 1..=240;
 const BITRATE_KBPS_RANGE: std::ops::RangeInclusive<u32> = 1_000..=500_000;
 
