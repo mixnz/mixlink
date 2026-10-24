@@ -10,5 +10,6 @@
 | 0006 | [0006-spike-vhid](0006-spike-vhid.md) | done |
 | 0007 | [0007-spike-encode-audio-session0](0007-spike-encode-audio-session0.md) | done |
 | 0008 | [0008-spike-anticheat-launch](0008-spike-anticheat-launch.md) | done |
+| 0009 | [0009-core-types](0009-core-types.md) | done |
 
 Rules: `../conventions/docs-writing.md`. Template: `_template.md`.
