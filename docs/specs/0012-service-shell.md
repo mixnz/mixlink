@@ -102,7 +102,8 @@ None new. `windows` 0.62.2 (workspace) gains features in `apps/svc`: `Win32_Foun
 - `SvcState`: `Idle` only for now; T5 / T6 / T9 add variants (bumping `PIPE_VERSION` when breaking).
 - Session: the tray sends `Hello` first. Different `pipe_version` → the service still answers `Hello`
   (so the tray can show both versions), then closes. Any other first message → `Error`, close.
-- `SvcPipe` client helper (std `File` opened on the pipe path, `BufReader` for lines; no `unsafe`):
+- `SvcPipe` client helper (std `File` opened on the pipe path with access `FILE_GENERIC_READ | FILE_WRITE_DATA`
+  only, matching the interactive-users ACE; `GENERIC_WRITE` would be denied; `BufReader` for lines; no `unsafe`):
   `connect(name) -> Result<SvcPipe, SvcPipeError>` (does the `Hello` exchange), `status()`,
   `request(&TrayToSvc) -> SvcToTray`; a busy pipe is retried for 250 ms (the server may be between instances).
   `SvcPipeError`: `NotRunning` (pipe missing / still busy), `Io`, `Ipc`,

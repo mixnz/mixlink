@@ -68,3 +68,7 @@ pub fn wait_client(instance: &OwnedHandle) -> Result<(), SvcError> {
         Err(error) => Err(SvcError::win32("ConnectNamedPipe")(error)),
     }
 }
+
+#[cfg(test)]
+#[path = "pipe_tests.rs"]
+mod tests;

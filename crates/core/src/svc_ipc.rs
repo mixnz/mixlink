@@ -22,6 +22,12 @@ pub const MAX_LINE: usize = 64 * 1024;
 /// Windows `ERROR_PIPE_BUSY`: no free instance right now (all taken, or the server is between two).
 const ERROR_PIPE_BUSY: i32 = 231;
 
+/// Windows access rights for the client end (winnt.h).
+#[cfg(windows)]
+const FILE_GENERIC_READ: u32 = 0x0012_0089;
+#[cfg(windows)]
+const FILE_WRITE_DATA: u32 = 0x0002;
+
 /// How long `SvcPipe::connect` retries a busy pipe before reporting `NotRunning`.
 const BUSY_WAIT: Duration = Duration::from_millis(250);
 const BUSY_RETRY: Duration = Duration::from_millis(10);
@@ -186,11 +192,28 @@ impl SvcPipe {
     }
 }
 
-/// Opens the pipe, retrying briefly while it is busy.
-fn open_pipe(name: &str) -> Result<File, SvcPipeError> {
+/// Read + write data only. `write(true)` would ask for `GENERIC_WRITE`, which includes
+/// `FILE_CREATE_PIPE_INSTANCE`; the pipe ACL denies that to interactive users (spec 0012).
+#[cfg(windows)]
+fn client_options() -> OpenOptions {
+    use std::os::windows::fs::OpenOptionsExt;
+    let mut options = OpenOptions::new();
+    options.access_mode(FILE_GENERIC_READ | FILE_WRITE_DATA);
+    options
+}
+
+#[cfg(not(windows))]
+fn client_options() -> OpenOptions {
+    let mut options = OpenOptions::new();
+    options.read(true).write(true);
+    options
+}
+
+/// Opens the client end, retrying briefly while it is busy. `SvcPipe::connect` uses it.
+pub fn open_pipe(name: &str) -> Result<File, SvcPipeError> {
     let deadline = Instant::now() + BUSY_WAIT;
     loop {
-        match OpenOptions::new().read(true).write(true).open(name) {
+        match client_options().open(name) {
             Ok(file) => return Ok(file),
             Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY) => {
                 if Instant::now() >= deadline {

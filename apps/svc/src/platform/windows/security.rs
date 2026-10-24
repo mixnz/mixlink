@@ -8,12 +8,13 @@ use windows::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
 use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
-use windows::core::w;
+use windows::core::HSTRING;
 
 use crate::error::SvcError;
 
 // 0x12008b = FILE_GENERIC_READ | FILE_WRITE_DATA (no FILE_CREATE_PIPE_INSTANCE).
 // OW = owner rights: the account that created the pipe (SYSTEM as a service, the user with --console).
+pub const PIPE_SDDL: &str = "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;OW)(A;;0x12008b;;;IU)";
 
 /// Owned security descriptor for `CreateNamedPipeW`.
 #[derive(Debug)]
@@ -28,11 +29,15 @@ unsafe impl Sync for PipeSecurity {}
 
 impl PipeSecurity {
     pub fn new() -> Result<PipeSecurity, SvcError> {
+        PipeSecurity::from_sddl(PIPE_SDDL)
+    }
+
+    pub fn from_sddl(sddl: &str) -> Result<PipeSecurity, SvcError> {
         let mut descriptor = PSECURITY_DESCRIPTOR::default();
-        // SAFETY: constant SDDL string; `descriptor` receives a LocalAlloc'd buffer freed in Drop.
+        // SAFETY: `sddl` outlives the call; `descriptor` receives a LocalAlloc'd buffer freed in Drop.
         unsafe {
             ConvertStringSecurityDescriptorToSecurityDescriptorW(
-                w!("D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;OW)(A;;0x12008b;;;IU)"),
+                &HSTRING::from(sddl),
                 SDDL_REVISION_1,
                 &mut descriptor,
                 None,

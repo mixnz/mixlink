@@ -23,7 +23,8 @@
   `CloseReason`, `IpcError`, `encode_line`, `decode_line`.
 - `svc_ipc`: tray <-> service pipe contract (spec 0012) — `PIPE_VERSION`, `PIPE_NAME`, `MAX_LINE`, `TrayToSvc`,
   `SvcToTray`, `SvcState`, `read_line_limited` / `LineRead`, blocking client `SvcPipe` (`connect`, `request`,
-  `status`), `SvcPipeError` (`NotRunning` = pipe missing or busy).
+  `status`), `open_pipe` (read + write-data access only, see spec 0012), `SvcPipeError` (`NotRunning` =
+  pipe missing or busy).
 
 ## Notes
 - `clock` ticks are raw QPC on Windows, same clock as `vdisplay` frame stamps; never subtract host
