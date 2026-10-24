@@ -29,8 +29,9 @@
 | 5 | input | client→host | one packet (body: T10) | 2, 1200 B |
 | 6 | feedback | client→host | one packet (body: T13) | 2, 1200 B |
 
-- Reassembly: a frame not newer than the newest completed or evicted one is late and dropped; a
-  newer frame completing first gives up older pending ones.
+- Reassembly: a frame not newer than the newest completed or evicted one (or, with all slots busy,
+  older than every pending one) is late and dropped; a newer frame completing first gives up older
+  pending ones.
 
 ## Control handshake (`crates/proto/src/control.rs`)
 - Client sends `Hello` (proto version, device id, name, 1–8 displays, `stream_display` index);

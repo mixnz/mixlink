@@ -343,3 +343,36 @@ fn perf_one_mib_frame() {
         per_frame.as_micros()
     );
 }
+
+#[test]
+fn header_not_from_decode_is_malformed() {
+    let mut r = video();
+    let mut h = datagrams(
+        &mut Packetizer::new(Channel::Video),
+        1,
+        Flags::empty(),
+        &[1],
+    )
+    .remove(0);
+    h.0.frag_count = 0;
+    assert_eq!(push(&mut r, &h), Out::Dropped(DropReason::Malformed));
+    h.0.frag_count = 2;
+    h.0.frag_index = 2;
+    assert_eq!(push(&mut r, &h), Out::Dropped(DropReason::Malformed));
+}
+
+#[test]
+fn frame_older_than_every_slot_does_not_evict_newer() {
+    let mut p = Packetizer::new(Channel::Video);
+    let f1 = datagrams(&mut p, 1, Flags::empty(), &[1; 3000]);
+    let f2 = datagrams(&mut p, 2, Flags::empty(), &[2; 3000]);
+    let f3 = datagrams(&mut p, 3, Flags::empty(), &[3; 3000]);
+    let mut r = two_slots();
+    completes(&mut r, &f2[..1]);
+    completes(&mut r, &f3[..1]);
+    // Frame 1 is reordered behind 2 and 3; it must not push frame 2 out.
+    assert_eq!(push(&mut r, &f1[0]), Out::Dropped(DropReason::Late));
+    assert_eq!(r.stats().evicted, 0);
+    assert_eq!(completes(&mut r, &f2[1..]).len(), 1);
+    assert_eq!(completes(&mut r, &f3[1..]).len(), 1);
+}

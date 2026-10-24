@@ -126,7 +126,15 @@ impl Reassembler {
             self.stats.late += 1;
             return Push::Dropped(DropReason::Late);
         }
-        let is_last = header.frag_index + 1 == header.frag_count;
+        // `PacketHeader::decode` guarantees these; a hand-built header must not panic or overrun.
+        let is_last = header.frag_index.checked_add(1) == Some(header.frag_count);
+        if header.frag_index >= header.frag_count
+            || payload.len() > MAX_PAYLOAD
+            || (!is_last && payload.len() != MAX_PAYLOAD)
+        {
+            self.stats.malformed += 1;
+            return Push::Dropped(DropReason::Malformed);
+        }
         // Smallest size the message can have; a non-last fragment only proves one more byte.
         let min_len = usize::from(header.frag_count - 1) * MAX_PAYLOAD
             + if is_last { payload.len() } else { 1 };
@@ -203,6 +211,11 @@ impl Reassembler {
             None => {
                 let oldest = self.oldest_busy();
                 let evicted = self.slots[oldest].frame;
+                // Reordered frame older than everything pending: drop it, keep the newer ones.
+                if !header.frame.is_newer_than(evicted) {
+                    self.stats.late += 1;
+                    return Err(DropReason::Late);
+                }
                 self.slots[oldest].busy = false;
                 self.stats.evicted += 1;
                 self.raise_floor(evicted);

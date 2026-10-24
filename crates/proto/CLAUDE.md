@@ -31,6 +31,7 @@
   allocation-free (`tests/no_alloc.rs` checks it). One reassembler per channel and peer; not `Sync`.
 - A single-packet message is returned borrowed from the datagram, a fragmented one from a slot;
   both borrows end at the next `push`.
-- Late = not newer than the newest completed or evicted frame. Out-of-order completion gives up
-  older pending frames (counted `evicted`); the caller decides on intra-refresh.
+- Late = not newer than the newest completed or evicted frame, or (slots full) older than every
+  pending frame. Out-of-order completion gives up older pending frames (counted `evicted`); the
+  caller decides on intra-refresh.
 - Control messages are JSON (not hot path); cursor and header are fixed binary.

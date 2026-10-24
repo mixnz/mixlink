@@ -93,8 +93,8 @@ Id 0 is invalid (a zeroed buffer never parses as a packet).
 - Rules: a frame not newer than the newest completed or evicted one is `Late`; a fragment seen twice is
   `Duplicate`; `frag_count` or flags differing from the slot's first fragment, or a message over
   `max_message_len`, is `Malformed`. A new frame with all slots busy evicts the oldest slot
-  (counted `Evicted`, i.e. that frame is lost). Out-of-order completion is delivered; older
-  pending frames then become late. The caller (T9 / T13) decides on intra-refresh.
+  (counted `Evicted`, i.e. that frame is lost), or is `Late` if it is older than every pending
+  frame. Out-of-order completion is delivered; older pending frames then become late. The caller (T9 / T13) decides on intra-refresh.
 - `stats() -> ReassemblerStats` (plain counters: completed, evicted, late, duplicate, malformed,
   seq gaps). Wrap-safe ordering via `FrameId::is_newer_than` / `Seq::is_newer_than`.
 
