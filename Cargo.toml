@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/*"]
+members = ["crates/*", "apps/*", "tools/net-probe"]
 
 [workspace.package]
 version = "0.1.0"
@@ -21,6 +21,8 @@ mixlink-render = { path = "crates/render", version = "0.1.0" }
 # Third-party (versions checked in spec 0002 / plan).
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+socket2 = "0.6.5"
+rtrb = "0.4.0"
 thiserror = "2.0.21"
 log = "0.4.34"
 env_logger = "0.11.11"

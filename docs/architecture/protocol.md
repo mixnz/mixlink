@@ -37,7 +37,8 @@
 - Client sends `Hello` (proto version, device id, name, 1–8 displays, `stream_display` index);
   host answers `Welcome` (session id, streamed mode) or `Reject` (version, busy, not paired, bad display).
 - Display refresh is in millihertz (59.94 Hz = 59 940). Unknown JSON fields are ignored.
-- Lost packets: the client resends `Hello` until a reply arrives (timer in T4). A general ack +
+- Lost packets: the client resends `Hello` every 250 ms until a reply arrives, giving up after 10 s
+  (`crates/net/src/resend.rs`, `handshake.rs`). A general ack +
   resend layer comes with the first non-idempotent control message. `Bye` ends a session.
 
 ## Cursor (`crates/proto/src/cursor.rs`)
