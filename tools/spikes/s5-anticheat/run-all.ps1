@@ -74,7 +74,7 @@ try {
         switch ($step) {
             'A' {
                 if ((ConvertTo-S5MixLinkState @(Get-S5MixLinkReasons)) -ne 'clean') { Uninstall-S5Drivers 'S5-pre' }
-                Confirm-S5Continue (Invoke-S5Launch 'A') 'A'
+                Confirm-S5Continue (Invoke-S5Case 'A') 'A'
             }
             'install' {
                 if (-not ((Test-Path (Join-Path $S1PkgDir 'vdisplay.cat')) -and (Test-Path (Join-Path $S3PkgDir 'vhid.cat')))) {
@@ -92,12 +92,12 @@ try {
             }
             'B' {
                 $state.OriginalPrimary = (Get-S5PrimaryDisplay).Name; Save-S5State $state
-                Confirm-S5Continue (Invoke-S5Launch 'B') 'B'
+                Confirm-S5Continue (Invoke-S5Case 'B') 'B'
             }
             'C' {
                 $virtual = Get-S5VirtualDisplay
                 Switch-S5Primary $(if ($virtual) { $virtual.Name } else { '' }) 'virtual (MixLink)'
-                $verdict = Invoke-S5Launch 'C'
+                $verdict = Invoke-S5Case 'C'
                 $physical = $state.OriginalPrimary
                 if (-not $physical) {
                     $physical = (@(Get-S5Displays) | Where-Object { -not (Test-S5VirtualAdapterId $_.DeviceId) } | Select-Object -First 1).Name
@@ -107,7 +107,7 @@ try {
             }
             'D' {
                 Uninstall-S5Drivers 'S5'
-                Confirm-S5Continue (Invoke-S5Launch 'D') 'D'
+                Confirm-S5Continue (Invoke-S5Case 'D') 'D'
             }
             'done' {
                 Unregister-S5ResumeTask

@@ -8,14 +8,31 @@ $S5Dir = $PSScriptRoot
 $S5OutDir = Join-Path $PSScriptRoot 'out'
 $S5StatePath = Join-Path $S5OutDir 's5-state.json'
 $S5SummaryPath = Join-Path $S5OutDir 's5-summary.txt'
-$S5EacLogDirs = "$env:APPDATA\EasyAntiCheat", "${env:ProgramFiles(x86)}\EasyAntiCheat_EOS"
-$S5GameProcess = 'r5apex*'
 $S5WatchSeconds = 300
 $S5StartTimeoutSeconds = 300
 $S5Steps = 'A', 'install', 'reboot', 'B', 'C', 'D', 'done'
 
-function Test-S5EacServiceName([string] $Name) {
-    return $Name -match '^EasyAntiCheat(_EOS)?$'
+# Games run in every case, in this order. Apex Legends ships EA Javelin Anticheat, not Easy Anti-Cheat.
+# Elden Ring must start normally (not in offline mode), or EAC does not load.
+$S5Games = @(
+    [pscustomobject]@{
+        Key = 'apex'; Name = 'Apex Legends'; Process = 'r5apex*'; AntiCheat = 'EA Javelin'
+        Service = '^EAAntiCheatService$'; LogDirs = @("$env:ProgramData\eaanticheat", "$env:ProgramFiles\EA\AC")
+    },
+    [pscustomobject]@{
+        Key = 'elden'; Name = 'Elden Ring'; Process = 'eldenring'; AntiCheat = 'Easy Anti-Cheat'
+        Service = '^EasyAntiCheat(_EOS)?$'; LogDirs = @("$env:APPDATA\EasyAntiCheat", "${env:ProgramFiles(x86)}\EasyAntiCheat_EOS")
+    }
+)
+
+function Get-S5Game([string] $Key) {
+    $game = $S5Games | Where-Object Key -eq $Key
+    if (-not $game) { throw "unknown game '$Key'" }
+    return $game
+}
+
+function Test-S5AcServiceName($Game, [string] $Name) {
+    return $Name -match $Game.Service
 }
 
 # 'clean' (nothing left), 'unknown' (only checks that need elevation were skipped), else 'installed'.
@@ -44,10 +61,10 @@ function Get-S5NextStep([string] $Last) {
     return $S5Steps[[Math]::Min($i + 1, $S5Steps.Count - 1)]
 }
 
-function ConvertTo-S5LaunchVerdict([bool] $Started, [int] $AliveSeconds, [int] $WatchSeconds, [bool] $EacSeen, [bool] $UserMenu) {
+function ConvertTo-S5LaunchVerdict([bool] $Started, [int] $AliveSeconds, [int] $WatchSeconds, [bool] $AcSeen, [bool] $UserMenu) {
     if (-not $Started) { return 'fail: game did not start' }
     if ($AliveSeconds -lt $WatchSeconds) { return "fail: game exited after $AliveSeconds s" }
-    if (-not $EacSeen) { return 'fail: EAC service never seen running' }
+    if (-not $AcSeen) { return 'fail: anti-cheat service never seen running' }
     if (-not $UserMenu) { return 'fail: main menu not reached' }
     return 'pass'
 }
@@ -57,8 +74,8 @@ function Test-S5VirtualAdapterId([string] $DeviceId) {
     return $DeviceId -match '(^ROOT\\DISPLAY)|MixLinkVDisplay'
 }
 
-function Get-S5EacServices {
-    @(Get-Service -ErrorAction SilentlyContinue | Where-Object { Test-S5EacServiceName $_.Name })
+function Get-S5AcServices($Game) {
+    @(Get-Service -ErrorAction SilentlyContinue | Where-Object { Test-S5AcServiceName $Game $_.Name })
 }
 
 function Start-S5Log([string] $Case, [string] $Script) {

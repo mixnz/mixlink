@@ -1,13 +1,22 @@
 # Pester 3.4 (in-box) tests for the pure helpers in common.ps1.
 . (Join-Path (Split-Path $PSScriptRoot -Parent) 'common.ps1')
 
-Describe 'Test-S5EacServiceName' {
-    It 'matches EasyAntiCheat' { Test-S5EacServiceName 'EasyAntiCheat' | Should Be $true }
-    It 'matches EasyAntiCheat_EOS' { Test-S5EacServiceName 'EasyAntiCheat_EOS' | Should Be $true }
-    It 'ignores case' { Test-S5EacServiceName 'easyanticheat_eos' | Should Be $true }
-    It 'rejects a longer name' { Test-S5EacServiceName 'EasyAntiCheatX' | Should Be $false }
-    It 'rejects BattlEye' { Test-S5EacServiceName 'BEService' | Should Be $false }
-    It 'rejects empty' { Test-S5EacServiceName '' | Should Be $false }
+Describe 'S5 games' {
+    It 'lists Apex then Elden Ring' { ($S5Games | ForEach-Object Key) -join ',' | Should Be 'apex,elden' }
+}
+
+Describe 'Test-S5AcServiceName' {
+    $apex = Get-S5Game 'apex'
+    $elden = Get-S5Game 'elden'
+    It 'Apex: matches EAAntiCheatService' { Test-S5AcServiceName $apex 'EAAntiCheatService' | Should Be $true }
+    It 'Apex: ignores case' { Test-S5AcServiceName $apex 'eaanticheatservice' | Should Be $true }
+    It 'Apex: rejects a longer name' { Test-S5AcServiceName $apex 'EAAntiCheatServiceX' | Should Be $false }
+    It 'Apex: rejects EAC' { Test-S5AcServiceName $apex 'EasyAntiCheat_EOS' | Should Be $false }
+    It 'Elden Ring: matches EasyAntiCheat_EOS' { Test-S5AcServiceName $elden 'EasyAntiCheat_EOS' | Should Be $true }
+    It 'Elden Ring: matches EasyAntiCheat' { Test-S5AcServiceName $elden 'EasyAntiCheat' | Should Be $true }
+    It 'Elden Ring: rejects Javelin' { Test-S5AcServiceName $elden 'EAAntiCheatService' | Should Be $false }
+    It 'rejects empty' { Test-S5AcServiceName $apex '' | Should Be $false }
+    It 'Get-S5Game throws on an unknown key' { { Get-S5Game 'nope' } | Should Throw }
 }
 
 Describe 'ConvertTo-S5MixLinkState' {
@@ -54,7 +63,7 @@ Describe 'ConvertTo-S5LaunchVerdict' {
     It 'passes when everything held' { ConvertTo-S5LaunchVerdict $true 300 300 $true $true | Should Be 'pass' }
     It 'fails when the game never started' { ConvertTo-S5LaunchVerdict $false 0 300 $false $false | Should Be 'fail: game did not start' }
     It 'fails when the game exited early' { ConvertTo-S5LaunchVerdict $true 42 300 $true $true | Should Be 'fail: game exited after 42 s' }
-    It 'fails when EAC never ran' { ConvertTo-S5LaunchVerdict $true 300 300 $false $true | Should Be 'fail: EAC service never seen running' }
+    It 'fails when the anti-cheat never ran' { ConvertTo-S5LaunchVerdict $true 300 300 $false $true | Should Be 'fail: anti-cheat service never seen running' }
     It 'fails when the user saw no menu' { ConvertTo-S5LaunchVerdict $true 300 300 $true $false | Should Be 'fail: main menu not reached' }
 }
 
