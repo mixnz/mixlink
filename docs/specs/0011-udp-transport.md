@@ -1,6 +1,6 @@
 # 0011 — UDP transport: socket, send / recv threads, SPSC lanes
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-24
 **Roadmap:** T4
 **Plan:** [0011-udp-transport](../plans/0011-udp-transport.md) (local only, written by writing-plans skill)
@@ -157,26 +157,27 @@ client's `Hello` is resent until the host answers. A dev tool proves it between 
 - Measured (loopback, release, main PC): one datagram commit → rx `at` p50 14 µs, p99 27 µs, max 238 µs.
 
 ## Acceptance criteria
-- [ ] Loopback: datagrams of 0, 1, 1216 and 1232 B on every channel arrive on the right rx lane
+- [x] Loopback: datagrams with 0 and 1 B payload, 1216 and 1232 B on every channel arrive on the right rx lane
       with the right bytes and sender address; a 1 MiB video frame packetized into the tx lane
       reassembles on the other side.
-- [ ] Bad datagrams (too short, unknown version or channel, longer than 1232 B) are counted
+- [x] Bad datagrams (too short, unknown version or channel, longer than 1232 B) are counted
       `rx_bad` and never reach a lane; a full rx lane counts `rx_full` and the recv thread keeps going.
-- [ ] A full tx lane returns `None` from `try_reserve` (counted `tx_full`), never blocks.
-- [ ] With the video tx lane holding 4000 datagrams, an `Input` datagram committed afterwards
+- [x] A full tx lane returns `None` from `try_reserve` (counted `tx_full`), never blocks.
+- [x] With the video tx lane holding 4000 datagrams, an `Input` datagram committed afterwards
       leaves before the video backlog is sent (priority + 32-datagram video batches).
-- [ ] After sending to a closed port, `recv_from` still works (`SIO_UDP_CONNRESET` off).
-- [ ] `TxLane::try_reserve` / `TxSlot::commit` and `RxLane::try_recv` / slot release do not allocate
+- [x] After sending to a closed port, `recv_from` still works (`SIO_UDP_CONNRESET` off).
+- [x] `TxLane::try_reserve` / `TxSlot::commit` and `RxLane::try_recv` / slot release do not allocate
       (counting-allocator integration test, as in `mixlink-proto`).
-- [ ] `shutdown` joins both threads within 100 ms; dropping `Transport` does the same.
-- [ ] `ResendTimer` gives `Send` at 0, 250, 500 ms… and `GiveUp` at 10 s (fake ticks).
-- [ ] Handshake: with the first two `Hello`s dropped by the test host, `connect` gets `Welcome`
+- [x] `shutdown` joins both threads within 100 ms; dropping `Transport` does the same.
+- [x] `ResendTimer` gives `Send` at 0, 250, 500 ms… and `GiveUp` at 10 s (fake ticks).
+- [x] Handshake: with the first two `Hello`s dropped by the test host, `connect` gets `Welcome`
       on the third; a `Reject` is returned as such; no reply → `Timeout`; `cancel` → `Cancelled`;
       a reply from another address is ignored.
-- [ ] Loopback one-datagram latency (commit → rx `at`) p99 ≤ 250 µs in release, value recorded.
+- [x] Loopback one-datagram latency (commit → rx `at`) p99 ≤ 250 µs in release, value recorded.
 - [ ] `net-probe` between main PC and laptop on wired LAN: handshake works, 30 s at 50 Mbps / 120 fps
       with ≤ 0.1 % video frames lost; RTT p50 / p99 recorded here (user runs it, two machines).
-- [ ] `crates/net/CLAUDE.md` lists the public API; `protocol.md` names the resend values;
+      Not run yet (user runs it on two machines); loopback smoke test: 0 % lost, RTT p50 46 µs, p99 224 µs.
+- [x] `crates/net/CLAUDE.md` lists the public API; `protocol.md` names the resend values;
       `tools/CLAUDE.md` lists `net-probe`.
 
 ## Open questions

@@ -2249,6 +2249,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mixlink-net-probe"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "log",
+ "mixlink-core",
+ "mixlink-net",
+ "mixlink-proto",
+]
+
+[[package]]
 name = "mixlink-proto"
 version = "0.1.0"
 dependencies = [

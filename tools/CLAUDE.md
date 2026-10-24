@@ -7,6 +7,8 @@
 **Hot path:** no.
 
 ## Layout
+- `net-probe/`: workspace member `mixlink-net-probe`, binary `net-probe` (`serve` / `run`): UDP transport
+  handshake, synthetic video + pings, RTT and frame loss, loopback or two PCs; see its README.
 - `latency-probe/`, `packet-sim/` (planned)
 - `spikes/s1-signing/`: spike S1 (T14) install/uninstall/report scripts, PowerShell; see its README.
 - `spikes/s2-iddcx-frames/`: spikes S2 (T15) and S2b (T23) Rust package outside the workspace (pattern,

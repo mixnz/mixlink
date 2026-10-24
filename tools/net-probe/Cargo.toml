@@ -1,0 +1,21 @@
+[package]
+name = "mixlink-net-probe"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "net-probe"
+path = "src/main.rs"
+
+[dependencies]
+mixlink-core.workspace = true
+mixlink-net.workspace = true
+mixlink-proto.workspace = true
+env_logger.workspace = true
+log.workspace = true
+
+[lints]
+workspace = true

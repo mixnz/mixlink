@@ -12,6 +12,6 @@
 | 0008 | [0008-spike-anticheat-launch](0008-spike-anticheat-launch.md) | done |
 | 0009 | [0009-core-types](0009-core-types.md) | done |
 | 0010 | [0010-protocol-packets](0010-protocol-packets.md) | done |
-| 0011 | [0011-udp-transport](0011-udp-transport.md) | in-progress |
+| 0011 | [0011-udp-transport](0011-udp-transport.md) | done |
 
 Rules: `../conventions/docs-writing.md`. Template: `_template.md`.
