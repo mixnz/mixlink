@@ -15,6 +15,8 @@ mixlink-audio.workspace = true
 mixlink-input.workspace = true
 mixlink-render.workspace = true
 tauri = { workspace = true, features = ["tray-icon"] }
+serde.workspace = true
+serde_json.workspace = true
 log.workspace = true
 env_logger.workspace = true
 

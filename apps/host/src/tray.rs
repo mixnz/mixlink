@@ -7,6 +7,7 @@ use tauri::{App, AppHandle, Manager};
 use crate::strings;
 
 const MAIN_WINDOW: &str = "main";
+const TRAY_ID: &str = "main";
 const MENU_OPEN: &str = "open";
 const MENU_QUIT: &str = "quit";
 
@@ -14,7 +15,7 @@ pub fn build_tray(app: &App) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, MENU_OPEN, strings::TRAY_OPEN, true, None::<&str>)?;
     let quit = MenuItem::with_id(app, MENU_QUIT, strings::TRAY_QUIT, true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quit])?;
-    let mut builder = TrayIconBuilder::new()
+    let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip(strings::TRAY_TOOLTIP)
         .menu(&menu)
         .show_menu_on_left_click(false)
@@ -38,6 +39,15 @@ pub fn build_tray(app: &App) -> tauri::Result<()> {
     }
     builder.build(app)?;
     Ok(())
+}
+
+pub fn set_tooltip(app: &AppHandle, text: &str) {
+    let Some(tray) = app.tray_by_id(TRAY_ID) else {
+        return;
+    };
+    if let Err(error) = tray.set_tooltip(Some(text)) {
+        log::warn!("setting tray tooltip: {error}");
+    }
 }
 
 pub fn is_main_window(label: &str) -> bool {

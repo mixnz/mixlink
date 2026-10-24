@@ -23,6 +23,8 @@ Details live in each spec; one line per item here.
 - T3 protocol (0010): 16 B header v1, 6 channels, packetizer / reassembler, control handshake, cursor messages.
 - T4 UDP transport (0011): `mixlink-net` socket, send / recv threads, per-channel lanes, `Hello` resend;
   `tools/net-probe`. Wired 0 % loss, RTT p99 0.76 ms (laptop Best performance) to 4.1 ms (power saving).
+- T19 service shell (0012): `mixlink-svc` as service `MixLink` or `--console`, `install` / `uninstall`,
+  pipe `\\.\pipe\mixlink-svc` (ACL, strict lines, `core::svc_ipc`); host tray shows the service link state.
 
 ## In progress
 - Nothing. Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
@@ -30,7 +32,7 @@ Details live in each spec; one line per item here.
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
-- Roadmap phase 1: T19 and T8 unblocked; T5 after T19 (discovery on `mixlink-net`).
+- Roadmap phase 1: T8, T5 (discovery in the service), T20 (driver tooling) unblocked.
 - Inputs for later rows: T20 ← specs 0003, 0008 Verdict (`vhid` held open by Steam blocks uninstall);
   T21 ← 0004, 0005 Verdict, 0008 (main display via `SetDisplayConfig`); T7 ← 0005, 0007 Verdict (encode
   levers, QSV pool); T11 ← 0007 (10 ms loopback, silence fill); T22 / T12 ← 0006 Verdict; T9 decides

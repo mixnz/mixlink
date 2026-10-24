@@ -6,5 +6,6 @@ pub mod error;
 pub mod ids;
 pub mod ipc;
 pub mod stage;
+pub mod svc_ipc;
 
 mod platform;

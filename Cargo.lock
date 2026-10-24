@@ -2224,6 +2224,8 @@ dependencies = [
  "mixlink-net",
  "mixlink-proto",
  "mixlink-render",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
 ]
@@ -2288,6 +2290,17 @@ dependencies = [
  "mixlink-core",
  "mixlink-render",
  "winit",
+]
+
+[[package]]
+name = "mixlink-svc"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "log",
+ "mixlink-core",
+ "thiserror 2.0.21",
+ "windows",
 ]
 
 [[package]]
