@@ -1,6 +1,6 @@
 # 0010 — Protocol: packet header, channels, handshake, packetizer / reassembler
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-24
 **Roadmap:** T3
 **Plan:** [0010-protocol-packets](../plans/0010-protocol-packets.md) (local only, written by writing-plans skill)
@@ -90,7 +90,7 @@ Id 0 is invalid (a zeroed buffer never parses as a packet).
   - Otherwise copies the payload to `frag_index * MAX_PAYLOAD` in the frame's slot; when the last
     missing fragment arrives returns `Push::Complete { frame, flags, data: &[u8] }` borrowing the slot.
   - Else `Push::Pending`, or `Push::Dropped(reason)`.
-- Rules: a frame not newer than the last completed one is `Late`; a fragment seen twice is
+- Rules: a frame not newer than the newest completed or evicted one is `Late`; a fragment seen twice is
   `Duplicate`; `frag_count` or flags differing from the slot's first fragment, or a message over
   `max_message_len`, is `Malformed`. A new frame with all slots busy evicts the oldest slot
   (counted `Evicted`, i.e. that frame is lost). Out-of-order completion is delivered; older
@@ -137,23 +137,24 @@ Adds header encode / decode (a few ns) and one memcpy per fragment (1200 B, tens
 send and receive paths; single-packet messages are not copied on receive. Measured by a unit test
 that packetizes and reassembles a 1 MiB frame 1000 times and prints µs per frame (informational,
 `--nocapture`), as in spec 0009. No new dependency (no criterion).
+Measured: 1 MiB frame packetize + reassemble 41 µs (release), 329 µs (debug).
 
 ## Acceptance criteria
-- [ ] Header round-trips for every channel / flag; each bad field (version, channel 0 / unknown,
+- [x] Header round-trips for every channel / flag; each bad field (version, channel 0 / unknown,
       unknown flag bit, `frag_index ≥ frag_count`, `frag_count 0`, short buffer, payload > 1200,
       non-last fragment ≠ 1200 B) is rejected with its own `DecodeError`.
-- [ ] Packetize → shuffle → reassemble returns the original bytes for sizes 0, 1, 1200, 1201 and
+- [x] Packetize → shuffle → reassemble returns the original bytes for sizes 0, 1, 1200, 1201 and
       1 MiB; `Seq` increases by 1 per datagram and wraps; `FrameId` ordering holds across `u32::MAX`.
-- [ ] Lost fragment → frame never completes and is counted evicted when slots run out; duplicates,
+- [x] Lost fragment → frame never completes and is counted evicted when slots run out; duplicates,
       late frames and inconsistent `frag_count` are dropped and counted; nothing panics on 100k random
       datagrams (deterministic PRNG, no new dependency).
-- [ ] `Reassembler::push` and `Fragments::next_into` do not allocate (checked by a counting global
+- [x] `Reassembler::push` and `Fragments::next_into` do not allocate (checked by a counting global
       allocator in an integration-test binary; its `unsafe impl GlobalAlloc` is test-only and
       delegates to `System`).
-- [ ] `Hello` / `Welcome` / `Reject` / `Bye` round-trip through JSON; each validation rule rejects its
+- [x] `Hello` / `Welcome` / `Reject` / `Bye` round-trip through JSON; each validation rule rejects its
       bad value; an unknown extra field is ignored.
-- [ ] Cursor `Position` and `Shape` round-trip; truncated buffers are errors, not panics.
-- [ ] ADR-0008 freezes header v1; `protocol.md` matches the code; `crates/proto/CLAUDE.md` lists the
+- [x] Cursor `Position` and `Shape` round-trip; truncated buffers are errors, not panics.
+- [x] ADR-0008 freezes header v1; `protocol.md` matches the code; `crates/proto/CLAUDE.md` lists the
       public API.
 
 ## Open questions

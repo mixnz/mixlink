@@ -11,6 +11,6 @@
 | 0007 | [0007-spike-encode-audio-session0](0007-spike-encode-audio-session0.md) | done |
 | 0008 | [0008-spike-anticheat-launch](0008-spike-anticheat-launch.md) | done |
 | 0009 | [0009-core-types](0009-core-types.md) | done |
-| 0010 | [0010-protocol-packets](0010-protocol-packets.md) | in-progress |
+| 0010 | [0010-protocol-packets](0010-protocol-packets.md) | done |
 
 Rules: `../conventions/docs-writing.md`. Template: `_template.md`.
