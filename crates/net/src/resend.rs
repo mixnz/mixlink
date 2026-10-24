@@ -44,9 +44,10 @@ impl ResendTimer {
         if elapsed >= self.give_up {
             return ResendAction::GiveUp;
         }
+        // An interval too large to add means "no resend before giving up".
         let next = match self.last_send {
             None => elapsed,
-            Some(last) => last + self.interval,
+            Some(last) => last.checked_add(self.interval).unwrap_or(self.give_up),
         };
         if elapsed >= next {
             self.last_send = Some(elapsed);

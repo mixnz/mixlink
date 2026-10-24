@@ -84,7 +84,11 @@ fn send_message(
     host: SocketAddrV4,
 ) -> Result<(), NetError> {
     let mut fragments = packetizer.packetize(frame, Flags::empty(), message)?;
-    while let Some(mut slot) = tx.try_reserve() {
+    // Reserve exactly one slot per fragment, so a lane that fits the message is never counted full.
+    for _ in 0..fragments.count() {
+        let Some(mut slot) = tx.try_reserve() else {
+            break;
+        };
         let Some(len) = fragments.next_into(slot.datagram()) else {
             break;
         };

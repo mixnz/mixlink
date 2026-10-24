@@ -170,13 +170,19 @@ impl Reader {
 
     pub(crate) fn recv_timeout(&mut self, timeout: Duration) -> Option<Received<'_>> {
         self.attach_current_thread();
-        let deadline = Instant::now() + timeout;
+        // `None` = no deadline (the timeout is too large to represent).
+        let deadline = Instant::now().checked_add(timeout);
         while self.filled.is_empty() {
-            let now = Instant::now();
-            if now >= deadline {
-                return None;
+            match deadline {
+                Some(deadline) => {
+                    let now = Instant::now();
+                    if now >= deadline {
+                        return None;
+                    }
+                    thread::park_timeout(deadline - now);
+                }
+                None => thread::park(),
             }
-            thread::park_timeout(deadline - now);
         }
         self.try_pop()
     }

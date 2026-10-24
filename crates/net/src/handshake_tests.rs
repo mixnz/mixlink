@@ -255,3 +255,17 @@ fn garbage_is_ignored() {
     let reply = connect_to(&mut client, host.addr).unwrap();
     assert!(matches!(reply, HandshakeReply::Welcome { .. }), "{reply:?}");
 }
+
+#[test]
+fn exact_fit_message_counts_no_full_lane() {
+    use crate::lane::{Wake, pair};
+    use crate::stats::LaneCounters;
+
+    let counters = Arc::new(LaneCounters::default());
+    let (writer, _reader) = pair(1, Arc::new(Wake::default()), Arc::clone(&counters));
+    let mut tx = TxLane(writer);
+    let to = SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 9);
+    let mut packetizer = Packetizer::new(Channel::Control);
+    send_message(&mut tx, &mut packetizer, FrameId::new(0), &welcome(), to).unwrap();
+    assert_eq!(counters.full.load(Ordering::Relaxed), 0);
+}

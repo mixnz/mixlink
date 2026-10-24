@@ -72,3 +72,10 @@ fn wait_stops_at_give_up() {
     assert_eq!(timer.poll(at(250)), ResendAction::Send);
     assert_eq!(timer.poll(at(260)), ResendAction::Wait(ms(40)));
 }
+
+#[test]
+fn huge_interval_waits_until_give_up() {
+    let mut timer = ResendTimer::new(at(0), Duration::MAX, ms(10_000));
+    assert_eq!(timer.poll(at(1)), ResendAction::Send);
+    assert_eq!(timer.poll(at(2)), ResendAction::Wait(ms(9998)));
+}

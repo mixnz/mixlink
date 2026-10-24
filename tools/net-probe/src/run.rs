@@ -35,6 +35,14 @@ struct SendReport {
     pings: u64,
 }
 
+impl SendReport {
+    /// One id per attempt, abandoned ones included: a reused id could let the host complete a
+    /// frame from fragments of two attempts. Wraps like `FrameId`.
+    fn next_frame_id(&self) -> FrameId {
+        FrameId::new((self.frames + self.abandoned) as u32)
+    }
+}
+
 #[derive(Debug, Default)]
 struct Feedback {
     rtt: Vec<Duration>,
@@ -144,7 +152,7 @@ fn send_load(
             break;
         }
         if now >= next_frame {
-            let id = FrameId::new(u32::try_from(report.frames).unwrap_or(u32::MAX));
+            let id = report.next_frame_id();
             if send_message(&mut video_tx, &mut video_out, id, &frame, host) {
                 report.frames += 1;
             } else {
@@ -226,3 +234,7 @@ fn report(sent: &SendReport, feedback: &mut Feedback, transport: &Transport) {
     ));
     say(format_args!("transport: {:?}", transport.stats()));
 }
+
+#[cfg(test)]
+#[path = "run_tests.rs"]
+mod tests;

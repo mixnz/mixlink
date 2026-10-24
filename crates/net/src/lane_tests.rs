@@ -129,3 +129,14 @@ fn datagram_is_first_1216_bytes() {
     assert!(slot.buf()[1216..].iter().all(|&b| b == 0x11));
     assert_eq!(SLOT_LEN, 1232);
 }
+
+#[test]
+fn huge_timeout_waits_without_overflow() {
+    let (mut writer, mut reader, _) = lane(4);
+    let producer = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(20));
+        assert!(commit_u32(&mut writer, 7));
+    });
+    assert!(reader.recv_timeout(Duration::MAX).is_some());
+    producer.join().unwrap();
+}
