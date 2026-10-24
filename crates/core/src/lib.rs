@@ -4,5 +4,6 @@ pub mod clock;
 pub mod error;
 pub mod ids;
 pub mod ipc;
+pub mod stage;
 
 mod platform;
