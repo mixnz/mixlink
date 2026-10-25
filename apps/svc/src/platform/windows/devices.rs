@@ -18,18 +18,8 @@ use windows::core::{GUID, HSTRING, PCWSTR};
 
 use crate::drivers::flow::RemoveOutcome;
 use crate::drivers::package::DriverSpec;
+use crate::drivers::status::DeviceState;
 use crate::error::SvcError;
-
-/// What `drivers status` reports for a device node.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DeviceState {
-    /// No node with our hardware ID.
-    Missing,
-    /// A node exists but is not started (e.g. not present after a failed install).
-    NotStarted,
-    /// Started; `0` = working, else the device manager problem code.
-    Problem(u32),
-}
 
 /// A `REG_MULTI_SZ` with one string.
 pub fn multi_sz(s: &str) -> Vec<u16> {

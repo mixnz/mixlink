@@ -50,6 +50,11 @@ impl PipeSecurity {
     }
 
     /// Valid while `self` lives.
+    pub fn descriptor(&self) -> PSECURITY_DESCRIPTOR {
+        self.descriptor
+    }
+
+    /// Valid while `self` lives.
     pub fn attributes(&self) -> SECURITY_ATTRIBUTES {
         SECURITY_ATTRIBUTES {
             nLength: u32::try_from(size_of::<SECURITY_ATTRIBUTES>()).unwrap_or(u32::MAX),

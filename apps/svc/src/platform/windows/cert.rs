@@ -33,6 +33,7 @@ const VALID_YEARS: u16 = 20;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyScope {
     Machine,
+    #[cfg(test)]
     User,
 }
 
@@ -40,6 +41,7 @@ impl KeyScope {
     fn ncrypt_flags(self) -> NCRYPT_FLAGS {
         match self {
             KeyScope::Machine => NCRYPT_MACHINE_KEY_FLAG | NCRYPT_SILENT_FLAG,
+            #[cfg(test)]
             KeyScope::User => NCRYPT_SILENT_FLAG,
         }
     }
@@ -47,6 +49,7 @@ impl KeyScope {
     fn prov_info_flags(self) -> CRYPT_KEY_FLAGS {
         match self {
             KeyScope::Machine => CRYPT_MACHINE_KEYSET,
+            #[cfg(test)]
             KeyScope::User => CRYPT_KEY_FLAGS(0),
         }
     }
@@ -205,10 +208,12 @@ impl SigningCert {
         thumbprint_of(self.context).unwrap_or_default()
     }
 
+    #[cfg(test)]
     pub fn subject(&self) -> Result<String, SvcError> {
         subject_of(self.context)
     }
 
+    #[cfg(test)]
     pub fn container(&self) -> &str {
         &self.container
     }

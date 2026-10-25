@@ -31,6 +31,9 @@ pub enum SvcError {
     Driver { step: &'static str, detail: String },
     #[error("the signing key still exists after deletion")]
     KeyNotDeleted,
+    /// Uninstall stopped: a program holds a device open (`Some` when Windows names it).
+    #[error("{}", crate::strings::drivers_held(.0.as_deref()))]
+    DeviceHeld(Option<String>),
 }
 
 #[cfg(windows)]

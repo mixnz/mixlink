@@ -1,6 +1,6 @@
 # 0014 — Driver install tooling: per-machine signing, install / uninstall, WDK build in gate and CI
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-25
 **Roadmap:** T20
 **Plan:** [0014-driver-install-tooling](../plans/0014-driver-install-tooling.md) (local only, written by writing-plans skill)
@@ -146,6 +146,26 @@ test-signing off), logged in the spec's Results like spec 0003.
 - [ ] `infverif /w` passes for `vdisplay.inf` and `vhid.inf`; the CI `drivers` job builds both.
 - [ ] `build.sh release` puts both unsigned packages in `dist/drivers/`, and `drivers install` run from
   `dist/` uses them.
+
+## Results
+Code landed with unit tests (flow order and rollback with a fake host, state, package lookup, status
+text, registry round trip on HKCU, user-scope cert + `SignerSignEx3` + catalog checks on the built `vhid`
+package: signed-untrusted gives `CERT_E_UNTRUSTEDROOT`, unsigned `TRUST_E_NOSIGNATURE`, a changed or
+extra file fails the member check). Done on the dev machine, not elevated:
+- `infverif /w` passes for both INFs (`scripts/check-drivers.sh`); the CI `drivers` job has not run yet.
+- `drivers status` without elevation: both "not installed", certificate "none", exit 0.
+- `drivers install` / `drivers uninstall` without elevation: "needs administrator rights", exit 1.
+
+Elevated machine checks (the acceptance list above) are still to run on the main PC; record each here.
+
+Implementation notes:
+- Staging also secures `%ProgramData%\MixLink` itself (owner Administrators, protected DACL SYSTEM +
+  Administrators, inherited by `logs\` and `drivers\`): a standard user could otherwise pre-create that
+  folder and swap staged files between verify and install.
+- The published name comes from `SetupCopyOEMInfW` with `SP_COPY_NOOVERWRITE` (fails with
+  `ERROR_FILE_EXISTS` and names the existing `oemNN.inf`); the first elevated run confirms it.
+- A failed update keeps the old published INF of a driver not yet re-installed in the state, so
+  `uninstall` still removes it.
 
 ## Open questions
 - Does `windows-latest` have the `WindowsUserModeDriver10.0` toolset (WDK VS component)? Checked with the
