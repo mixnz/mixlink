@@ -163,3 +163,6 @@ baseline (specs 0004, 0005). Session start cost (add + switch) is measured and r
 - Does IddCx let the driver see file cleanup for the owner rule? (Plan task 1; fallback in Design.)
 - Do the CCD calls work from Session 0? (Plan task 1; fallback `display-agent`.)
 - Is an iGPU + dGPU host available for the render adapter row? If not, the row stays open like spec 0004's.
+
+## Results
+Manual runs (elevated, main PC) are recorded here as they happen.

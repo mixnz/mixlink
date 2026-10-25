@@ -2,10 +2,6 @@
 //! for development; `install` / `uninstall` register it.
 
 mod args;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired into the display commands next (spec 0015)")
-)]
 mod display;
 mod drivers;
 mod error;
@@ -75,6 +71,7 @@ fn run_mode(mode: Mode) -> Result<(), SvcError> {
             Ok(())
         }
         Mode::Drivers(cmd) => drivers::run(&cmd),
+        Mode::Display(cmd) => display::commands::run(&cmd),
     }
 }
 
