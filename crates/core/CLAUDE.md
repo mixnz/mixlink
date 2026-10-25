@@ -3,12 +3,12 @@
 > Module card. Keep <= 50 lines. Update when the public API changes.
 
 **Purpose:** Shared ids, config, error types, monotonic clock + per-frame stage timestamps.
-**Depends on:** nothing internal (leaf crate); `windows` only for QPC (`cfg(windows)`).
+**Depends on:** nothing internal (leaf crate); `windows` only for QPC and MMCSS (`cfg(windows)`), `log`.
 **Hot path:** `clock::now` and `StageStamps::mark`/`mark_at` are called per frame: allocation-free.
 
 ## Layout
-- `ids.rs`, `clock.rs`, `stage.rs`, `config.rs`, `ipc.rs`, `svc_ipc.rs`, `error.rs` (each + `<name>_tests.rs`)
-- `platform/windows/qpc.rs` (QPC), `platform/fallback.rs` (`Instant`, non-Windows): the only platform code.
+- `ids.rs`, `clock.rs`, `stage.rs`, `config.rs`, `ipc.rs`, `svc_ipc.rs`, `error.rs`, `mmcss.rs` (each + `<name>_tests.rs`)
+- `platform/windows/{qpc,mmcss}.rs`, `platform/fallback.rs` (`Instant`, no MMCSS; non-Windows): the only platform code.
 
 ## Public API
 - `ids`: `SessionId`, `FrameId`, `Seq` (`u32`; `new`, `get`; `FrameId`/`Seq`: `next`, `is_newer_than`
@@ -19,6 +19,8 @@
 - `config`: `CONFIG_VERSION`, `MAX_NAME_BYTES` (63, shared with `proto::control`), `HostConfig`,
   `ClientConfig` (`from_json`, `to_json_pretty`, `validate`), `NetConfig`, `VideoConfig`.
 - `error`: `IdParseError`, `ConfigError`.
+- `mmcss`: `MmcssTask` (`ProAudio` critical, `Games` high), `Mmcss::enter(task) -> Option<Mmcss>` (reverts on drop,
+  same thread; `None` + warning when refused).
 - `ipc`: launcher <-> stream JSON-lines contract — `IPC_VERSION`, `StreamToLauncher`, `LauncherToStream`,
   `CloseReason`, `IpcError`, `encode_line`, `decode_line`.
 - `svc_ipc`: tray <-> service pipe contract (spec 0012) — `PIPE_VERSION`, `PIPE_NAME`, `MAX_LINE`, `TrayToSvc`,

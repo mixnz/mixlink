@@ -8,6 +8,9 @@ license.workspace = true
 [dependencies]
 mixlink-core.workspace = true
 mixlink-render.workspace = true
+mixlink-codec.workspace = true
+rtrb.workspace = true
+thiserror.workspace = true
 log.workspace = true
 env_logger.workspace = true
 winit.workspace = true

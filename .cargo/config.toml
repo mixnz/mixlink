@@ -1,0 +1,4 @@
+# Local defaults for the FFmpeg build (spec 0013); a value set in the shell wins.
+[env]
+FFMPEG_DIR = 'C:\tools\ffmpeg'
+LIBCLANG_PATH = 'C:\Program Files\LLVM\bin'

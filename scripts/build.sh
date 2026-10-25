@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds the workspace.
 #   scripts/build.sh                 debug build of the whole workspace
-#   scripts/build.sh release         UI + release build (UI embedded), copies the 4 app exes to dist/
+#   scripts/build.sh release         UI + release build (UI embedded), copies the 4 app exes
+#                                    and the FFmpeg DLLs to dist/
 #   scripts/build.sh debug -p NAME   build one package (e.g. mixlink-net)
 source "$(dirname "$0")/lib.sh"
 
@@ -40,5 +41,11 @@ if [[ "$profile" == "release" ]]; then
         break
       fi
     done
+  done
+  # FFmpeg DLLs for mixlink-stream's decoder (spec 0013); the .exe tools are not shipped.
+  ffmpeg_env || exit 1
+  for dll in "$(cygpath -u "$FFMPEG_DIR")"/bin/*.dll; do
+    cp "$dll" dist/
+    ok "dist/$(basename "$dll")"
   done
 fi

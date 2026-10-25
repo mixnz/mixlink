@@ -17,3 +17,13 @@ pub(crate) fn now_raw() -> u64 {
 pub(crate) fn ticks_per_sec() -> u64 {
     1_000_000_000
 }
+
+/// No MMCSS off Windows.
+#[derive(Debug)]
+pub struct Mmcss;
+
+impl Mmcss {
+    pub fn enter(_task: crate::mmcss::MmcssTask) -> Option<Mmcss> {
+        None
+    }
+}

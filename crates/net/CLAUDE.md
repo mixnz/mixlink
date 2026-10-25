@@ -9,7 +9,7 @@
 ## Layout
 - `socket.rs` (open + configure), `lane.rs` (SPSC slot lanes), `transport.rs` (start / stop, lanes),
   `send_loop.rs`, `recv_loop.rs`, `stats.rs`, `resend.rs`, `handshake.rs`, `error.rs`
-  (each logic file + `<name>_tests.rs`); `platform/windows/{socket,mmcss}.rs` (only `unsafe`).
+  (each logic file + `<name>_tests.rs`); `platform/windows/socket.rs` (only `unsafe`); MMCSS via `core::mmcss`.
 - `tests/no_alloc.rs` (counting allocator), `tests/latency.rs` (loopback p50 / p99, release assert).
 - Planned: `pacer.rs`, `bitrate.rs` (phase 3), `discovery/` (T5), `pairing.rs` (T6).
 

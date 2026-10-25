@@ -17,6 +17,12 @@ Bash scripts (Git Bash on Windows). Each script <= 150 lines; shared helpers in 
 | `check-docs.sh` | Doc index, spec/ADR headers, module cards, `docs/plans/` ignored. |
 | `check-deps.sh` | Crate dependency direction (allow-table mirrors `CLAUDE.md`), all dependency sections. |
 | `check-refs.sh` | Code comments cite specs/ADRs, never roadmap task/spike ids or `docs/roadmap/` (`tools/spikes/` exempt). |
+| `make-test-stream.sh` | Test bitstreams for `mixlink-stream --play` (`out/test-<size>-<fps>.h264/.hevc`, NVENC or `--encoder qsv`), checked with `ffprobe`. |
+| `ci-ffmpeg.sh` | CI only: downloads the pinned FFmpeg zip (`FFMPEG_URL`) into `FFMPEG_DIR` unless the cache has it. |
 | `setup-hooks.sh` | Enables `.githooks/` (pre-push: branch name check only; the gate runs in `/land`). |
 
 Run from anywhere: `bash scripts/gate.sh`. Scripts `cd` to the repo root themselves.
+
+FFmpeg (spec 0013): `mixlink-codec` builds against FFmpeg 8.1 LGPL shared (BtbN zip unpacked to
+`C:\tools\ffmpeg`) and needs LLVM's `libclang.dll`; `.cargo/config.toml` holds both default paths.
+The gate puts `C:\tools\ffmpeg\bin` on `PATH`; for plain `cargo test` add it to your user `PATH` once.

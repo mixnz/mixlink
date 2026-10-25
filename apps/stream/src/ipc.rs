@@ -4,13 +4,16 @@
 use std::io::{self, BufRead, Write};
 
 use mixlink_core::ipc::{LauncherToStream, StreamToLauncher, decode_line, encode_line};
+use mixlink_stream::video::VideoEvent;
 
-/// Event forwarded from the stdin thread to the window event loop.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Event forwarded to the window event loop (stdin thread, video thread).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamEvent {
     Stop,
     /// Stdin closed or failed: the launcher is gone.
     LauncherGone,
+    /// From the video thread.
+    Video(VideoEvent),
 }
 
 /// Reads launcher commands until EOF. Undecodable lines are logged and skipped.

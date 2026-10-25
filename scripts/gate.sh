@@ -47,6 +47,7 @@ fi
 
 if ((fmt || clippy || tests)); then
   if [[ -f Cargo.toml ]]; then
+    ((clippy || tests)) && { ffmpeg_env || failed+=("ffmpeg-env"); }
     ((fmt)) && run_step "cargo fmt" cargo fmt --all -- --check
     ((clippy)) && run_step "cargo clippy" cargo clippy --workspace --all-targets -- -D warnings
     ((tests)) && run_step "cargo test" cargo test --workspace

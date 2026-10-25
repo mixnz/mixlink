@@ -10,7 +10,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::w;
 
-use crate::{Presenter, RenderError};
+use crate::platform::windows::test_util::nv12_bands;
+use crate::{Presenter, RenderError, VideoFrame};
 
 /// Hidden top-level window owned by a test.
 struct TestWindow(HWND);
@@ -97,4 +98,38 @@ fn minimized_skips_present() {
 fn non_win32_handle_is_rejected() {
     let result = Presenter::new(Arc::new(WebWindow), 64, 64);
     assert!(matches!(result, Err(RenderError::UnsupportedWindow)));
+}
+
+fn white_frame_test(presenter: &mut Presenter, size: (u32, u32)) {
+    let device = presenter.device();
+    let texture = nv12_bands(&device, 64, 64, &[(235, 128, 128)]);
+    let frame = VideoFrame {
+        texture: &texture,
+        array_index: 0,
+        width: 64,
+        height: 64,
+    };
+    presenter.resize(size.0, size.1).unwrap();
+    presenter.present_nv12(&frame).unwrap();
+    presenter.present_nv12(&frame).unwrap();
+}
+
+#[test]
+fn presents_nv12_frame() {
+    let mut presenter = Presenter::new(TestWindow::new(), 64, 64).unwrap();
+    white_frame_test(&mut presenter, (96, 64));
+}
+
+#[test]
+fn present_nv12_when_minimized_is_ok() {
+    let mut presenter = Presenter::new(TestWindow::new(), 64, 64).unwrap();
+    white_frame_test(&mut presenter, (0, 0));
+    white_frame_test(&mut presenter, (64, 64));
+}
+
+#[test]
+fn wait_gpu_returns() {
+    let mut presenter = Presenter::new(TestWindow::new(), 64, 64).unwrap();
+    white_frame_test(&mut presenter, (64, 64));
+    presenter.wait_gpu();
 }
