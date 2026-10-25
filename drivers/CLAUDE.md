@@ -36,8 +36,10 @@
 - `Inf2CatUseLocalTime=true` / `/uselocaltime`: stampinf writes a local-time `DriverVer`; east of UTC
   Inf2Cat otherwise rejects it as "postdated".
 - `SignMode=Off`: the WDK build must never create or use a `WDKTestCert`.
-- `infverif /w` fails on the sample (DLL in `%12%\UMDF`, not DIRID 13); `/v` passes; isolation is T20.
-- Signing and install: `tools/spikes/s1-signing/` (spike), later T20 tooling.
+- Driver isolation: both INFs install the DLL to DIRID 13 (runs from the driver store); `infverif /w`
+  passes for both (`scripts/check-drivers.sh`, full gate and CI `drivers` job).
+- Signing and install: `mixlink-svc drivers install | uninstall | status` (spec 0014). Never sign or
+  install with `tools/spikes/s1-signing/` any more.
 - New `.cpp` files include `Driver.h` first (UMDF_USING_NTSTATUS needs it before WRL).
 - Build for IddCx 1.4 (`IDDCX_VERSION_MINOR` 4, define 6): a 1.11 build fails `IddCxAdapterInitAsync` with
   `STATUS_INVALID_PARAMETER` on 24H2 (IddCx 1.10), so no monitor arrives. Newer DDIs: runtime checks only.
