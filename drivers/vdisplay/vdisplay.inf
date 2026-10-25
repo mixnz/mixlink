@@ -52,11 +52,11 @@ UmdfKernelModeClientPolicy = AllowKernelModeClients
 
 [MixLinkVDisplay_Install]
 UmdfLibraryVersion=$UMDFVERSION$
-ServiceBinary=%12%\UMDF\vdisplay.dll
+ServiceBinary=%13%\vdisplay.dll
 UmdfExtensions = IddCx0102
 
 [DestinationDirs]
-UMDriverCopy=12,UMDF ; copy to drivers\umdf
+DefaultDestDir = 13 ; run from the driver store (driver isolation, spec 0014)
 
 [UMDriverCopy]
 vdisplay.dll

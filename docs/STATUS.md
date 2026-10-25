@@ -28,24 +28,29 @@ Details live in each spec; one line per item here.
 - T8 decode + present (0013): FFmpeg D3D11VA on the presenter's device, NV12 shader pass, video thread
   (newest frame wins), `mixlink-stream --play` dev mode, `scripts/make-test-stream.sh` (BT.709). Decode p99
   at 1440p120: main PC 1.4–1.5 ms, laptop iGPU 1.7–2.3 ms. FFmpeg in CI (`scripts/ci-ffmpeg.sh`) and `dist/`.
+- T20 driver tooling (0014): `mixlink-svc drivers install | uninstall | status` (per-machine cert, catalog check,
+  no prompt; install removes what is there first; exit 3 when a program holds `vhid`); `vdisplay` isolated
+  (DIRID 13); driver build in full gate, CI `drivers` job, `build.sh release` (`dist/drivers/`). Two machine runs pass.
 
 ## In progress
-- Nothing. Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
+- Main PC: MixLink drivers installed from `dist/` (`mixlink-svc drivers status`), kept for T21 / T22. One-off
+  physical-screen blanking after run 1's install not reproduced (also not at 160 + 120 Hz).
+- Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
   machine: ViGEmBus may still be installed (Settings → Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
 - 60 Hz clients: `Present` blocks the video thread at vblank, AUs wait 2–6 ms before decode (spec 0013 →
   Latency impact). Use the frame-latency waitable object in T9 or phase 3.
-- Roadmap phase 1: T5 (discovery in the service), T20 (driver tooling) unblocked.
-- Inputs for later rows: T20 ← specs 0003, 0008 Verdict (`vhid` held open by Steam blocks uninstall);
-  T21 ← 0004, 0005 Verdict, 0008 (main display via `SetDisplayConfig`); T7 ← 0005, 0007 Verdict (encode
-  levers, QSV pool); T11 ← 0007 (10 ms loopback, silence fill); T22 / T12 ← 0006 Verdict; T9 decides
-  cursor shape recovery.
+- Roadmap phase 1: T5 (discovery in the service), T21 (virtual display), T22 (virtual HID) unblocked.
+- Spec 0014 open rows: Steam itself holding the pad (exit 3 proven with a held-handle helper only), tampered
+  package with the remove-first install. Check when T22 / T12 use the pad with Steam.
+- Inputs for later rows: T21 ← 0004, 0005 Verdict, 0008 (main display via `SetDisplayConfig`); T7 ← 0005,
+  0007 Verdict (encode levers, QSV pool); T11 ← 0007 (10 ms loopback, silence fill); T22 / T12 ← 0006 Verdict;
+  T9 decides cursor shape recovery. T21 / T22 release driver handles before `drivers uninstall`.
 - Phase 3 notes: keep CPU / NIC awake while streaming, pacing, measure all power modes (spec 0011).
 
 ## Open questions
 - Roadmap row for the language switch (EN/VI setting + `vi` strings) not added yet.
-- CI has no WDK build yet (T20); driver build is local only.
 - CI pins a BtbN FFmpeg autobuild URL (`ci.yml` `FFMPEG_URL`); BtbN prunes old ones, so bump it when it 404s.
   The CI FFmpeg step has not run yet (no dispatch in T8).

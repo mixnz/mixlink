@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Quality gate. Run before claiming a task done and before every push.
-#   scripts/gate.sh               full gate: repo checks + UI + fmt + clippy + tests
+#   scripts/gate.sh               full gate: repo checks + UI + drivers + fmt + clippy + tests
 #   scripts/gate.sh --fast        repo checks + fmt (pre-commit hook)
 #   scripts/gate.sh --checks      repo checks only (CI `docs` job)
 #   scripts/gate.sh --ui          UI checks only (npm lint/typecheck/test/build)
@@ -9,14 +9,14 @@
 # UI runs before cargo: Tauri embeds apps/<app>/ui/dist at compile time.
 source "$(dirname "$0")/lib.sh"
 
-checks=1 ui=1 fmt=1 clippy=1 tests=1
+checks=1 ui=1 drivers=1 fmt=1 clippy=1 tests=1
 case "${1:-}" in
   "") ;;
-  --fast) ui=0 clippy=0 tests=0 ;;
-  --checks) ui=0 fmt=0 clippy=0 tests=0 ;;
-  --ui) checks=0 fmt=0 clippy=0 tests=0 ;;
+  --fast) ui=0 drivers=0 clippy=0 tests=0 ;;
+  --checks) ui=0 drivers=0 fmt=0 clippy=0 tests=0 ;;
+  --ui) checks=0 drivers=0 fmt=0 clippy=0 tests=0 ;;
   --cargo)
-    checks=0
+    checks=0 drivers=0
     case "${2:-}" in
       lint) tests=0 ;;
       test) fmt=0 clippy=0 ;;
@@ -44,6 +44,8 @@ if ((checks)); then
 fi
 
 ((ui)) && run_step "check-ui" bash scripts/check-ui.sh
+# UMDF driver build + infverif (spec 0014); a WARN and skip when the WDK toolset is missing.
+((drivers)) && run_step "check-drivers" bash scripts/check-drivers.sh
 
 if ((fmt || clippy || tests)); then
   if [[ -f Cargo.toml ]]; then

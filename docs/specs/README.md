@@ -15,5 +15,6 @@
 | 0011 | [0011-udp-transport](0011-udp-transport.md) | done |
 | 0012 | [0012-service-shell](0012-service-shell.md) | done |
 | 0013 | [0013-d3d11va-decode-present](0013-d3d11va-decode-present.md) | done |
+| 0014 | [0014-driver-install-tooling](0014-driver-install-tooling.md) | done |
 
 Rules: `../conventions/docs-writing.md`. Template: `_template.md`.

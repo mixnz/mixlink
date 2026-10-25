@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Builds the workspace.
 #   scripts/build.sh                 debug build of the whole workspace
-#   scripts/build.sh release         UI + release build (UI embedded), copies the 4 app exes
-#                                    and the FFmpeg DLLs to dist/
+#   scripts/build.sh release         UI + release build (UI embedded), copies the 4 app exes,
+#                                    the FFmpeg DLLs and the unsigned driver packages to dist/
 #   scripts/build.sh debug -p NAME   build one package (e.g. mixlink-net)
 source "$(dirname "$0")/lib.sh"
 
@@ -47,5 +47,15 @@ if [[ "$profile" == "release" ]]; then
   for dll in "$(cygpath -u "$FFMPEG_DIR")"/bin/*.dll; do
     cp "$dll" dist/
     ok "dist/$(basename "$dll")"
+  done
+  # Unsigned driver packages; `mixlink-svc drivers install` signs them per machine (spec 0014).
+  powershell -NoProfile -ExecutionPolicy Bypass -File drivers/build.ps1 -Driver all || exit 1
+  for name in vdisplay vhid; do
+    rm -rf "dist/drivers/$name"
+    mkdir -p "dist/drivers/$name"
+    for f in "target/drivers/$name/pkg/"*; do
+      cp "$f" "dist/drivers/$name/"
+      ok "dist/drivers/$name/$(basename "$f")"
+    done
   done
 fi

@@ -8,7 +8,7 @@ on:
         description: Job group to run (narrowed runs skip the others)
         type: choice
         default: all
-        options: [all, docs, lint, test]
+        options: [all, docs, lint, test, drivers]
   push:
     tags: ['v*']
 
@@ -84,3 +84,26 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Tests
         run: bash scripts/gate.sh --cargo test
+
+  drivers:
+    # UMDF driver build + infverif /w, then the svc tests that need the built packages (spec 0014).
+    if: ${{ !inputs.jobs || inputs.jobs == 'all' || inputs.jobs == 'drivers' }}
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Keep LF on checkout
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - name: Toolchain (from rust-toolchain.toml, incl. components)
+        run: rustup toolchain install
+      - uses: actions/cache@v4
+        with:
+          path: drivers/packages
+          key: wdk-${{ hashFiles('drivers/*/packages.config') }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Driver build + infverif
+        run: MIXLINK_REQUIRE_WDK=1 bash scripts/check-drivers.sh
+      - name: svc tests with driver packages
+        run: cargo test -p mixlink-svc

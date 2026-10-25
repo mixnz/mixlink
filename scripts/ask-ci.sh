@@ -3,7 +3,7 @@
 #   scripts/ask-ci.sh                 current branch, every job
 #   scripts/ask-ci.sh some-branch     a branch by name (pushed without the gate)
 #   scripts/ask-ci.sh --watch         request, then wait for the verdict (watch-ci.sh)
-#   scripts/ask-ci.sh --jobs test     one job group only: docs | lint | test
+#   scripts/ask-ci.sh --jobs test     one job group only: docs | lint | test | drivers
 #   scripts/ask-ci.sh --no-gate       skip the local gate (for CI-only changes)
 #
 # ci.yml runs only on dispatch and on `v*` tags, so every branch has to ask.
@@ -14,7 +14,7 @@
 # Exit: 0 run requested, 1 something refused, 64 misuse of this script.
 set -uo pipefail
 
-groups="all docs lint test"
+groups="all docs lint test drivers"
 watch=0 gate=1 branch="" jobs="" want_jobs=0
 for arg in "$@"; do
   if ((want_jobs)); then
