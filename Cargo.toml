@@ -50,6 +50,11 @@ print_stdout = "warn"
 [profile.dev.package."*"]
 opt-level = 2
 
+# Build scripts optimized: bindgen in ffmpeg-sys-next overflows the 1 MiB main-thread stack
+# on Windows when built unoptimized (spec 0013).
+[profile.release.build-override]
+opt-level = 2
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

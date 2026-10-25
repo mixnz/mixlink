@@ -17,6 +17,7 @@ Bash scripts (Git Bash on Windows). Each script <= 150 lines; shared helpers in 
 | `check-docs.sh` | Doc index, spec/ADR headers, module cards, `docs/plans/` ignored. |
 | `check-deps.sh` | Crate dependency direction (allow-table mirrors `CLAUDE.md`), all dependency sections. |
 | `check-refs.sh` | Code comments cite specs/ADRs, never roadmap task/spike ids or `docs/roadmap/` (`tools/spikes/` exempt). |
+| `make-test-stream.sh` | Test bitstreams for `mixlink-stream --play` (`out/test-<size>-<fps>.h264/.hevc`, NVENC or `--encoder qsv`), checked with `ffprobe`. |
 | `ci-ffmpeg.sh` | CI only: downloads the pinned FFmpeg zip (`FFMPEG_URL`) into `FFMPEG_DIR` unless the cache has it. |
 | `setup-hooks.sh` | Enables `.githooks/` (pre-push: branch name check only; the gate runs in `/land`). |
 

@@ -2,7 +2,7 @@
 
 > Replace content each update; keep ≤ 80 lines. History lives in git, not here.
 
-**Updated:** 2026-10-24
+**Updated:** 2026-10-25
 **Phase:** 1 — LAN MVP
 
 ## Done
@@ -25,6 +25,9 @@ Details live in each spec; one line per item here.
   `tools/net-probe`. Wired 0 % loss, RTT p99 0.76 ms (laptop Best performance) to 4.1 ms (power saving).
 - T19 service shell (0012): `mixlink-svc` as service `MixLink` or `--console`, `install` / `uninstall`,
   pipe `\\.\pipe\mixlink-svc` (ACL, strict lines, `core::svc_ipc`); host tray shows the service link state.
+- T8 decode + present (0013): FFmpeg D3D11VA on the presenter's device, NV12 shader pass, video thread
+  (newest frame wins), `mixlink-stream --play` dev mode, `scripts/make-test-stream.sh`. Main PC 1440p120:
+  decode p99 1.42 ms (H.264) / 1.47 ms (HEVC). FFmpeg in CI (`scripts/ci-ffmpeg.sh`) and `dist/`.
 
 ## In progress
 - Nothing. Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
@@ -32,7 +35,9 @@ Details live in each spec; one line per item here.
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
-- Roadmap phase 1: T8, T5 (discovery in the service), T20 (driver tooling) unblocked.
+- Manual checks left from T8 (spec 0013 → Acceptance): `--play` next to `ffplay` (colours), resize /
+  minimize / restore while playing, laptop run (`make-test-stream.sh --encoder qsv`, decode p99), a 60 Hz screen.
+- Roadmap phase 1: T5 (discovery in the service), T20 (driver tooling) unblocked.
 - Inputs for later rows: T20 ← specs 0003, 0008 Verdict (`vhid` held open by Steam blocks uninstall);
   T21 ← 0004, 0005 Verdict, 0008 (main display via `SetDisplayConfig`); T7 ← 0005, 0007 Verdict (encode
   levers, QSV pool); T11 ← 0007 (10 ms loopback, silence fill); T22 / T12 ← 0006 Verdict; T9 decides
@@ -42,3 +47,5 @@ Details live in each spec; one line per item here.
 ## Open questions
 - Roadmap row for the language switch (EN/VI setting + `vi` strings) not added yet.
 - CI has no WDK build yet (T20); driver build is local only.
+- CI pins a BtbN FFmpeg autobuild URL (`ci.yml` `FFMPEG_URL`); BtbN prunes old ones, so bump it when it 404s.
+  The CI FFmpeg step has not run yet (no dispatch in T8).

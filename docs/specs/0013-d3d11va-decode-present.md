@@ -1,6 +1,6 @@
 # 0013 — D3D11VA decode via FFmpeg, present in the stream window
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-25
 **Roadmap:** T8
 **Plan:** [0013-d3d11va-decode-present](../plans/0013-d3d11va-decode-present.md) (local only, written by writing-plans skill)
@@ -104,26 +104,46 @@ play mode feeds a recorded bitstream file so decode and present can be seen and 
 - No CPU copy of pixel data anywhere; one GPU pass (colour convert + scale).
 - Measured by play mode with `--measure` on the main PC (NVIDIA) and the laptop (Intel iGPU),
   release builds, both codecs. Results go in this section.
+- Measured (2026-10-25, main PC: RTX 5070, 3840x2160 at 160 Hz, release, `--measure`, 10 s at
+  2560x1440@120 from `make-test-stream.sh` NVENC, 1197 of 1200 frames presented, 3 replaced):
+
+  | Codec | Queue p50 / p99 | Decode p50 / p99 / max | Present p50 / p99 | Total p50 / p99 |
+  |---|---|---|---|---|
+  | H.264 | 0.029 / 0.136 ms | 0.710 / 1.419 / 2.493 ms | 0.188 / 0.597 ms | 0.946 / 1.841 ms |
+  | HEVC | 0.029 / 0.142 ms | 0.761 / 1.473 / 2.121 ms | 0.184 / 0.437 ms | 1.016 / 1.896 ms |
+
+  Without `--measure` decode is CPU-side submit only (H.264 p50 0.36 ms, p99 0.88 ms). Laptop: not
+  measured yet (user run, `make-test-stream.sh --encoder qsv`).
 
 ## Acceptance criteria
 - [ ] `mixlink-stream --play` shows the test pattern for H.264 and HEVC at 1440p120 with correct
       colours (bars match `ffplay` side by side) and kept aspect ratio; resize, minimize, restore and
       close keep working; `--loop` runs 10 minutes without growing memory.
+      Done: both codecs play all 1200 frames, close via `Stop` works, screenshot shows the pattern.
+      `--loop` 10 min (H.264): 71 976 frames decoded, private memory 350–361 MiB each minute, flat.
+      Left for the user (by eye): `ffplay` side by side, resize / minimize / restore.
 - [ ] Main PC and laptop: `DecodeStart` → `DecodeEnd` (with `--measure`) p99 ≤ 3 ms for both codecs
       (laptop may drop to 1080p if its iGPU cannot hold 1440p120; recorded); all spans recorded here.
+      Main PC done (Latency impact); laptop left for the user.
 - [ ] Decode faster than the display (120 fps on 60 Hz): presented frames are the newest, older ones
       counted as dropped; the AU queue never backs up beyond one display interval.
+      Main PC display is 160 Hz, so not exercised; queue p99 0.14 ms there. Check on a 60 Hz screen.
 - [ ] A corrupted AU (random bytes in the middle of the file) is counted `corrupt`, the window keeps
       running and the picture recovers at the next keyframe.
-- [ ] No D3D11VA decoder (WARP device) → `NoHardwareDecoder`, window closes with `CloseReason::Error`.
-- [ ] Decode → present path has no CPU copy (no `av_hwframe_transfer_data`, no staging texture) and
-      our per-frame code does not allocate (counting-allocator test over the AU → present loop,
+      200 KB of random bytes mid-file: the window keeps running and decodes on (1193 frames), but
+      NVIDIA D3D11VA conceals the damage, so FFmpeg reports no error and `corrupt` stays 0. Recovery at
+      the next IDR is covered by `codec/tests/decode.rs::corrupt_au_recovers_at_next_idr`.
+- [x] No D3D11VA decoder (WARP device) → `NoHardwareDecoder` (`warp_device_has_no_decoder`); a video
+      thread failure closes the window with `CloseReason::Error` (`video_failure_closes_cleanly`).
+- [x] Decode → present path has no CPU copy (no `av_hwframe_transfer_data`, no staging texture) and
+      our per-frame code does not allocate (counting-allocator tests in codec, render and stream,
       FFmpeg's internal pools excluded).
-- [ ] NV12 → BGRA pass on WARP: a known NV12 texture (limited-range BT.709 white, black, red, mid grey)
+- [x] NV12 → BGRA pass on WARP: a known NV12 texture (limited-range BT.709 white, black, red, mid grey)
       reads back within ±2 of the expected RGB; letterbox bars are black. Runs on CI.
-- [ ] Hardware decode tests skip with a log line when no hardware decoder exists (CI); they run locally.
-- [ ] `dist/` from `build.sh release` runs `--play` on a PC with no FFmpeg installed.
-- [ ] Module cards of `codec`, `render`, `stream` list the new API.
+- [x] Hardware decode tests skip with a log line when no hardware decoder exists (CI); they run locally.
+- [x] `dist/` from `build.sh release` runs `--play` on a PC with no FFmpeg installed (copied `dist/`
+      run with `PATH` = Windows folders only).
+- [x] Module cards of `codec`, `render`, `stream` list the new API.
 
 ## Open questions
 - Tearing / VRR and waitable-object pacing: phase 3 for now; T9 may pull them in if glass-to-glass needs it.
