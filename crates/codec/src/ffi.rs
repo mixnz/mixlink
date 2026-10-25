@@ -34,3 +34,6 @@ pub(crate) fn codec_id(codec: VideoCodec) -> ff::AVCodecID {
         VideoCodec::Hevc => ff::AVCodecID::AV_CODEC_ID_HEVC,
     }
 }
+
+/// `AVERROR(EAGAIN)`: EAGAIN is 11 in the MinGW CRT the FFmpeg build uses.
+pub(crate) const EAGAIN: i32 = -11;

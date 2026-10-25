@@ -16,4 +16,10 @@ pub enum CodecError {
     Corrupt,
     #[error("out of memory")]
     OutOfMemory,
+    #[cfg(windows)]
+    #[error("{context} failed: {source}")]
+    Win32 {
+        context: &'static str,
+        source: windows::core::Error,
+    },
 }
