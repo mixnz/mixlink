@@ -1,6 +1,6 @@
 # 0015 — Virtual display: monitors on demand, stable EDID per client, topology, monitor before login
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-25
 **Roadmap:** T21
 **Plan:** [0015-virtual-display](../plans/0015-virtual-display.md) (local only, written by writing-plans skill)
@@ -88,7 +88,7 @@ so the session logic is tested with a fake.
 - APIs: `QueryDisplayConfig(QDC_ALL_PATHS)` / `SetDisplayConfig(SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG |
   SDC_SAVE_TO_DATABASE | SDC_ALLOW_CHANGES)` (spec 0008: not `ChangeDisplaySettingsEx`).
 - **Save:** before the first switch, the active paths with source / target modes, written to
-  `%ProgramData%\MixLink\topology.json` (folder DACL as the drivers staging folder). Each target is keyed
+  `%ProgramData%\MixLink\display\topology.json` (that folder gets the drivers staging DACL). Each target is keyed
   by its monitor device path (`DisplayConfigGetDeviceInfo` target name), never by LUID (changes per boot).
   An existing file is never overwritten: it already holds the user's real layout.
 - **Switch:** find the new virtual target by monitor device path, give it the client mode at desktop

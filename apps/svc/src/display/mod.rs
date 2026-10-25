@@ -10,5 +10,7 @@ pub mod topology;
 #[cfg(windows)]
 pub mod commands;
 pub mod ports;
+#[cfg(windows)]
+pub mod service;
 pub mod session;
 pub mod wire;

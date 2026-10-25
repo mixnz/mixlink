@@ -147,10 +147,6 @@ pub fn end<D: DisplayDriver, C: DisplayConfig>(
 
 /// Service start: restore a layout a crash or power loss left switched, then add the headless
 /// monitor when no physical monitor is active (login screen streamable, ADR-0006).
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired into the service start next (spec 0015)")
-)]
 pub fn start_up<D: DisplayDriver, C: DisplayConfig>(
     p: &mut Ports<'_, D, C>,
     headless: &mut Option<u32>,

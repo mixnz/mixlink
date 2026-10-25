@@ -14,15 +14,13 @@ use mixlink_proto::control::DisplayInfo;
 use super::edid::{HEADLESS_ID, HEADLESS_MODE, PRODUCT_HEADLESS};
 use super::modes::add_request;
 use super::ports::DisplayDriver;
+use super::service::{default_store, secured_store};
 use super::session::{self, Ports};
 use super::status::{format_status, refresh_text};
-use super::store::SnapshotStore;
 use crate::args::{DisplayCmd, TryTopology};
 use crate::error::SvcError;
 use crate::platform::windows::console::install_ctrl_handler;
-use crate::platform::windows::dir_security::secure_dir;
 use crate::platform::windows::display_config::{CcdConfig, probe_report};
-use crate::platform::windows::drivers_host::program_data;
 use crate::platform::windows::gpu_name::gpu_name;
 use crate::platform::windows::install::is_running;
 use crate::platform::windows::vdisplay::VDisplay;
@@ -42,26 +40,13 @@ pub fn run(cmd: &DisplayCmd) -> Result<(), SvcError> {
     }
 }
 
-fn snapshot_store() -> SnapshotStore {
-    SnapshotStore::new(SnapshotStore::default_path(&program_data()))
-}
-
 fn status() -> Result<(), SvcError> {
     let reply = VDisplay::open()?.query()?;
     let gpu = gpu_name(reply.render_luid);
-    let saved = snapshot_store().path().exists();
+    let saved = default_store().path().exists();
     let text = format_status(&reply, gpu.as_deref(), saved);
     std::io::stdout().write_all(text.as_bytes())?;
     Ok(())
-}
-
-/// The layout file's folder, created and limited to SYSTEM + Administrators (as the driver staging).
-fn secured_store() -> Result<SnapshotStore, SvcError> {
-    let store = snapshot_store();
-    if let Some(dir) = store.path().parent() {
-        secure_dir(dir)?;
-    }
-    Ok(store)
 }
 
 /// A session by hand: `begin`, wait for Enter / Ctrl+C, `end`. Refused while the service runs

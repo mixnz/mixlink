@@ -68,6 +68,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     }
     let opts = RunOptions {
         pipe: PIPE_NAME.to_owned(),
+        display: Some(crate::host_display_settings()),
     };
     let result = catch_unwind(AssertUnwindSafe(|| {
         run(&stop, &opts, || set_state(SERVICE_RUNNING, 0))

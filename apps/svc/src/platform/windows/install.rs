@@ -213,6 +213,25 @@ fn configure(service: &ScHandle) -> Result<(), SvcError> {
     .map_err(SvcError::win32("ChangeServiceConfig2W(failure flag)"))
 }
 
+/// Stops the service if it runs (it holds the `vdisplay` handle, spec 0015). `true` = it was running.
+pub fn stop_if_running() -> Result<bool, SvcError> {
+    if !is_running()? {
+        return Ok(false);
+    }
+    let manager = open_manager()?;
+    let service = open_service(&manager)?;
+    stop_and_wait(&service)?;
+    Ok(true)
+}
+
+/// Starts the installed service.
+pub fn start() -> Result<(), SvcError> {
+    let manager = open_manager()?;
+    let service = open_service(&manager)?;
+    // SAFETY: valid service handle; no start arguments.
+    unsafe { StartServiceW(service.0, None) }.map_err(SvcError::win32("StartServiceW"))
+}
+
 /// Whether the `MixLink` service is running (any state but stopped); not installed → `false`.
 pub fn is_running() -> Result<bool, SvcError> {
     // SAFETY: local machine, default database, connect right only.

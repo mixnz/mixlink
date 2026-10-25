@@ -10,9 +10,29 @@ use crate::args::DriversCmd;
 #[cfg(windows)]
 use crate::error::SvcError;
 
-/// Runs a `drivers ...` command. Messages go to stderr like the service commands; `status` to stdout.
+/// Runs a `drivers ...` command. `install` / `uninstall` stop the MixLink service first (it holds
+/// the `vdisplay` handle, spec 0015) and start it again after, also after an error.
 #[cfg(windows)]
 pub fn run(cmd: &DriversCmd) -> Result<(), SvcError> {
+    use crate::platform::windows::install::{start, stop_if_running};
+
+    if matches!(cmd, DriversCmd::Status) {
+        return run_command(cmd);
+    }
+    let was_running = stop_if_running()?;
+    let result = run_command(cmd);
+    if was_running && let Err(error) = start() {
+        eprintln!(
+            "{}",
+            crate::strings::service_not_restarted(&error.to_string())
+        );
+    }
+    result
+}
+
+/// Messages go to stderr like the service commands; `status` to stdout.
+#[cfg(windows)]
+fn run_command(cmd: &DriversCmd) -> Result<(), SvcError> {
     use std::io::Write;
     use std::path::PathBuf;
 

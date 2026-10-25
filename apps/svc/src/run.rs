@@ -5,6 +5,9 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use mixlink_core::config::DisplaySettings;
+
+use crate::display;
 use crate::error::SvcError;
 use crate::pipe::server::listen;
 use crate::platform::windows::pipe::create_instance;
@@ -18,6 +21,8 @@ const WAKE_RETRY: Duration = Duration::from_millis(20);
 #[derive(Debug, Clone)]
 pub struct RunOptions {
     pub pipe: String,
+    /// `Some`: start the virtual display (spec 0015). Tests that only exercise the pipe pass `None`.
+    pub display: Option<DisplaySettings>,
 }
 
 /// Serves the pipe until `stop` is set. `on_ready` runs once the pipe accepts clients;
@@ -39,11 +44,20 @@ pub fn run(
             .spawn(move || listen(&name, first, &security, &stop, started))?
     };
     log::info!("serving {}", opts.pipe);
+    let display = match opts.display {
+        Some(settings) => Some(display::service::spawn(Arc::clone(stop), settings)?),
+        None => None,
+    };
     on_ready();
     stop.wait();
     wake_listener(&opts.pipe, &listener);
     if listener.join().is_err() {
         log::error!("pipe listener panicked");
+    }
+    if let Some(display) = display
+        && display.join().is_err()
+    {
+        log::error!("display thread panicked");
     }
     log::info!("stopped");
     Ok(())

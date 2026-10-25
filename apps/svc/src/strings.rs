@@ -77,6 +77,11 @@ pub fn status_cert_none() -> String {
     "none".to_owned()
 }
 
+/// `drivers install | uninstall` stopped the service and could not start it again (spec 0015).
+pub fn service_not_restarted(error: &str) -> String {
+    format!("MixLink service didn't start again ({error}). Start it with `sc start MixLink`.")
+}
+
 /// `display try`: the monitor is up (spec 0015).
 pub fn monitor_on(width: u32, height: u32, refresh: &str, took_ms: u128) -> String {
     format!(
