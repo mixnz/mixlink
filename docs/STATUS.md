@@ -29,13 +29,10 @@ Details live in each spec; one line per item here.
   (newest frame wins), `mixlink-stream --play` dev mode, `scripts/make-test-stream.sh` (BT.709). Decode p99
   at 1440p120: main PC 1.4–1.5 ms, laptop iGPU 1.7–2.3 ms. FFmpeg in CI (`scripts/ci-ffmpeg.sh`) and `dist/`.
 - T20 driver tooling (0014): `mixlink-svc drivers install | uninstall | status` (per-machine cert, catalog check,
-  no prompt, exit 3 when Steam holds `vhid`); `vdisplay` isolated (DIRID 13); driver build in full gate,
-  CI `drivers` job and `build.sh release` (`dist/drivers/`).
+  no prompt; install removes what is there first; exit 3 when a program holds `vhid`); `vdisplay` isolated
+  (DIRID 13); driver build in full gate, CI `drivers` job, `build.sh release` (`dist/drivers/`). Two machine runs pass.
 
 ## In progress
-- T20 on branch `0014-driver-install-tooling`: machine runs 1 + 2 pass (spec 0014 → Results); reinstall now
-  removes everything first. Open before `/land`: CI `drivers` job (does `windows-latest` have the WDK
-  toolset?), Steam itself holding the pad (exit 3 proven with a test helper only).
 - Main PC: MixLink drivers installed from `dist/` (`mixlink-svc drivers status`), kept for T21 / T22. One-off
   physical-screen blanking after run 1's install not reproduced (also not at 160 + 120 Hz).
 - Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
@@ -46,6 +43,8 @@ Details live in each spec; one line per item here.
 - 60 Hz clients: `Present` blocks the video thread at vblank, AUs wait 2–6 ms before decode (spec 0013 →
   Latency impact). Use the frame-latency waitable object in T9 or phase 3.
 - Roadmap phase 1: T5 (discovery in the service), T21 (virtual display), T22 (virtual HID) unblocked.
+- Spec 0014 open rows: Steam itself holding the pad (exit 3 proven with a held-handle helper only), tampered
+  package with the remove-first install. Check when T22 / T12 use the pad with Steam.
 - Inputs for later rows: T21 ← 0004, 0005 Verdict, 0008 (main display via `SetDisplayConfig`); T7 ← 0005,
   0007 Verdict (encode levers, QSV pool); T11 ← 0007 (10 ms loopback, silence fill); T22 / T12 ← 0006 Verdict;
   T9 decides cursor shape recovery. T21 / T22 release driver handles before `drivers uninstall`.
