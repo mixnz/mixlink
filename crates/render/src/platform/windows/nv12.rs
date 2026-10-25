@@ -1,0 +1,166 @@
+//! NV12 → BGRA draw pass: BT.709 limited range, bilinear, aspect fit (spec 0013).
+//! Shaders are compiled once at start with `D3DCompile` (ships with Windows): no shader tools
+//! in the build.
+
+use windows::Win32::Graphics::Direct3D::Fxc::{D3DCOMPILE_OPTIMIZATION_LEVEL3, D3DCompile};
+use windows::Win32::Graphics::Direct3D::{D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, ID3DBlob};
+use windows::Win32::Graphics::Direct3D11::{
+    D3D11_BIND_CONSTANT_BUFFER, D3D11_BUFFER_DESC, D3D11_COMPARISON_NEVER,
+    D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_SAMPLER_DESC, D3D11_TEXTURE_ADDRESS_CLAMP,
+    D3D11_USAGE_DEFAULT, D3D11_VIEWPORT, ID3D11Buffer, ID3D11Device, ID3D11DeviceContext,
+    ID3D11PixelShader, ID3D11RenderTargetView, ID3D11SamplerState, ID3D11ShaderResourceView,
+    ID3D11VertexShader,
+};
+use windows::core::{PCSTR, s};
+
+use super::nv12_views::ViewCache;
+use crate::viewport::fit;
+use crate::{RenderError, VideoFrame};
+
+const SHADER: &str = include_str!("nv12.hlsl");
+const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+
+fn win32(context: &'static str) -> impl FnOnce(windows::core::Error) -> RenderError {
+    move |source| RenderError::Win32 { context, source }
+}
+
+/// Unwraps a `windows` out-parameter that a successful call must have filled.
+fn filled<T>(value: Option<T>, context: &'static str) -> Result<T, RenderError> {
+    value.ok_or_else(|| win32(context)(windows::core::Error::empty()))
+}
+
+#[derive(Debug)]
+pub(crate) struct Nv12Pass {
+    vs: ID3D11VertexShader,
+    ps: ID3D11PixelShader,
+    sampler: ID3D11SamplerState,
+    crop: ID3D11Buffer,
+    crop_value: [f32; 4],
+    views: ViewCache,
+}
+
+impl Nv12Pass {
+    pub(crate) fn new(device: &ID3D11Device) -> Result<Self, RenderError> {
+        let vs_code = compile(s!("vs_main"), s!("vs_4_0"))?;
+        let ps_code = compile(s!("ps_main"), s!("ps_4_0"))?;
+        let (mut vs, mut ps, mut sampler, mut crop) = (None, None, None, None);
+        let sampler_desc = D3D11_SAMPLER_DESC {
+            Filter: D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+            AddressU: D3D11_TEXTURE_ADDRESS_CLAMP,
+            AddressV: D3D11_TEXTURE_ADDRESS_CLAMP,
+            AddressW: D3D11_TEXTURE_ADDRESS_CLAMP,
+            ComparisonFunc: D3D11_COMPARISON_NEVER,
+            MaxLOD: f32::MAX,
+            ..Default::default()
+        };
+        let crop_desc = D3D11_BUFFER_DESC {
+            ByteWidth: 16,
+            Usage: D3D11_USAGE_DEFAULT,
+            BindFlags: D3D11_BIND_CONSTANT_BUFFER.0 as u32,
+            ..Default::default()
+        };
+        // SAFETY: bytecode slices come from live blobs; descriptors outlive the calls; valid
+        // out-pointers.
+        unsafe {
+            device
+                .CreateVertexShader(blob_bytes(&vs_code), None, Some(&mut vs))
+                .map_err(win32("CreateVertexShader"))?;
+            device
+                .CreatePixelShader(blob_bytes(&ps_code), None, Some(&mut ps))
+                .map_err(win32("CreatePixelShader"))?;
+            device
+                .CreateSamplerState(&sampler_desc, Some(&mut sampler))
+                .map_err(win32("CreateSamplerState"))?;
+            device
+                .CreateBuffer(&crop_desc, None, Some(&mut crop))
+                .map_err(win32("CreateBuffer (crop)"))?;
+        }
+        Ok(Self {
+            vs: filled(vs, "CreateVertexShader")?,
+            ps: filled(ps, "CreatePixelShader")?,
+            sampler: filled(sampler, "CreateSamplerState")?,
+            crop: filled(crop, "CreateBuffer (crop)")?,
+            crop_value: [0.0; 4],
+            views: ViewCache::new(device.clone()),
+        })
+    }
+
+    /// Clears `rtv` (`dst` pixels) to black and draws `frame` fitted inside it.
+    // HOT PATH
+    pub(crate) fn draw(
+        &mut self,
+        context: &ID3D11DeviceContext,
+        frame: &VideoFrame,
+        rtv: &ID3D11RenderTargetView,
+        dst: (u32, u32),
+    ) -> Result<(), RenderError> {
+        let views = self.views.get(frame)?;
+        let (luma, chroma, uv_max) = (views.luma.clone(), views.chroma.clone(), views.uv_max);
+        let rect = fit((frame.width, frame.height), dst);
+        let crop_value = [uv_max[0], uv_max[1], 0.0, 0.0];
+        // SAFETY: every bound object is alive for the whole block; the constant buffer holds
+        // 16 bytes, exactly `crop_value`.
+        unsafe {
+            context.OMSetRenderTargets(Some(&[Some(rtv.clone())]), None);
+            context.ClearRenderTargetView(rtv, &BLACK);
+            if rect.w <= 0.0 || rect.h <= 0.0 {
+                return Ok(());
+            }
+            if crop_value != self.crop_value {
+                context.UpdateSubresource(&self.crop, 0, None, crop_value.as_ptr().cast(), 0, 0);
+                self.crop_value = crop_value;
+            }
+            context.RSSetViewports(Some(&[D3D11_VIEWPORT {
+                TopLeftX: rect.x,
+                TopLeftY: rect.y,
+                Width: rect.w,
+                Height: rect.h,
+                MinDepth: 0.0,
+                MaxDepth: 1.0,
+            }]));
+            context.IASetInputLayout(None);
+            context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            context.VSSetShader(&self.vs, None);
+            context.VSSetConstantBuffers(0, Some(&[Some(self.crop.clone())]));
+            context.PSSetShader(&self.ps, None);
+            context.PSSetShaderResources(0, Some(&[Some(luma), Some(chroma)]));
+            context.PSSetSamplers(0, Some(&[Some(self.sampler.clone())]));
+            context.Draw(3, 0);
+            // Unbind so the decoder can write the surface again without a read/write hazard.
+            let none: [Option<ID3D11ShaderResourceView>; 2] = [None, None];
+            context.PSSetShaderResources(0, Some(&none));
+        }
+        Ok(())
+    }
+}
+
+fn compile(entry: PCSTR, target: PCSTR) -> Result<ID3DBlob, RenderError> {
+    let mut code = None;
+    // SAFETY: the source slice is valid for its length; `code` is a valid out-pointer.
+    unsafe {
+        D3DCompile(
+            SHADER.as_ptr().cast(),
+            SHADER.len(),
+            s!("nv12.hlsl"),
+            None,
+            None,
+            entry,
+            target,
+            D3DCOMPILE_OPTIMIZATION_LEVEL3,
+            0,
+            &mut code,
+            None,
+        )
+    }
+    .map_err(win32("D3DCompile"))?;
+    filled(code, "D3DCompile")
+}
+
+fn blob_bytes(blob: &ID3DBlob) -> &[u8] {
+    // SAFETY: the blob owns `GetBufferSize` bytes at `GetBufferPointer` while borrowed.
+    unsafe { std::slice::from_raw_parts(blob.GetBufferPointer().cast(), blob.GetBufferSize()) }
+}
+
+#[cfg(test)]
+#[path = "nv12_tests.rs"]
+mod tests;
