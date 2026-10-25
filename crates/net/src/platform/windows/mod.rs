@@ -1,4 +1,3 @@
-//! Windows: WinSock UDP fix and MMCSS thread priority.
+//! Windows: WinSock UDP fix.
 
-pub(crate) mod mmcss;
 pub(crate) mod socket;

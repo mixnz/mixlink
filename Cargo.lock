@@ -2265,6 +2265,7 @@ dependencies = [
 name = "mixlink-core"
 version = "0.1.0"
 dependencies = [
+ "log",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -2348,8 +2349,11 @@ version = "0.1.0"
 dependencies = [
  "env_logger",
  "log",
+ "mixlink-codec",
  "mixlink-core",
  "mixlink-render",
+ "rtrb",
+ "thiserror 2.0.21",
  "winit",
 ]
 

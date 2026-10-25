@@ -11,8 +11,8 @@ use mixlink_proto::channel::Channel;
 use mixlink_proto::header::{HEADER_LEN, WIRE_VERSION};
 
 use crate::lane::{SLOT_LEN, Writer};
-use crate::platform::Mmcss;
 use crate::stats::{SocketCounters, lane_index};
+use mixlink_core::mmcss::{Mmcss, MmcssTask};
 
 /// Staging buffer: bigger than any valid datagram, so oversize ones are seen and dropped.
 const STAGING_LEN: usize = 1500;
@@ -30,7 +30,7 @@ pub(crate) struct RecvLoop {
 impl RecvLoop {
     /// Thread body; reports MMCSS on `ready`, then reads until `stop` (seen within the read timeout).
     pub(crate) fn run(mut self, ready: Sender<bool>) {
-        let mmcss = Mmcss::enter();
+        let mmcss = Mmcss::enter(MmcssTask::ProAudio);
         let _ = ready.send(mmcss.is_some());
         let mut staging = [0u8; STAGING_LEN];
         while !self.stop.load(Ordering::Acquire) {

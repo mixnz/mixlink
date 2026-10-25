@@ -9,8 +9,8 @@ use std::thread;
 use mixlink_proto::channel::Channel;
 
 use crate::lane::{Reader, Wake};
-use crate::platform::Mmcss;
 use crate::stats::SocketCounters;
+use mixlink_core::mmcss::{Mmcss, MmcssTask};
 
 /// Lanes drained fully on every pass, highest priority first; video goes last, in batches.
 pub(crate) const PRIORITY: [Channel; 5] = [
@@ -37,7 +37,7 @@ impl SendLoop {
     /// Thread body; reports MMCSS on `ready` once it can be woken.
     pub(crate) fn run(mut self, ready: Sender<bool>) {
         self.wake.attach_current();
-        let mmcss = Mmcss::enter();
+        let mmcss = Mmcss::enter(MmcssTask::ProAudio);
         let _ = ready.send(mmcss.is_some());
         loop {
             if !self.pass() {
