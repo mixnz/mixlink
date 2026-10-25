@@ -30,6 +30,10 @@ pub enum DisplayCmd {
         mode: DisplayInfo,
         topology: TryTopology,
     },
+    /// Hidden: checks the display layout calls from this session (spec 0015, Session 0 check).
+    Probe {
+        out: PathBuf,
+    },
     /// Hidden: sends malformed `ADD_MONITOR` requests; each must be refused.
     RejectCheck,
 }
@@ -98,6 +102,9 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, Strin
                 .map_err(|_| format!("--client needs 32 hex digits, got {client}"))?,
             mode: parse_mode(mode)?,
             topology: parse_topology(topology)?,
+        })),
+        ["display", "probe", "--out", out] => Ok(Mode::Display(DisplayCmd::Probe {
+            out: PathBuf::from(out),
         })),
         ["display", "reject-check"] => Ok(Mode::Display(DisplayCmd::RejectCheck)),
         _ => Err(format!("unknown arguments: {}", args.join(" "))),

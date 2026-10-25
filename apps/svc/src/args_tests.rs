@@ -191,3 +191,13 @@ fn display_reject_check() {
         Mode::Display(DisplayCmd::RejectCheck)
     );
 }
+
+#[test]
+fn display_probe() {
+    assert_eq!(
+        parse(&["display", "probe", "--out", "p.txt"]).unwrap(),
+        Mode::Display(DisplayCmd::Probe {
+            out: PathBuf::from("p.txt")
+        })
+    );
+}

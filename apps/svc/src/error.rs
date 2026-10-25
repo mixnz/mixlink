@@ -39,6 +39,8 @@ pub enum SvcError {
     DisplayNotReady,
     #[error(transparent)]
     Wire(#[from] crate::display::wire::WireError),
+    #[error("screen layout {step} failed: Windows error {code}")]
+    Topology { step: &'static str, code: i32 },
     /// Uninstall stopped: a program holds a device open (`Some` when Windows names it).
     #[error("{}", crate::strings::drivers_held(.0.as_deref()))]
     DeviceHeld(Option<String>),

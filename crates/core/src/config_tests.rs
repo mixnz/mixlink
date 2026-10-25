@@ -176,3 +176,16 @@ fn bad_json_is_parse_error() {
         Err(ConfigError::Parse(_))
     ));
 }
+
+#[test]
+fn topology_default_and_json_names() {
+    assert_eq!(Topology::default(), Topology::VirtualOnly);
+    assert_eq!(
+        serde_json::to_string(&Topology::VirtualOnly).unwrap(),
+        "\"virtualOnly\""
+    );
+    assert_eq!(
+        serde_json::from_str::<Topology>("\"extend\"").unwrap(),
+        Topology::Extend
+    );
+}

@@ -166,3 +166,6 @@ baseline (specs 0004, 0005). Session start cost (add + switch) is measured and r
 
 ## Results
 Manual runs (elevated, main PC) are recorded here as they happen.
+- `display probe` from the desktop (session 1, not elevated): query and re-apply of the current layout
+  work. `edidManufactureId` is EDID bytes 8..10 read little-endian (`DEL` = `0xac10`, `MXL_MFG_ID`), the
+  product code as stored. The S2 sample monitor (`DELD0E6`) is still active from the old driver.

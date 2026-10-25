@@ -1,7 +1,11 @@
 //! The `display ...` developer commands (spec 0015).
 
 use std::io::{BufRead, Write};
+use std::path::Path;
 use std::sync::Arc;
+
+use windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
+use windows::Win32::System::Threading::GetCurrentProcessId;
 
 use mixlink_core::ids::DeviceId;
 use mixlink_proto::control::DisplayInfo;
@@ -10,9 +14,12 @@ use super::edid::{HEADLESS_ID, HEADLESS_MODE, PRODUCT_CLIENT, PRODUCT_HEADLESS};
 use super::modes::add_request;
 use super::ports::DisplayDriver;
 use super::status::{format_status, refresh_text};
+use super::store::SnapshotStore;
 use crate::args::{DisplayCmd, TryTopology};
 use crate::error::SvcError;
 use crate::platform::windows::console::install_ctrl_handler;
+use crate::platform::windows::display_config::probe_report;
+use crate::platform::windows::drivers_host::program_data;
 use crate::platform::windows::gpu_name::gpu_name;
 use crate::platform::windows::vdisplay::VDisplay;
 use crate::stop::StopSignal;
@@ -26,14 +33,20 @@ pub fn run(cmd: &DisplayCmd) -> Result<(), SvcError> {
             mode,
             topology,
         } => try_monitor(client, mode, *topology),
+        DisplayCmd::Probe { out } => probe(out),
         DisplayCmd::RejectCheck => reject_check(),
     }
+}
+
+fn snapshot_store() -> SnapshotStore {
+    SnapshotStore::new(SnapshotStore::default_path(&program_data()))
 }
 
 fn status() -> Result<(), SvcError> {
     let reply = VDisplay::open()?.query()?;
     let gpu = gpu_name(reply.render_luid);
-    let text = format_status(&reply, gpu.as_deref(), false);
+    let saved = snapshot_store().path().exists();
+    let text = format_status(&reply, gpu.as_deref(), saved);
     std::io::stdout().write_all(text.as_bytes())?;
     Ok(())
 }
@@ -69,6 +82,20 @@ fn wait_enter_or_ctrl_c() -> Result<(), SvcError> {
             reader.stop();
         })?;
     stop.wait();
+    Ok(())
+}
+
+/// Writes the session id and the layout read / re-apply results to `out` (spec 0015, Session 0 check).
+fn probe(out: &Path) -> Result<(), SvcError> {
+    let mut session = 0u32;
+    // SAFETY: our own process id; `session` is a valid out pointer.
+    let session_text =
+        match unsafe { ProcessIdToSessionId(GetCurrentProcessId(), &raw mut session) } {
+            Ok(()) => session.to_string(),
+            Err(error) => error.to_string(),
+        };
+    let text = format!("session: {session_text}\n{}", probe_report());
+    std::fs::write(out, text)?;
     Ok(())
 }
 
