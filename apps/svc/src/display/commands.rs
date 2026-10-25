@@ -3,6 +3,7 @@
 use std::io::{BufRead, Write};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 
 use windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
 use windows::Win32::System::Threading::GetCurrentProcessId;
@@ -10,17 +11,20 @@ use windows::Win32::System::Threading::GetCurrentProcessId;
 use mixlink_core::ids::DeviceId;
 use mixlink_proto::control::DisplayInfo;
 
-use super::edid::{HEADLESS_ID, HEADLESS_MODE, PRODUCT_CLIENT, PRODUCT_HEADLESS};
+use super::edid::{HEADLESS_ID, HEADLESS_MODE, PRODUCT_HEADLESS};
 use super::modes::add_request;
 use super::ports::DisplayDriver;
+use super::session::{self, Ports};
 use super::status::{format_status, refresh_text};
 use super::store::SnapshotStore;
 use crate::args::{DisplayCmd, TryTopology};
 use crate::error::SvcError;
 use crate::platform::windows::console::install_ctrl_handler;
-use crate::platform::windows::display_config::probe_report;
+use crate::platform::windows::dir_security::secure_dir;
+use crate::platform::windows::display_config::{CcdConfig, probe_report};
 use crate::platform::windows::drivers_host::program_data;
 use crate::platform::windows::gpu_name::gpu_name;
+use crate::platform::windows::install::is_running;
 use crate::platform::windows::vdisplay::VDisplay;
 use crate::stop::StopSignal;
 use crate::strings;
@@ -51,20 +55,59 @@ fn status() -> Result<(), SvcError> {
     Ok(())
 }
 
+/// The layout file's folder, created and limited to SYSTEM + Administrators (as the driver staging).
+fn secured_store() -> Result<SnapshotStore, SvcError> {
+    let store = snapshot_store();
+    if let Some(dir) = store.path().parent() {
+        secure_dir(dir)?;
+    }
+    Ok(store)
+}
+
+/// A session by hand: `begin`, wait for Enter / Ctrl+C, `end`. Refused while the service runs
+/// (two owners of the screen layout).
 fn try_monitor(
     client: &DeviceId,
     mode: &DisplayInfo,
     topology: TryTopology,
 ) -> Result<(), SvcError> {
+    if is_running()? {
+        return Err(SvcError::ServiceRunning);
+    }
     let mut driver = VDisplay::open()?;
-    let TryTopology::Keep = topology;
-    let id = driver.add_monitor(&add_request(client, PRODUCT_CLIENT, mode))?;
+    let mut config = CcdConfig;
+    let store = secured_store()?;
+    let mut ports = Ports {
+        driver: &mut driver,
+        config: &mut config,
+        store: &store,
+    };
+    let topology = match topology {
+        TryTopology::Keep => None,
+        TryTopology::Apply(topology) => Some(topology),
+    };
+    let mut headless = None;
+    let started = Instant::now();
+    let active = session::begin(
+        &mut ports,
+        client,
+        mode,
+        topology,
+        &mut headless,
+        &std::thread::sleep,
+    )?;
+    let took_ms = started.elapsed().as_millis();
     eprintln!(
         "{}",
-        strings::monitor_on(mode.width, mode.height, &refresh_text(mode.refresh_mhz))
+        strings::monitor_on(
+            mode.width,
+            mode.height,
+            &refresh_text(mode.refresh_mhz),
+            took_ms
+        )
     );
     wait_enter_or_ctrl_c()?;
-    driver.remove_monitor(id)?;
+    session::end(&mut ports, active, &mut headless)?;
     eprintln!("{}", strings::MONITOR_OFF);
     Ok(())
 }

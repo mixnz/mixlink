@@ -39,6 +39,10 @@ pub enum SvcError {
     DisplayNotReady,
     #[error(transparent)]
     Wire(#[from] crate::display::wire::WireError),
+    #[error("The new MixLink monitor didn't show up in Windows within 5 seconds.")]
+    MonitorTimeout,
+    #[error("The MixLink service is running. Stop it first with `sc stop MixLink`.")]
+    ServiceRunning,
     #[error("screen layout {step} failed: Windows error {code}")]
     Topology { step: &'static str, code: i32 },
     /// Uninstall stopped: a program holds a device open (`Some` when Windows names it).

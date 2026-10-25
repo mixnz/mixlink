@@ -11,11 +11,12 @@ use windows::Win32::Foundation::{
 use windows::Win32::System::Services::{
     ChangeServiceConfig2W, ChangeServiceConfigW, CloseServiceHandle, ControlService,
     CreateServiceW, DeleteService, OpenSCManagerW, OpenServiceW, QueryServiceStatus, SC_ACTION,
-    SC_ACTION_RESTART, SC_HANDLE, SC_MANAGER_ALL_ACCESS, SERVICE_ALL_ACCESS, SERVICE_AUTO_START,
-    SERVICE_CONFIG_DESCRIPTION, SERVICE_CONFIG_FAILURE_ACTIONS,
+    SC_ACTION_RESTART, SC_HANDLE, SC_MANAGER_ALL_ACCESS, SC_MANAGER_CONNECT, SERVICE_ALL_ACCESS,
+    SERVICE_AUTO_START, SERVICE_CONFIG_DESCRIPTION, SERVICE_CONFIG_FAILURE_ACTIONS,
     SERVICE_CONFIG_FAILURE_ACTIONS_FLAG, SERVICE_CONTROL_STOP, SERVICE_DESCRIPTIONW,
-    SERVICE_ERROR_NORMAL, SERVICE_FAILURE_ACTIONS_FLAG, SERVICE_FAILURE_ACTIONSW, SERVICE_STATUS,
-    SERVICE_STOPPED, SERVICE_WIN32_OWN_PROCESS, StartServiceW,
+    SERVICE_ERROR_NORMAL, SERVICE_FAILURE_ACTIONS_FLAG, SERVICE_FAILURE_ACTIONSW,
+    SERVICE_QUERY_STATUS, SERVICE_STATUS, SERVICE_STOPPED, SERVICE_WIN32_OWN_PROCESS,
+    StartServiceW,
 };
 use windows::core::{HSTRING, PCWSTR, PWSTR};
 
@@ -210,6 +211,28 @@ fn configure(service: &ScHandle) -> Result<(), SvcError> {
         )
     }
     .map_err(SvcError::win32("ChangeServiceConfig2W(failure flag)"))
+}
+
+/// Whether the `MixLink` service is running (any state but stopped); not installed → `false`.
+pub fn is_running() -> Result<bool, SvcError> {
+    // SAFETY: local machine, default database, connect right only.
+    let manager = unsafe { OpenSCManagerW(PCWSTR::null(), PCWSTR::null(), SC_MANAGER_CONNECT) }
+        .map(ScHandle)
+        .map_err(SvcError::win32("OpenSCManagerW"))?;
+    let name = HSTRING::from(SERVICE_NAME);
+    // SAFETY: valid manager handle; `name` outlives the call.
+    let service = match unsafe { OpenServiceW(manager.0, &name, SERVICE_QUERY_STATUS) } {
+        Ok(handle) => ScHandle(handle),
+        Err(error) if error.code() == ERROR_SERVICE_DOES_NOT_EXIST.to_hresult() => {
+            return Ok(false);
+        }
+        Err(error) => return Err(SvcError::win32("OpenServiceW")(error)),
+    };
+    let mut status = SERVICE_STATUS::default();
+    // SAFETY: valid service handle; `status` is written by the call.
+    unsafe { QueryServiceStatus(service.0, &mut status) }
+        .map_err(SvcError::win32("QueryServiceStatus"))?;
+    Ok(status.dwCurrentState != SERVICE_STOPPED)
 }
 
 /// Sends Stop (if running) and waits up to 10 s for the stopped state.

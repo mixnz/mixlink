@@ -25,6 +25,13 @@ pub enum Topology {
     Extend,
 }
 
+/// Host display settings (spec 0015).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DisplaySettings {
+    pub topology: Topology,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct NetConfig {
@@ -101,6 +108,7 @@ pub struct HostConfig {
     pub name: String,
     pub net: NetConfig,
     pub video: VideoConfig,
+    pub display: DisplaySettings,
 }
 
 impl Default for HostConfig {
@@ -110,6 +118,7 @@ impl Default for HostConfig {
             name: "MixLink Host".to_owned(),
             net: NetConfig::default(),
             video: VideoConfig::default(),
+            display: DisplaySettings::default(),
         }
     }
 }

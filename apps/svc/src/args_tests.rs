@@ -201,3 +201,26 @@ fn display_probe() {
         })
     );
 }
+
+#[test]
+fn display_try_virtual_only_and_extend() {
+    for (text, topology) in [
+        ("virtual-only", Topology::VirtualOnly),
+        ("extend", Topology::Extend),
+    ] {
+        let args = [
+            "display",
+            "try",
+            "--client",
+            CLIENT,
+            "--mode",
+            "1920x1080@60",
+            "--topology",
+            text,
+        ];
+        let Mode::Display(DisplayCmd::Try { topology: got, .. }) = parse(&args).unwrap() else {
+            panic!("not a try command");
+        };
+        assert_eq!(got, TryTopology::Apply(topology));
+    }
+}

@@ -78,8 +78,11 @@ pub fn status_cert_none() -> String {
 }
 
 /// `display try`: the monitor is up (spec 0015).
-pub fn monitor_on(width: u32, height: u32, refresh: &str) -> String {
-    format!("MixLink monitor is on: {width}x{height} at {refresh} Hz. Press Enter to remove it.")
+pub fn monitor_on(width: u32, height: u32, refresh: &str, took_ms: u128) -> String {
+    format!(
+        "MixLink monitor is on: {width}x{height} at {refresh} Hz (ready in {took_ms} ms). \
+         Press Enter to remove it."
+    )
 }
 
 pub const MONITOR_OFF: &str = "MixLink monitor removed.";

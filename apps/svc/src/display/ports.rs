@@ -8,13 +8,11 @@ use super::wire::{AddMonitor, QueryReply};
 use crate::error::SvcError;
 
 /// Windows' screen layout (CCD API, or a helper process that calls it; spec 0015).
-#[expect(
-    dead_code,
-    reason = "used by the display session flow next (spec 0015)"
-)]
 pub trait DisplayConfig {
     /// The active displays now.
     fn snapshot(&mut self) -> Result<Snapshot, SvcError>;
+    /// Device paths of every monitor Windows can show now (active or not).
+    fn present_monitors(&mut self) -> Result<Vec<String>, SvcError>;
     /// Device path of the MixLink monitor with this EDID product code, once Windows lists it.
     fn find_mixlink(&mut self, product: u16) -> Result<Option<String>, SvcError>;
     /// Whether any active display is not a MixLink monitor.

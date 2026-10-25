@@ -164,6 +164,20 @@ impl DisplayConfig for CcdConfig {
         })
     }
 
+    fn present_monitors(&mut self) -> Result<Vec<String>, SvcError> {
+        let all = ccd::query(QDC_ALL_PATHS)?;
+        let mut out: Vec<String> = Vec::new();
+        for path in &all.paths {
+            if path.targetInfo.targetAvailable.as_bool() {
+                let name = name_of(path)?.monitor_path;
+                if !out.contains(&name) {
+                    out.push(name);
+                }
+            }
+        }
+        Ok(out)
+    }
+
     fn find_mixlink(&mut self, product: u16) -> Result<Option<String>, SvcError> {
         let all = ccd::query(QDC_ALL_PATHS)?;
         for path in &all.paths {

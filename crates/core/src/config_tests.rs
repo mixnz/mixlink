@@ -189,3 +189,24 @@ fn topology_default_and_json_names() {
         Topology::Extend
     );
 }
+
+#[test]
+fn display_topology_default_virtual_only() {
+    assert_eq!(
+        HostConfig::default().display.topology,
+        Topology::VirtualOnly
+    );
+}
+
+#[test]
+fn display_topology_extend_parses() {
+    let host = HostConfig::from_json(r#"{"display":{"topology":"extend"}}"#).unwrap();
+    assert_eq!(host.display.topology, Topology::Extend);
+}
+
+#[test]
+fn old_config_without_display_loads() {
+    let host = HostConfig::from_json(r#"{"version":1,"name":"Den PC"}"#).unwrap();
+    assert_eq!(host.display, DisplaySettings::default());
+    assert_eq!(host.name, "Den PC");
+}

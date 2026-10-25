@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use mixlink_core::config::Topology;
 use mixlink_core::ids::DeviceId;
 use mixlink_core::svc_ipc::PIPE_NAME;
 use mixlink_proto::control::DisplayInfo;
@@ -42,6 +43,8 @@ pub enum DisplayCmd {
 pub enum TryTopology {
     /// Monitor only; the screen layout is left alone.
     Keep,
+    /// Monitor as main display with this layout, restored after.
+    Apply(Topology),
 }
 
 /// Mode from the command line: dpi 96, SDR.
@@ -60,7 +63,7 @@ pub enum DriversCmd {
 
 pub const USAGE: &str = "usage: mixlink-svc [--console [--pipe <name>] | install | uninstall]\n       \
      mixlink-svc drivers [install [--from <dir>] | uninstall | status]\n       \
-     mixlink-svc display [status | try --client <32 hex> --mode <W>x<H>@<Hz> --topology keep]";
+     mixlink-svc display [status | try --client <32 hex> --mode <W>x<H>@<Hz> --topology virtual-only|extend|keep]";
 
 /// Parses the arguments after the program name.
 pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, String> {
@@ -114,7 +117,11 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, Strin
 fn parse_topology(text: &str) -> Result<TryTopology, String> {
     match text {
         "keep" => Ok(TryTopology::Keep),
-        _ => Err(format!("--topology must be keep, got {text}")),
+        "virtual-only" => Ok(TryTopology::Apply(Topology::VirtualOnly)),
+        "extend" => Ok(TryTopology::Apply(Topology::Extend)),
+        _ => Err(format!(
+            "--topology must be virtual-only, extend or keep, got {text}"
+        )),
     }
 }
 
