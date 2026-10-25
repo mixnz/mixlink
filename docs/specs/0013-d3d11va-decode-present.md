@@ -97,6 +97,9 @@ play mode feeds a recorded bitstream file so decode and present can be seen and 
 - `ffmpeg.exe` `testsrc2` (moving pattern, colour bars) 2560x1440@120, 10 s, no B-frames, GOP = 120,
   `h264_nvenc` / `hevc_nvenc` (`--encoder qsv` for Intel). Output in `out/` (gitignored), checked
   with `ffprobe -count_frames`. The LGPL build has no x264, so a HW encoder is required.
+- Converted and tagged BT.709 limited range (untagged, FFmpeg uses BT.601 and `ffplay` then shows other
+  colours than the stream window). Also writes `-<codec>.mkv` copies with timestamps: `ffplay` cannot
+  loop the raw files.
 
 ## Latency impact
 - Stages: `Received` → `DecodeStart` (queue wait), `DecodeStart` → `DecodeEnd` (budget ≤ 3 ms),
@@ -112,22 +115,36 @@ play mode feeds a recorded bitstream file so decode and present can be seen and 
   | H.264 | 0.029 / 0.136 ms | 0.710 / 1.419 / 2.493 ms | 0.188 / 0.597 ms | 0.946 / 1.841 ms |
   | HEVC | 0.029 / 0.142 ms | 0.761 / 1.473 / 2.121 ms | 0.184 / 0.437 ms | 1.016 / 1.896 ms |
 
-  Without `--measure` decode is CPU-side submit only (H.264 p50 0.36 ms, p99 0.88 ms). Laptop: not
-  measured yet (user run, `make-test-stream.sh --encoder qsv`).
+  Without `--measure` decode is CPU-side submit only (H.264 p50 0.36 ms, p99 0.88 ms).
+- Measured (2026-10-25, laptop: Intel UHD Graphics driver 32.0.101.7088, 1920x1080 at 59 Hz, charger,
+  same NVENC files, release, `--measure`). Decode only (window minimized, nothing presented):
+
+  | File | Decode p50 / p99 / max | Queue p99 |
+  |---|---|---|
+  | 1080p120 H.264 | 0.661 / 2.702 / 3.102 ms | 0.191 ms |
+  | 1080p120 HEVC | 0.636 / 1.965 / 7.522 ms | 0.166 ms |
+  | 1440p120 H.264 | 0.591 / 1.695 / 2.843 ms | 0.164 ms |
+  | 1440p120 HEVC | 0.706 / 2.273 / 7.264 ms | 0.236 ms |
+
+  Window shown (60 Hz): about 600 of 1200 frames presented (newest wins, rest counted `dropped`), but
+  `Present(0, 0)` still blocks the video thread until a back buffer frees at vblank. AUs then wait
+  2–6 ms in the queue (p50, up to 8 ms) and `--measure`'s GPU wait catches the same vblank, so decode
+  p99 reads 8.1–8.6 ms in some runs. That wait is presentation, not decode: frame-latency waitable
+  object or tearing (Open questions) removes it.
 
 ## Acceptance criteria
-- [ ] `mixlink-stream --play` shows the test pattern for H.264 and HEVC at 1440p120 with correct
+- [x] `mixlink-stream --play` shows the test pattern for H.264 and HEVC at 1440p120 with correct
       colours (bars match `ffplay` side by side) and kept aspect ratio; resize, minimize, restore and
       close keep working; `--loop` runs 10 minutes without growing memory.
-      Done: both codecs play all 1200 frames, close via `Stop` works, screenshot shows the pattern.
-      `--loop` 10 min (H.264): 71 976 frames decoded, private memory 350–361 MiB each minute, flat.
-      Left for the user (by eye): `ffplay` side by side, resize / minimize / restore.
-- [ ] Main PC and laptop: `DecodeStart` → `DecodeEnd` (with `--measure`) p99 ≤ 3 ms for both codecs
+      Colours read from the window (`PrintWindow`) match FFmpeg's CPU decode within ±2 on all six bars
+      (BT.709 test file); black bars on tall and wide windows. Resize / minimize / restore / maximize /
+      close checked by the user. `--loop` 10 min (H.264): 71 976 frames, private memory 350–361 MiB, flat.
+- [x] Main PC and laptop: `DecodeStart` → `DecodeEnd` (with `--measure`) p99 ≤ 3 ms for both codecs
       (laptop may drop to 1080p if its iGPU cannot hold 1440p120; recorded); all spans recorded here.
-      Main PC done (Latency impact); laptop left for the user.
-- [ ] Decode faster than the display (120 fps on 60 Hz): presented frames are the newest, older ones
+      Laptop meets it at 1080p and 1440p with nothing presented; see Latency impact for the 60 Hz wait.
+- [x] Decode faster than the display (120 fps on 60 Hz): presented frames are the newest, older ones
       counted as dropped; the AU queue never backs up beyond one display interval.
-      Main PC display is 160 Hz, so not exercised; queue p99 0.14 ms there. Check on a 60 Hz screen.
+      Laptop 59 Hz: ~600 of 1200 presented, ~600 `dropped`; queue max 8.1 ms < 16.7 ms.
 - [ ] A corrupted AU (random bytes in the middle of the file) is counted `corrupt`, the window keeps
       running and the picture recovers at the next keyframe.
       200 KB of random bytes mid-file: the window keeps running and decodes on (1193 frames), but
@@ -147,4 +164,7 @@ play mode feeds a recorded bitstream file so decode and present can be seen and 
 
 ## Open questions
 - Tearing / VRR and waitable-object pacing: phase 3 for now; T9 may pull them in if glass-to-glass needs it.
-- `--play` stays in release builds (field checks on PCs without a dev setup).
+- `--play` stays in release builds (field checks on PCs without a dev setup); without a launcher it
+  ignores stdin EOF, only the window closes it.
+- 60 Hz clients: `Present` blocking adds 2–6 ms (p50) before decode. Fix with the frame-latency waitable
+  object (present only when a buffer is free, never block decode) in T9 or phase 3.

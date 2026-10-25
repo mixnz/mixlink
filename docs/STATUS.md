@@ -26,8 +26,8 @@ Details live in each spec; one line per item here.
 - T19 service shell (0012): `mixlink-svc` as service `MixLink` or `--console`, `install` / `uninstall`,
   pipe `\\.\pipe\mixlink-svc` (ACL, strict lines, `core::svc_ipc`); host tray shows the service link state.
 - T8 decode + present (0013): FFmpeg D3D11VA on the presenter's device, NV12 shader pass, video thread
-  (newest frame wins), `mixlink-stream --play` dev mode, `scripts/make-test-stream.sh`. Main PC 1440p120:
-  decode p99 1.42 ms (H.264) / 1.47 ms (HEVC). FFmpeg in CI (`scripts/ci-ffmpeg.sh`) and `dist/`.
+  (newest frame wins), `mixlink-stream --play` dev mode, `scripts/make-test-stream.sh` (BT.709). Decode p99
+  at 1440p120: main PC 1.4–1.5 ms, laptop iGPU 1.7–2.3 ms. FFmpeg in CI (`scripts/ci-ffmpeg.sh`) and `dist/`.
 
 ## In progress
 - Nothing. Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
@@ -35,8 +35,8 @@ Details live in each spec; one line per item here.
 
 ## Next
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
-- Manual checks left from T8 (spec 0013 → Acceptance): `--play` next to `ffplay` (colours), resize /
-  minimize / restore while playing, laptop run (`make-test-stream.sh --encoder qsv`, decode p99), a 60 Hz screen.
+- 60 Hz clients: `Present` blocks the video thread at vblank, AUs wait 2–6 ms before decode (spec 0013 →
+  Latency impact). Use the frame-latency waitable object in T9 or phase 3.
 - Roadmap phase 1: T5 (discovery in the service), T20 (driver tooling) unblocked.
 - Inputs for later rows: T20 ← specs 0003, 0008 Verdict (`vhid` held open by Steam blocks uninstall);
   T21 ← 0004, 0005 Verdict, 0008 (main display via `SetDisplayConfig`); T7 ← 0005, 0007 Verdict (encode

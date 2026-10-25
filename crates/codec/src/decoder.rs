@@ -77,4 +77,10 @@ impl DecodedFrame {
     pub fn height(&self) -> u32 {
         self.raw.height
     }
+
+    /// Which `decode` call (0-based, counted per decoder) brought the access unit this picture
+    /// came from. Equals the current call's index unless the decoder had to delay output.
+    pub fn au_index(&self) -> u64 {
+        self.raw.au_index
+    }
 }

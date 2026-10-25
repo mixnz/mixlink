@@ -3,7 +3,7 @@
 mod common;
 
 use common::{access_units, device_or_skip, warp_device};
-use mixlink_codec::{CodecError, DecodedFrame, Decoder, VideoCodec};
+use mixlink_codec::{CodecError, DecodedFrame, Decoder, EXTRA_SURFACES, VideoCodec};
 use windows::Win32::Graphics::Direct3D11::{D3D11_BIND_SHADER_RESOURCE, D3D11_TEXTURE2D_DESC};
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_NV12;
 
@@ -105,6 +105,40 @@ fn frame_outlives_decoder() {
     drop(decoder);
     assert_eq!(desc(&frame).Format, DXGI_FORMAT_NV12);
     drop(frame);
+}
+
+#[test]
+fn frames_carry_their_au_index() {
+    let codec = VideoCodec::H264;
+    let Some(device) = device_or_skip(codec) else {
+        return;
+    };
+    let mut decoder = Decoder::new(&device, codec).unwrap();
+    for (i, au) in access_units(codec).unwrap().iter().enumerate() {
+        let frame = decoder.decode(au).unwrap().unwrap();
+        assert_eq!(frame.au_index(), i as u64);
+    }
+}
+
+#[test]
+fn au_is_not_lost_when_caller_holds_every_frame() {
+    let codec = VideoCodec::H264;
+    let Some(device) = device_or_skip(codec) else {
+        return;
+    };
+    let mut decoder = Decoder::new(&device, codec).unwrap();
+    let aus = access_units(codec).unwrap();
+    let held: Vec<_> = aus[..EXTRA_SURFACES + 2]
+        .iter()
+        .map(|au| decoder.decode(au).unwrap().unwrap())
+        .collect();
+    // Every pooled frame is held: AU 6 is decoded, its picture cannot be handed out.
+    assert!(decoder.decode(&aus[6]).unwrap().is_none());
+    drop(held);
+    for (i, au) in aus.iter().enumerate().skip(7) {
+        let frame = decoder.decode(au).unwrap().unwrap();
+        assert_eq!(frame.au_index(), i as u64, "AU {i} lost or late");
+    }
 }
 
 #[test]

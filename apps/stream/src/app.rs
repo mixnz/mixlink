@@ -172,9 +172,12 @@ impl ApplicationHandler<StreamEvent> for StreamApp {
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: StreamEvent) {
         match event {
-            StreamEvent::Stop | StreamEvent::LauncherGone => {
-                self.close(event_loop, CloseReason::Stopped);
+            StreamEvent::Stop => self.close(event_loop, CloseReason::Stopped),
+            // Play mode runs without a launcher (terminal, Explorer): only the window closes it.
+            StreamEvent::LauncherGone if self.play.is_some() => {
+                log::info!("stdin closed; play mode keeps running until the window is closed");
             }
+            StreamEvent::LauncherGone => self.close(event_loop, CloseReason::Stopped),
             StreamEvent::Video(video) => self.on_video(event_loop, video),
         }
     }

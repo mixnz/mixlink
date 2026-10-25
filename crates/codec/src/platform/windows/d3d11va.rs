@@ -23,6 +23,8 @@ pub(crate) struct RawFrame {
     pub(crate) index: u32,
     pub(crate) width: u32,
     pub(crate) height: u32,
+    /// Which `decode` call (0-based) brought the AU this picture came from.
+    pub(crate) au_index: u64,
     // Keeps the pool surface (and the device) alive; returned to the pool on drop.
     pub(crate) _frame: PooledFrame,
 }
@@ -35,6 +37,10 @@ pub(crate) struct D3d11vaDecoder {
     codec: VideoCodec,
     ctx: *mut ff::AVCodecContext,
     pkt: *mut ff::AVPacket,
+    /// AUs sent so far; tags each packet (`pts`) so a frame knows its AU.
+    sent_aus: u64,
+    /// Receives pictures nobody can take (all pooled frames held); unreferenced at once.
+    scratch: *mut ff::AVFrame,
     /// Access unit plus FFmpeg's zeroed read-ahead padding.
     padded: Vec<u8>,
     state: Box<FormatState>,
@@ -56,6 +62,9 @@ impl D3d11vaDecoder {
             ctx: ptr::null_mut(),
             // SAFETY: plain allocation, null-checked below.
             pkt: unsafe { ff::av_packet_alloc() },
+            sent_aus: 0,
+            // SAFETY: plain allocation, null-checked below.
+            scratch: unsafe { ff::av_frame_alloc() },
             padded: Vec::with_capacity(512 * 1024),
             state: Box::new(FormatState {
                 force_copy,
@@ -64,7 +73,7 @@ impl D3d11vaDecoder {
             pool: FramePool::new()?,
             copy: GpuCopy::new(device)?,
         };
-        if this.pkt.is_null() {
+        if this.pkt.is_null() || this.scratch.is_null() {
             return Err(CodecError::OutOfMemory);
         }
         let mut hw_device = device_context(device)?;
@@ -110,27 +119,51 @@ impl D3d11vaDecoder {
         self.padded.extend_from_slice(au);
         self.padded.resize(au.len() + PADDING, 0);
         let size = i32::try_from(au.len()).map_err(|_| CodecError::Corrupt)?;
-        // SAFETY: context and packet are live; the packet borrows `padded` only for this call
-        // (not reference-counted, so FFmpeg copies what it keeps).
-        let sent = unsafe {
-            (*self.pkt).data = self.padded.as_mut_ptr();
-            (*self.pkt).size = size;
-            let sent = ff::avcodec_send_packet(self.ctx, self.pkt);
-            (*self.pkt).data = ptr::null_mut();
-            (*self.pkt).size = 0;
-            sent
-        };
+        let mut sent = self.send(size);
+        if sent == EAGAIN {
+            // A picture is still waiting inside the decoder: drop it so this AU is not lost
+            // (a missing AU would break every frame that references it).
+            self.discard_pending();
+            sent = self.send(size);
+        }
+        self.sent_aus += 1;
         if self.state.failed {
             return Err(CodecError::NoHardwareDecoder(self.codec));
         }
-        if sent < 0 && sent != EAGAIN {
+        if sent < 0 {
             return Err(CodecError::Corrupt);
         }
         self.receive()
     }
 
+    /// Sends `padded[..size]` tagged with the AU index; returns FFmpeg's code.
+    fn send(&mut self, size: i32) -> i32 {
+        // SAFETY: context and packet are live; the packet borrows `padded` only for this call
+        // (not reference-counted, so FFmpeg copies what it keeps).
+        unsafe {
+            (*self.pkt).data = self.padded.as_mut_ptr();
+            (*self.pkt).size = size;
+            (*self.pkt).pts = self.sent_aus as i64;
+            let sent = ff::avcodec_send_packet(self.ctx, self.pkt);
+            (*self.pkt).data = ptr::null_mut();
+            (*self.pkt).size = 0;
+            sent
+        }
+    }
+
+    /// Takes the decoder's waiting picture (if any) and releases it at once.
+    fn discard_pending(&mut self) {
+        // SAFETY: live context and owned scratch frame; unref releases the surface right away.
+        unsafe {
+            ff::avcodec_receive_frame(self.ctx, self.scratch);
+            ff::av_frame_unref(self.scratch);
+        }
+    }
+
     fn receive(&mut self) -> Result<Option<RawFrame>, CodecError> {
         let Some(frame) = self.pool.take() else {
+            // The caller holds every pooled frame: this picture is dropped, the decoder keeps going.
+            self.discard_pending();
             return Ok(None);
         };
         // SAFETY: live context; `frame` is an empty pooled frame.
@@ -142,7 +175,7 @@ impl D3d11vaDecoder {
             return Err(CodecError::Corrupt);
         }
         // SAFETY: a D3D11 hw frame: data[0] is the ID3D11Texture2D of the pool, data[1] the slice.
-        let (texture, index, width, height) = unsafe {
+        let (texture, index, width, height, au_index) = unsafe {
             let f = &*frame.as_ptr();
             let raw = f.data[0].cast::<c_void>();
             let texture = ID3D11Texture2D::from_raw_borrowed(&raw)
@@ -151,7 +184,8 @@ impl D3d11vaDecoder {
             let index = u32::try_from(f.data[1] as usize).map_err(|_| CodecError::Corrupt)?;
             let width = u32::try_from(f.width).map_err(|_| CodecError::Corrupt)?;
             let height = u32::try_from(f.height).map_err(|_| CodecError::Corrupt)?;
-            (texture, index, width, height)
+            let au_index = u64::try_from(f.pts).map_err(|_| CodecError::Corrupt)?;
+            (texture, index, width, height, au_index)
         };
         let (texture, index) = if self.state.gpu_copy {
             let even = |v: u32| (v + 1) & !1;
@@ -165,6 +199,7 @@ impl D3d11vaDecoder {
             index,
             width,
             height,
+            au_index,
             _frame: frame,
         }))
     }
@@ -176,10 +211,11 @@ unsafe impl Send for D3d11vaDecoder {}
 
 impl Drop for D3d11vaDecoder {
     fn drop(&mut self) {
-        // SAFETY: both are owned here (or null); the free functions accept null.
+        // SAFETY: all owned here (or null); the free functions accept null.
         unsafe {
             ff::avcodec_free_context(&mut self.ctx);
             ff::av_packet_free(&mut self.pkt);
+            ff::av_frame_free(&mut self.scratch);
         }
     }
 }

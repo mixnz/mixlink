@@ -19,7 +19,7 @@
 - `CodecError`: `Ffmpeg { call, code, text }`, `NoHardwareDecoder(codec)`, `Corrupt`, `OutOfMemory`, `Win32`.
 - `AccessUnitParser` (`new`, `push(&mut &[u8]) -> Option<&[u8]>`, `flush`, `reset`): Annex-B → AUs, file mode.
 - `Decoder` (`new(&ID3D11Device, codec)`, `with_gpu_copy`, `decode(au) -> Option<DecodedFrame>`, `uses_gpu_copy`).
-- `DecodedFrame` (`texture`, `array_index`, `width`, `height`): holds the pool surface until dropped.
+- `DecodedFrame` (`texture`, `array_index`, `width`, `height`, `au_index`): holds the pool surface until dropped.
 - `has_hardware_decoder(&ID3D11Device, codec)`, `EXTRA_SURFACES` (4 frames the caller may hold).
 
 ## Notes
@@ -28,7 +28,8 @@
 - Decode runs on the presenter's device (no cross-device copy). Pool = NV12 array with
   `BIND_DECODER | BIND_SHADER_RESOURCE`; if the driver refuses, frames are GPU-copied into 3 own textures.
 - `decode` copies the AU into a padded buffer (FFmpeg reads up to 64 B past the end). Low delay, 1 thread,
-  no B-frames: one AU in, one frame out. Hardware decoders conceal most corrupt data (no `Corrupt`).
+  no B-frames: one AU in, one frame out. An AU is never dropped: when the caller holds every pooled
+  frame, the new picture is discarded instead. Hardware decoders conceal most corrupt data (no `Corrupt`).
 - Spike S4 (spec 0007): in the Session 0 service, encode only matches a user-session process with raised
   priority (ADR-0005 → Encode priority). NVENC takes `AV_PIX_FMT_D3D11` frames directly (BGRA or NV12);
   NV12 arrays with the render-target flag fail (`E_INVALIDARG`). QSV: derive from a multithread-protected

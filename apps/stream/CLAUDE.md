@@ -16,7 +16,8 @@ and present on a video thread; later network input (T9) and input capture (T10).
 
 ## Public API (process contract)
 - Stdout: `StreamToLauncher` JSON lines only — `Ready` after the first present, `Closed { reason }` before exit.
-- Stdin: `LauncherToStream::Stop`; EOF = launcher gone → closes with reason `Stopped`.
+- Stdin: `LauncherToStream::Stop`; EOF = launcher gone → closes with reason `Stopped` (not in `--play`
+  mode: no launcher there, only the window closes it).
 - Exit code 0 after `Closed`; non-zero only if the event loop fails to start or the arguments are bad (2).
 - Dev: `mixlink-stream --play <file.h264|.hevc> [--fps 120] [--loop] [--measure]` (spec 0013); stats on stderr
   at close. Test files: `scripts/make-test-stream.sh`.
