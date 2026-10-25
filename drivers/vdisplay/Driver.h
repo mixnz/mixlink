@@ -14,6 +14,8 @@
 
 #include <memory>
 #include <vector>
+#include <atomic>
+#include <algorithm>
 
 #include "Trace.h"
 
@@ -33,23 +35,6 @@ namespace Microsoft
 {
     namespace IndirectDisp
     {
-        /// <summary>
-        /// Manages the creation and lifetime of a Direct3D render device.
-        /// </summary>
-        struct IndirectSampleMonitor
-        {
-            static constexpr size_t szEdidBlock = 128;
-            static constexpr size_t szModeList = 3;
-
-            const BYTE pEdidBlock[szEdidBlock];
-            const struct SampleMonitorMode {
-                DWORD Width;
-                DWORD Height;
-                DWORD VSync;
-            } pModeList[szModeList];
-            const DWORD ulPreferredModeIdx;
-        };
-
         /// <summary>
         /// Manages the creation and lifetime of a Direct3D render device.
         /// </summary>
@@ -100,7 +85,6 @@ namespace Microsoft
             virtual ~IndirectDeviceContext();
 
             void InitAdapter();
-            void FinishInit(UINT ConnectorIndex);
 
         protected:
             WDFDEVICE m_WdfDevice;
@@ -122,3 +106,29 @@ namespace Microsoft
         } ;
     }
 }
+
+struct IndirectDeviceContextWrapper
+{
+    Microsoft::IndirectDisp::IndirectDeviceContext* pContext;
+
+    void Cleanup()
+    {
+        delete pContext;
+        pContext = nullptr;
+    }
+};
+
+struct IndirectMonitorContextWrapper
+{
+    Microsoft::IndirectDisp::IndirectMonitorContext* pContext;
+
+    void Cleanup()
+    {
+        delete pContext;
+        pContext = nullptr;
+    }
+};
+
+// Accessors for the wrappers as WDF object contexts (device / adapter, and monitor; spec 0015).
+WDF_DECLARE_CONTEXT_TYPE(IndirectDeviceContextWrapper);
+WDF_DECLARE_CONTEXT_TYPE(IndirectMonitorContextWrapper);

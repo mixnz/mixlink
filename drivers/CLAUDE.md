@@ -10,8 +10,11 @@
 - `vdisplay/`: IddCx virtual display. Microsoft `IddSampleDriver` (Windows-driver-samples
   `bb68ed5e770bce04dc5395ec9258dafab034184d`, MIT, `vdisplay/LICENSE`), renamed:
   hardware ID `Root\MixLinkVDisplay`, files `vdisplay.inf/.dll/.cat`. Code still uses `IddSample*` names.
-  - S2 (spec 0004): one monitor, 2560x1440@120. `SharedHeader` (`Global\MixLinkS2Frames` v2, mirrored in
-    the spike's `header.rs`); `FrameShare`: 4 shared textures + fence, or (L3) the slot names the surface.
+  - Spec 0015: no monitor until `ADD_MONITOR`. `Control.{h,cpp}`: interface GUID, IOCTLs (layout =
+    `apps/svc/src/display/wire.rs`), strict checks; INF SDDL SYSTEM + Admins. `Monitors.{h,cpp}`: `MonitorRegistry`
+    (≤ 4, modes from the request; a closed handle departs its monitors; no lock across IddCx calls).
+  - S2 (spec 0004): `SharedHeader` (`Global\MixLinkS2Frames` v2), `FrameShare`: 4 shared textures + fence, or
+    (L3) the slot names the surface. Only the first running swapchain publishes (`FrameShareClaim`).
   - S2b levers (spec 0005), `Levers.{h,cpp}`: registry `HKLM\SOFTWARE\MixLink\S2b\Levers` read per swapchain.
     L1 MMCSS "Pro Audio" critical, L2 `SetGPUThreadPriority(7)`, L3 `SurfaceShare.{h,cpp}` (shares the IddCx
     surface itself), L4 `SwapChain12`/`FrameShare12` (D3D12 copy queue, compiled only for IddCx >= 1.11).
