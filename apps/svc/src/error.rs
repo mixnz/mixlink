@@ -1,4 +1,5 @@
 use std::io;
+use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SvcError {
@@ -19,6 +20,17 @@ pub enum SvcError {
     StopTimeout,
     #[error("{0}")]
     Usage(String),
+    #[error(
+        "Driver package not found at {}. Build it with drivers/build.ps1 and pass --from <folder>.",
+        path.display()
+    )]
+    PackageMissing { path: PathBuf },
+    #[error("saved driver state is not valid: {0}")]
+    StateInvalid(String),
+    #[error("driver {step} failed: {detail}")]
+    Driver { step: &'static str, detail: String },
+    #[error("the signing key still exists after deletion")]
+    KeyNotDeleted,
 }
 
 #[cfg(windows)]

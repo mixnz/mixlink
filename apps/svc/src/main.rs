@@ -2,6 +2,7 @@
 //! for development; `install` / `uninstall` register it.
 
 mod args;
+mod drivers;
 mod error;
 mod log_setup;
 mod pipe;
@@ -62,6 +63,7 @@ fn run_mode(mode: Mode) -> Result<(), SvcError> {
             eprintln!("{message}");
             Ok(())
         }
+        Mode::Drivers(_) => Err(SvcError::Usage("drivers: not implemented yet".to_owned())),
     }
 }
 

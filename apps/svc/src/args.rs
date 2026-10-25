@@ -1,5 +1,7 @@
 //! Command line: which mode the process runs in.
 
+use std::path::PathBuf;
+
 use mixlink_core::svc_ipc::PIPE_NAME;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -12,9 +14,22 @@ pub enum Mode {
     },
     Install,
     Uninstall,
+    Drivers(DriversCmd),
 }
 
-pub const USAGE: &str = "usage: mixlink-svc [--console [--pipe <name>] | install | uninstall]";
+/// `drivers ...` subcommands (spec 0014).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DriversCmd {
+    /// `from`: folder with `<name>\[pkg\]` packages instead of `<exe dir>\drivers`.
+    Install {
+        from: Option<PathBuf>,
+    },
+    Uninstall,
+    Status,
+}
+
+pub const USAGE: &str = "usage: mixlink-svc [--console [--pipe <name>] | install | uninstall]\n       \
+     mixlink-svc drivers [install [--from <dir>] | uninstall | status]";
 
 /// Parses the arguments after the program name.
 pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, String> {
@@ -34,6 +49,12 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, Strin
         }),
         ["install"] => Ok(Mode::Install),
         ["uninstall"] => Ok(Mode::Uninstall),
+        ["drivers", "install"] => Ok(Mode::Drivers(DriversCmd::Install { from: None })),
+        ["drivers", "install", "--from", dir] => Ok(Mode::Drivers(DriversCmd::Install {
+            from: Some(PathBuf::from(dir)),
+        })),
+        ["drivers", "uninstall"] => Ok(Mode::Drivers(DriversCmd::Uninstall)),
+        ["drivers", "status"] => Ok(Mode::Drivers(DriversCmd::Status)),
         _ => Err(format!("unknown arguments: {}", args.join(" "))),
     }
 }
