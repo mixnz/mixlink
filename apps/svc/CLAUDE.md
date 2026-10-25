@@ -28,11 +28,12 @@ audio, input.
 - No args: started by the service manager. `--console [--pipe <name>]`: same work in this session.
 - `install` (admin): creates or updates service `MixLink` (LocalSystem, Automatic, this exe, restart after 5 s
   on the first 3 failures), then starts it. `uninstall` (admin): stops and deletes it; not installed = ok.
-- `drivers install [--from <dir>]` (admin): signs `vdisplay` + `vhid` with a fresh per-machine cert, installs
-  them, no prompt. Packages from `<exe dir>\drivers\<name>` or `--from` (`target\drivers`). `drivers uninstall`
-  (admin): devices, packages, certs. `drivers status`: no admin.
+- `drivers install [--from <dir>]` (admin): removes what is there (as `drivers uninstall`), then signs
+  `vdisplay` + `vhid` with a fresh per-machine cert and installs them, no prompt. Packages from
+  `<exe dir>\drivers\<name>` or `--from` (`target\drivers`). `drivers uninstall` (admin): devices,
+  packages, certs. `drivers status`: no admin.
 - Service mode logs to `%ProgramData%\MixLink\logs\svc.log`; console mode to stderr (`RUST_LOG`).
-- Exit codes: 0 ok, 1 error, 2 usage, 3 a program holds a MixLink device open (`drivers uninstall`).
+- Exit codes: 0 ok, 1 error, 2 usage, 3 a program holds a MixLink device open (`drivers install | uninstall`).
 
 ## Notes
 - The pipe carries input from any interactive user while we run as SYSTEM: parse strictly, close on

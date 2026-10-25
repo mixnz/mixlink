@@ -17,10 +17,15 @@ pub enum RemoveOutcome {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstallOutcome {
     Installed,
+    /// Something of ours was there and was removed first.
     Updated,
+    /// The first step (removing what was there) stopped at a device a program holds open.
+    Held {
+        app: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,7 +67,16 @@ pub fn install<H: DriverHost>(
     host: &mut H,
     sources: &[(&DriverSpec, PathBuf)],
 ) -> Result<InstallOutcome, SvcError> {
-    let old = host.load_state()?;
+    // Windows keeps an identical package as it is, still signed by the old certificate, so a
+    // reinstall cannot swap certificates in place: remove everything, then install as on a clean
+    // machine (spec 0014 → Install steps).
+    let specs: Vec<DriverSpec> = sources.iter().map(|(spec, _)| **spec).collect();
+    let updated = match uninstall(host, &specs)? {
+        UninstallOutcome::Removed => true,
+        UninstallOutcome::NothingInstalled => false,
+        UninstallOutcome::Held { app } => return Ok(InstallOutcome::Held { app }),
+    };
+
     let mut staged = Vec::with_capacity(sources.len());
     for (spec, source) in sources {
         staged.push((*spec, host.stage(spec, source)?));
@@ -90,29 +104,18 @@ pub fn install<H: DriverHost>(
 
     // From here on the state names everything, so a later install or uninstall can clean up.
     let mut new = DriverState {
-        cert_thumbprint: Some(thumb.clone()),
-        published: old.published.clone(),
+        cert_thumbprint: Some(thumb),
+        ..DriverState::default()
     };
     if let Err(error) = install_packages(host, &staged, &mut new) {
         let _ = host.save_state(&new);
         return Err(error);
     }
     host.save_state(&new)?;
-
-    for (name, published) in &old.published {
-        if new.published.get(name) != Some(published) {
-            host.uninstall_package(published)?;
-        }
-    }
-    for cert in host.our_certs()? {
-        if cert != thumb {
-            host.untrust_cert(&cert)?;
-        }
-    }
-    Ok(if old.is_empty() {
-        InstallOutcome::Installed
-    } else {
+    Ok(if updated {
         InstallOutcome::Updated
+    } else {
+        InstallOutcome::Installed
     })
 }
 

@@ -33,6 +33,7 @@ pub fn run(cmd: &DriversCmd) -> Result<(), SvcError> {
             let message = match flow::install(&mut host, &sources)? {
                 InstallOutcome::Installed => strings::DRIVERS_INSTALLED,
                 InstallOutcome::Updated => strings::DRIVERS_UPDATED,
+                InstallOutcome::Held { app } => return Err(SvcError::DeviceHeld(app)),
             };
             eprintln!("{message}");
         }

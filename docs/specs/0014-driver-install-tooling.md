@@ -39,7 +39,7 @@ build on a host where the drivers are installed this way. The driver build runs 
 ### Commands (process contract, extends spec 0012)
 | Command | Elevated | Does | Exit codes |
 |---|---|---|---|
-| `drivers install [--from <dir>]` | yes | install or update both drivers | 0 ok, 1 error |
+| `drivers install [--from <dir>]` | yes | remove what is there, then install both drivers | 0 ok, 1 error, 3 device held open |
 | `drivers uninstall` | yes | remove devices, packages, certificates | 0 ok or nothing installed, 1 error, 3 device held open |
 | `drivers status` | no | one line per driver + certificate state | 0 |
 - Package source: `<exe dir>\drivers\<name>\` (the `dist/` layout); `--from <dir>` points at a folder
@@ -52,6 +52,11 @@ build on a host where the drivers are installed this way. The driver build runs 
 ### Install steps (`drivers install`)
 Spec 0003 Verdict and 0008 Verdict set the order. `SetupSetNonInteractiveMode(TRUE)` is called first:
 any SetupAPI step that would show UI fails instead.
+0. **Remove what is there:** run the Uninstall steps below (devices, packages, every certificate with
+   our subject, state, staging). A held device → exit 3 as for `uninstall`; nothing is installed.
+   Reason (found on the machine, see Results): re-signing the same build gives a package Windows
+   reports as "Already Imported" and keeps as it is, with its catalog signed by the old certificate,
+   so certificates cannot be swapped in place. After step 0 every run is a first install.
 1. **Stage:** copy each package to `%ProgramData%\MixLink\drivers\<name>\` (recreated each run), folder
    DACL protected, SYSTEM + Administrators full control only. The source folder is never changed.
 2. **Certificate:** `CertCreateSelfSignCertificate` with a new CNG key (`NCryptCreatePersistedKey`,
@@ -66,13 +71,12 @@ any SetupAPI step that would show UI fails instead.
 7. **Install packages:** `DiInstallDriverW` per staged INF (no `DIIRFLAG_FORCE_INF`). Failure → stop.
 8. **Device nodes:** only now (spec 0003 C) create a root node per hardware ID that has none yet
    (`SetupDiCreateDeviceInfoW` + `SPDRP_HARDWAREID` + `DIF_REGISTERDEVICE`), then
-   `UpdateDriverForPlugAndPlayDevicesW` with `INSTALLFLAG_NONINTERACTIVE`. Existing nodes get the
-   update only.
-9. **Record and clean up:** write the state (below); on an update, remove the previous packages
-   (`DiUninstallDriverW` on their published `oem*.inf`) and the previous certificates, in that order.
-- Reruns are updates: a new certificate every time, old one removed only after the new packages are in.
-- A failure after step 5 and before step 9 leaves the new certificate trusted and records it, so the
-  next `install` or `uninstall` cleans it up. Nothing is left that the state does not name.
+   `UpdateDriverForPlugAndPlayDevicesW` with `INSTALLFLAG_NONINTERACTIVE`.
+9. **Record:** write the state (below).
+- A failure after step 5 and before step 9 leaves the new certificate trusted and records it (with the
+  packages installed so far), so the next `install` or `uninstall` cleans it up.
+- A reinstall that fails after step 0 leaves no drivers installed; running `install` again fixes it.
+- The virtual monitor disappears for a moment during a reinstall (devices are removed in step 0).
 
 ### Uninstall steps (`drivers uninstall`)
 1. For each device node with our hardware IDs: `CM_Query_And_Remove_SubTreeW` (no UI). A veto →
@@ -133,11 +137,12 @@ test-signing off), logged in the spec's Results like spec 0003.
   the virtual monitor appears; the certificate is in Root and TrustedPublisher; no private key exists
   for it (`certutil -store my` / key container check shows none).
 - [ ] After a reboot both devices are still OK.
-- [ ] `drivers install` again (update): exits 0, one certificate and one published INF per driver left.
+- [ ] `drivers install` again (reinstall): exits 0, one certificate (the new one) and one published INF per
+  driver left, one device each.
 - [ ] A package copy with one byte appended to its `.dll` (`--from` that copy) → install fails at verify,
-  no prompt, no device node, no certificate left.
-- [ ] Steam running with Steam Input: `drivers uninstall` exits 3 and asks to close Steam (by name or
-  as the usual holder); after closing Steam it exits 0.
+  no prompt; no MixLink device, package or certificate is left (step 0 already removed an earlier install).
+- [ ] Steam running with Steam Input using the virtual pad: `drivers uninstall` and `drivers install` exit 3
+  and ask to close Steam (by name or as the usual holder); after closing Steam they exit 0.
 - [ ] After `drivers uninstall`: no device, no `oem*.inf` for our drivers in the driver store, no
   certificate with our subject in either store, no `%ProgramData%\MixLink\drivers`, no state key.
   `drivers uninstall` again exits 0 ("nothing installed").
@@ -148,29 +153,43 @@ test-signing off), logged in the spec's Results like spec 0003.
   `dist/` uses them.
 
 ## Results
-Code landed with unit tests (flow order and rollback with a fake host, state, package lookup, status
-text, registry round trip on HKCU, user-scope cert + `SignerSignEx3` + catalog checks on the built `vhid`
-package: signed-untrusted gives `CERT_E_UNTRUSTEDROOT`, unsigned `TRUST_E_NOSIGNATURE`, a changed or
-extra file fails the member check). Done on the dev machine, not elevated:
-- `infverif /w` passes for both INFs (`scripts/check-drivers.sh`); the CI `drivers` job has not run yet.
-- `drivers status` without elevation: both "not installed", certificate "none", exit 0.
-- `drivers install` / `drivers uninstall` without elevation: "needs administrator rights", exit 1.
+Unit tests: flow order and rollback with a fake host (incl. reinstall = uninstall first, held device),
+state, package lookup, status text, registry round trip on HKCU, user-scope cert + `SignerSignEx3` +
+catalog checks on the built `vhid` package (signed-untrusted gives `CERT_E_UNTRUSTEDROOT`, unsigned
+`TRUST_E_NOSIGNATURE`, a changed or extra file fails the member check). Not elevated on the dev machine:
+`infverif /w` passes for both INFs; `drivers status` works; `install` / `uninstall` say "needs
+administrator rights", exit 1. The CI `drivers` job has not run yet.
 
-Elevated machine checks (the acceptance list above) are still to run on the main PC; record each here.
+Machine run 1, 2026-10-25, main PC (Windows 11 26H2, Secure Boot on, HVCI on, test-signing off), build
+with the first install design (reinstall swapped certificates in place):
+
+| Check | Result |
+|---|---|
+| Clean start | No MixLink device, package or certificate |
+| First install | Exit 0; `ROOT\DISPLAY\0000` + `ROOT\HIDCLASS\0000` Started, `oem18.inf` / `oem26.inf` signed by `MixLink Driver (this PC)`; cert in Root + TrustedPublisher, `HasPrivateKey False`, certutil "No key provider information", valid to 2046; state matches; staging ACL SYSTEM + Administrators only. Published names from `SetupCopyOEMInfW` match `pnputil` |
+| Reboot | Both devices Started, same packages and cert. Code Integrity: no event for our drivers; Kernel-PnP 219 for both at boot ("SCM not started yet", retried) |
+| Reinstall | **Failed**: `DiInstallDriverW` 0x80070103. setupapi: "Outcome - Already Imported (oem18.inf)", "No better matching drivers found", "No devices were updated". The new cert stayed trusted next to the old one, state named the new one; devices kept running |
+| Tampered `vhid.dll` | Exit 1 "vhid.dll is not in the catalog or was changed", no prompt, the run's cert removed, nothing else changed |
+| Uninstall (Steam open) | Exit 0: Steam did not hold the pad, so exit 3 is untested. Then no device (incl. non-present), no package, both certs gone, no state key, no staging folder; second uninstall "aren't installed", exit 0 |
+
+Fix after run 1: install step 0 (remove everything first), see Install steps. Run 2 must repeat first
+install, reinstall, held pad (Steam Input actively using the pad, e.g. Big Picture) and the `dist/` install.
+
+Observed, not explained: after the first install the main (physical) screen went black for a moment
+every 2–3 minutes. Logs show no driver crash or restart at those times; it stopped after disabling and
+re-enabling the virtual display and changing the refresh rate. Spec 0008 saw the physical monitor drop
+from 160 Hz to 120 Hz with the virtual monitor present. Watch for it in run 2 and note the times.
 
 Implementation notes:
 - Staging also secures `%ProgramData%\MixLink` itself (owner Administrators, protected DACL SYSTEM +
   Administrators, inherited by `logs\` and `drivers\`): a standard user could otherwise pre-create that
   folder and swap staged files between verify and install.
 - The published name comes from `SetupCopyOEMInfW` with `SP_COPY_NOOVERWRITE` (fails with
-  `ERROR_FILE_EXISTS` and names the existing `oemNN.inf`); the first elevated run confirms it.
-- A failed update keeps the old published INF of a driver not yet re-installed in the state, so
-  `uninstall` still removes it.
+  `ERROR_FILE_EXISTS` and names the existing `oemNN.inf`); confirmed in run 1.
 
 ## Open questions
 - Does `windows-latest` have the `WindowsUserModeDriver10.0` toolset (WDK VS component)? Checked with the
   first CI dispatch; if missing, the job adds the component with the VS installer before building.
 - Remove a held `vhid` at next boot instead of asking the user to close the app: decide when the
   installer UI exists (phase 2); T20 only reports the holder.
-- Does `vdisplay` (IddCx) behave the same from DIRID 13? Expected yes (current Microsoft samples use it);
-  the first two acceptance checks confirm it.
+- (Answered in run 1) `vdisplay` (IddCx) starts from DIRID 13 and survives a reboot.

@@ -161,38 +161,51 @@ fn state(thumb: &str, vdisplay: &str, vhid: &str) -> DriverState {
     s
 }
 
+/// A machine with nothing of ours on it.
+fn clean_host() -> FakeHost {
+    let mut host = FakeHost::new();
+    host.no_devices = true;
+    host
+}
+
+/// The steps of `uninstall` on a clean machine, which `install` always runs first.
+const CLEAN_UNINSTALL: [&str; 5] = [
+    "load_state",
+    "remove_devices vdisplay",
+    "remove_devices vhid",
+    "our_certs",
+    "clear_state",
+];
+
 #[test]
 fn install_fresh_order() {
-    let mut host = FakeHost::new();
+    let mut host = clean_host();
     let outcome = install(&mut host, &sources()).unwrap();
     assert_eq!(outcome, InstallOutcome::Installed);
-    assert_eq!(
-        host.log,
-        [
-            "load_state",
-            "stage vdisplay",
-            "stage vhid",
-            "create_cert T1",
-            "sign T1 vdisplay.cat",
-            "sign T1 vhid.cat",
-            "delete_key T1",
-            "trust T1",
-            "verify vdisplay.cat",
-            "verify vhid.cat",
-            "install_package vdisplay.inf",
-            "install_package vhid.inf",
-            "ensure_device vdisplay",
-            "ensure_device vhid",
-            "save_state",
-            "our_certs",
-        ]
-    );
+    let mut expected: Vec<&str> = CLEAN_UNINSTALL.to_vec();
+    expected.extend([
+        "stage vdisplay",
+        "stage vhid",
+        "create_cert T1",
+        "sign T1 vdisplay.cat",
+        "sign T1 vhid.cat",
+        "delete_key T1",
+        "trust T1",
+        "verify vdisplay.cat",
+        "verify vhid.cat",
+        "install_package vdisplay.inf",
+        "install_package vhid.inf",
+        "ensure_device vdisplay",
+        "ensure_device vhid",
+        "save_state",
+    ]);
+    assert_eq!(host.log, expected);
     assert_eq!(host.saved, Some(state("T1", "oem10.inf", "oem11.inf")));
 }
 
 #[test]
 fn install_devices_after_all_packages() {
-    let mut host = FakeHost::new();
+    let mut host = clean_host();
     install(&mut host, &sources()).unwrap();
     let last_package = *host.index("install_package").last().unwrap();
     assert!(
@@ -204,14 +217,14 @@ fn install_devices_after_all_packages() {
 
 #[test]
 fn install_key_deleted_before_trust() {
-    let mut host = FakeHost::new();
+    let mut host = clean_host();
     install(&mut host, &sources()).unwrap();
     assert!(host.index("delete_key")[0] < host.index("trust")[0]);
 }
 
 #[test]
 fn install_sign_failure_deletes_key() {
-    let mut host = FakeHost::new();
+    let mut host = clean_host();
     host.fail_on = Some("sign T1 vhid.cat".to_owned());
     assert!(install(&mut host, &sources()).is_err());
     assert!(host.has("delete_key T1"));
@@ -221,7 +234,7 @@ fn install_sign_failure_deletes_key() {
 
 #[test]
 fn install_verify_failure_rolls_back() {
-    let mut host = FakeHost::new();
+    let mut host = clean_host();
     host.fail_on = Some("verify vhid.cat".to_owned());
     assert!(install(&mut host, &sources()).is_err());
     assert!(host.has("untrust T1"));
@@ -232,7 +245,7 @@ fn install_verify_failure_rolls_back() {
 
 #[test]
 fn install_package_failure_records_cert() {
-    let mut host = FakeHost::new();
+    let mut host = clean_host();
     host.fail_on = Some("install_package vhid.inf".to_owned());
     assert!(install(&mut host, &sources()).is_err());
     let mut expected = DriverState {
@@ -246,39 +259,67 @@ fn install_package_failure_records_cert() {
     assert!(!host.has("ensure_device"));
 }
 
+/// Reinstalling the same build: Windows keeps an identical package as it is (spec 0014 → Results),
+/// so everything old goes first and the install starts from a clean machine.
 #[test]
-fn install_update_removes_old_after_new() {
+fn install_again_uninstalls_everything_first() {
     let mut host = FakeHost::new();
     host.state = state("T0", "oem3.inf", "oem4.inf");
     host.certs = vec!["T0".to_owned()];
     let outcome = install(&mut host, &sources()).unwrap();
     assert_eq!(outcome, InstallOutcome::Updated);
-    let saved = host.index("save_state")[0];
-    assert!(host.index("uninstall_package oem3.inf")[0] > saved);
-    assert!(host.index("uninstall_package oem4.inf")[0] > saved);
-    assert_eq!(host.log.last().unwrap(), "untrust T0");
+    let first_stage = host.index("stage")[0];
+    for step in [
+        "remove_devices vdisplay",
+        "remove_devices vhid",
+        "uninstall_package oem3.inf",
+        "uninstall_package oem4.inf",
+        "untrust T0",
+        "clear_state",
+    ] {
+        assert!(host.index(step)[0] < first_stage, "{step} after staging");
+    }
     assert_eq!(host.certs, ["T1"]);
     assert_eq!(host.saved, Some(state("T1", "oem10.inf", "oem11.inf")));
 }
 
 #[test]
-fn install_same_published_kept() {
+fn install_held_changes_nothing_else() {
     let mut host = FakeHost::new();
     host.state = state("T0", "oem3.inf", "oem4.inf");
-    host.republish
-        .insert("vdisplay".to_owned(), "oem3.inf".to_owned());
-    install(&mut host, &sources()).unwrap();
-    assert!(!host.has("uninstall_package oem3.inf"));
-    assert!(host.has("uninstall_package oem4.inf"));
+    host.certs = vec!["T0".to_owned()];
+    host.held = Some("Steam");
+    let outcome = install(&mut host, &sources()).unwrap();
+    assert_eq!(
+        outcome,
+        InstallOutcome::Held {
+            app: Some("Steam".to_owned())
+        }
+    );
+    assert!(!host.has("uninstall_package"));
+    assert!(!host.has("untrust"));
+    assert!(!host.has("stage"));
+    assert!(!host.has("create_cert"));
 }
 
 #[test]
-fn install_removes_stray_certs() {
-    let mut host = FakeHost::new();
+fn install_removes_stray_certs_first() {
+    let mut host = clean_host();
     host.certs = vec!["TX".to_owned()];
-    install(&mut host, &sources()).unwrap();
-    assert!(host.has("untrust TX"));
-    assert!(!host.has("untrust T1"));
+    let outcome = install(&mut host, &sources()).unwrap();
+    assert_eq!(outcome, InstallOutcome::Updated);
+    assert!(host.index("untrust TX")[0] < host.index("stage")[0]);
+    assert_eq!(host.certs, ["T1"]);
+}
+
+#[test]
+fn install_uninstall_failure_stops() {
+    let mut host = FakeHost::new();
+    host.state = state("T0", "oem3.inf", "oem4.inf");
+    host.fail_on = Some("uninstall_package oem4.inf".to_owned());
+    assert!(install(&mut host, &sources()).is_err());
+    assert!(!host.has("stage"));
+    assert!(!host.has("create_cert"));
 }
 
 #[test]
@@ -357,14 +398,4 @@ fn uninstall_package_failure_keeps_certs() {
     assert!(uninstall(&mut host, &DRIVERS).is_err());
     assert!(!host.has("untrust"));
     assert!(!host.has("clear_state"));
-}
-
-#[test]
-fn install_update_failure_keeps_old_entries() {
-    let mut host = FakeHost::new();
-    host.state = state("T0", "oem3.inf", "oem4.inf");
-    host.fail_on = Some("install_package vhid.inf".to_owned());
-    assert!(install(&mut host, &sources()).is_err());
-    assert_eq!(host.saved, Some(state("T1", "oem10.inf", "oem4.inf")));
-    assert!(!host.has("uninstall_package"));
 }
