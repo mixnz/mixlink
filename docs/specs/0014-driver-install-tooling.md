@@ -148,7 +148,7 @@ test-signing off), logged in the spec's Results like spec 0003.
   `drivers uninstall` again exits 0 ("nothing installed").
 - [x] `drivers status` shows each state above correctly and works without elevation.
 - [x] Not elevated: `install` / `uninstall` print "run as administrator", exit 1, change nothing.
-- [ ] `infverif /w` passes for `vdisplay.inf` and `vhid.inf`; the CI `drivers` job builds both.
+- [x] `infverif /w` passes for `vdisplay.inf` and `vhid.inf`; the CI `drivers` job builds both.
 - [x] `build.sh release` puts both unsigned packages in `dist/drivers/`, and `drivers install` run from
   `dist/` uses them.
 
@@ -158,7 +158,7 @@ state, package lookup, status text, registry round trip on HKCU, user-scope cert
 catalog checks on the built `vhid` package (signed-untrusted gives `CERT_E_UNTRUSTEDROOT`, unsigned
 `TRUST_E_NOSIGNATURE`, a changed or extra file fails the member check). Not elevated on the dev machine:
 `infverif /w` passes for both INFs; `drivers status` works; `install` / `uninstall` say "needs
-administrator rights", exit 1. The CI `drivers` job has not run yet.
+administrator rights", exit 1. CI run 40203124325 (all jobs) green, incl. `drivers`.
 
 Machine run 1, 2026-10-25, main PC (Windows 11 26H2, Secure Boot on, HVCI on, test-signing off), build
 with the first install design (reinstall swapped certificates in place):
@@ -206,8 +206,8 @@ Implementation notes:
   `ERROR_FILE_EXISTS` and names the existing `oemNN.inf`); confirmed in run 1.
 
 ## Open questions
-- Does `windows-latest` have the `WindowsUserModeDriver10.0` toolset (WDK VS component)? Checked with the
-  first CI dispatch; if missing, the job adds the component with the VS installer before building.
+- (Answered by CI run 40203124325) `windows-latest` has the `WindowsUserModeDriver10.0` toolset: the
+  `drivers` job builds both drivers and passes `infverif /w` with no extra install step.
 - Remove a held `vhid` at next boot instead of asking the user to close the app: decide when the
   installer UI exists (phase 2); T20 only reports the holder.
 - (Answered in run 1) `vdisplay` (IddCx) starts from DIRID 13 and survives a reboot.
