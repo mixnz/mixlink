@@ -25,7 +25,7 @@ its spec; a failed spike switches to the fallback its ADR names before dependent
 | T4 | UDP layer: socket setup, send/recv threads, SPSC queues | net | T3 | [0011](../specs/0011-udp-transport.md) | done |
 | T19 | Service shell: `apps/svc` as service + `--console`, install/uninstall, named pipe to host tray | svc, host, core | T1, T2, T17 | [0012](../specs/0012-service-shell.md) | done |
 | T20 | Driver install tooling: per-machine cert, sign catalog, install/uninstall `vdisplay` + `vhid`, WDK build in gate/CI | drivers, svc | T14, T19 | [0014](../specs/0014-driver-install-tooling.md) | done |
-| T21 | Virtual display: add/remove monitor in client mode, stable EDID per client, render adapter, topology save/restore, monitor before login | drivers, svc | T15, T20 | — | todo |
+| T21 | Virtual display: add/remove monitor in client mode, stable EDID per client, render adapter, topology save/restore, monitor before login | drivers, svc | T15, T20 | [0015](../specs/0015-virtual-display.md) | wip |
 | T22 | Virtual HID driver: keyboard, mouse (relative + absolute), gamepad; IOCTL report feed | drivers, input | T16, T20 | — | todo |
 | T5 | LAN discovery (mDNS + broadcast fallback) in the service, host list in the launcher | net, svc, client | T4, T19 | — | todo |
 | T6 | Pairing: PIN on host tray, entry on client, X25519 + AES-128-GCM session | net, proto, svc, host, client | T5 | — | todo |

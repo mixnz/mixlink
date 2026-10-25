@@ -2364,6 +2364,9 @@ dependencies = [
  "env_logger",
  "log",
  "mixlink-core",
+ "mixlink-proto",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
  "windows",
 ]
