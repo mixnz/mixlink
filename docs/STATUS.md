@@ -33,10 +33,11 @@ Details live in each spec; one line per item here.
   CI `drivers` job and `build.sh release` (`dist/drivers/`).
 
 ## In progress
-- T20 machine run 2 (spec 0014 → Results): run 1 passed first install, reboot, tampered package, uninstall;
-  reinstall failed ("Already Imported") → `drivers install` now removes everything first. Repeat first install,
-  reinstall, Steam-held pad, `dist/` install before `/land`. Watch for the physical screen blanking. First CI
-  dispatch answers whether `windows-latest` has the WDK toolset.
+- T20 on branch `0014-driver-install-tooling`: machine runs 1 + 2 pass (spec 0014 → Results); reinstall now
+  removes everything first. Open before `/land`: CI `drivers` job (does `windows-latest` have the WDK
+  toolset?), Steam itself holding the pad (exit 3 proven with a test helper only).
+- Main PC: MixLink drivers installed from `dist/` (`mixlink-svc drivers status`), kept for T21 / T22. One-off
+  physical-screen blanking after run 1's install not reproduced (also not at 160 + 120 Hz).
 - Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
   machine: ViGEmBus may still be installed (Settings → Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
 

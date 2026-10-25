@@ -133,23 +133,23 @@ None: install-time only, no hot path touched. DIRID 13 changes where `vdisplay.d
 ## Acceptance criteria
 Machine checks run by the user in an elevated terminal on the main PC (Secure Boot on, HVCI on,
 test-signing off), logged in the spec's Results like spec 0003.
-- [ ] Clean machine: `drivers install` exits 0 with no Windows prompt; both devices OK, problem code 0;
+- [x] Clean machine: `drivers install` exits 0 with no Windows prompt; both devices OK, problem code 0;
   the virtual monitor appears; the certificate is in Root and TrustedPublisher; no private key exists
   for it (`certutil -store my` / key container check shows none).
-- [ ] After a reboot both devices are still OK.
-- [ ] `drivers install` again (reinstall): exits 0, one certificate (the new one) and one published INF per
+- [x] After a reboot both devices are still OK.
+- [x] `drivers install` again (reinstall): exits 0, one certificate (the new one) and one published INF per
   driver left, one device each.
 - [ ] A package copy with one byte appended to its `.dll` (`--from` that copy) → install fails at verify,
   no prompt; no MixLink device, package or certificate is left (step 0 already removed an earlier install).
 - [ ] Steam running with Steam Input using the virtual pad: `drivers uninstall` and `drivers install` exit 3
   and ask to close Steam (by name or as the usual holder); after closing Steam they exit 0.
-- [ ] After `drivers uninstall`: no device, no `oem*.inf` for our drivers in the driver store, no
+- [x] After `drivers uninstall`: no device, no `oem*.inf` for our drivers in the driver store, no
   certificate with our subject in either store, no `%ProgramData%\MixLink\drivers`, no state key.
   `drivers uninstall` again exits 0 ("nothing installed").
-- [ ] `drivers status` shows each state above correctly and works without elevation.
-- [ ] Not elevated: `install` / `uninstall` print "run as administrator", exit 1, change nothing.
+- [x] `drivers status` shows each state above correctly and works without elevation.
+- [x] Not elevated: `install` / `uninstall` print "run as administrator", exit 1, change nothing.
 - [ ] `infverif /w` passes for `vdisplay.inf` and `vhid.inf`; the CI `drivers` job builds both.
-- [ ] `build.sh release` puts both unsigned packages in `dist/drivers/`, and `drivers install` run from
+- [x] `build.sh release` puts both unsigned packages in `dist/drivers/`, and `drivers install` run from
   `dist/` uses them.
 
 ## Results
@@ -172,13 +172,31 @@ with the first install design (reinstall swapped certificates in place):
 | Tampered `vhid.dll` | Exit 1 "vhid.dll is not in the catalog or was changed", no prompt, the run's cert removed, nothing else changed |
 | Uninstall (Steam open) | Exit 0: Steam did not hold the pad, so exit 3 is untested. Then no device (incl. non-present), no package, both certs gone, no state key, no staging folder; second uninstall "aren't installed", exit 0 |
 
-Fix after run 1: install step 0 (remove everything first), see Install steps. Run 2 must repeat first
-install, reinstall, held pad (Steam Input actively using the pad, e.g. Big Picture) and the `dist/` install.
+Fix after run 1: install step 0 (remove everything first), see Install steps.
 
-Observed, not explained: after the first install the main (physical) screen went black for a moment
-every 2–3 minutes. Logs show no driver crash or restart at those times; it stopped after disabling and
-re-enabling the virtual display and changing the refresh rate. Spec 0008 saw the physical monitor drop
-from 160 Hz to 120 Hz with the virtual monitor present. Watch for it in run 2 and note the times.
+Machine run 2, same day and PC, build `f4fb36c` (step 0 in place); drivers left installed afterwards:
+
+| Check | Result |
+|---|---|
+| Clean start | Same as the end of run 1 |
+| First install | Exit 0 "installed", no prompt; both Started; one package each (`oem18` / `oem26`), cert `F2E51CFB…` in both stores, no private key; virtual monitor shown |
+| Reinstall | Exit 0 "updated"; only the new cert `FF765827…` left, one package and one device each. setupapi: both packages "Outcome - Imported", SUCCESS. Both driver-store catalogs `Valid`, signed by the new cert |
+| Held pad | `target/hold-vhid.ps1` (test helper, not committed) opened all 5 `vhid` HID collections, like Steam Input's open handle: `install` and `uninstall` both exit 3 "A program is using the MixLink virtual controller, usually Steam…"; `vdisplay` device already removed, `vhid` and cert kept. After releasing, `install` exit 0 "updated" |
+| `dist/` install | `build.sh release`, then `dist\mixlink-svc.exe drivers install` (no `--from`): exit 0, packages version 20.52 / 20.53 (the release build), one cert |
+
+- setupapi shows `FAILURE(0x00000050)` sections after each import: that is the `SetupCopyOEMInfW`
+  published-name query getting `ERROR_FILE_EXISTS` on purpose, not an error.
+- Steam (open, logged in) never held the pad in either run, so exit 3 was proven with the helper only;
+  the Steam row stays open. The tampered-package row was checked in run 1 only (verify path unchanged;
+  with step 0 it also removes an earlier install first).
+
+Physical screen blanking (run 1 only): after the first install of run 1 the main (physical) screen went
+black for a moment every 2–3 minutes. Logs show no driver crash or restart at those times; it stopped
+after disabling and re-enabling the virtual display. Not reproduced in run 2: 5 min with both displays at
+120 Hz, then 10 min with the physical display at 160 Hz and the virtual one at 120 Hz (checked with
+`EnumDisplaySettings`), no blanking, no WUDF / Display / Kernel-PnP event. A mixed refresh rate is not the
+cause; the likeliest difference is run 1's half-reinstalled state (two trusted certs, state naming the new
+one). Watch for it when T21 adds and removes monitors.
 
 Implementation notes:
 - Staging also secures `%ProgramData%\MixLink` itself (owner Administrators, protected DACL SYSTEM +

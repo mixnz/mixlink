@@ -95,6 +95,8 @@ Notes:
 - **Main display switch:** `ChangeDisplaySettingsEx` with `CDS_SET_PRIMARY` returned `DISP_CHANGE_FAILED` (-1)
   for the virtual monitor (user switched in Settings); switching back to the physical one worked (0).
 - With the virtual monitor main, the physical monitor ran at 120 Hz instead of 160 Hz; back to 160 Hz after.
+  (Corrected 2026-10-25, spec 0014: the user had set 120 Hz by hand to measure frames on the 120 Hz virtual
+  monitor; Windows did not lower it. Physical 160 Hz + virtual 120 Hz runs fine.)
 
 ### Verdict: launch risk passes for EA Javelin and Easy Anti-Cheat
 With our per-machine signed `vdisplay` and `vhid` drivers and their certificates installed, Apex Legends
