@@ -4,3 +4,5 @@
 *.ico binary
 *.dll binary
 *.exe binary
+*.h264 binary
+*.hevc binary
