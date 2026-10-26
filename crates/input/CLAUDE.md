@@ -2,7 +2,7 @@
 
 > Module card. Keep <= 50 lines. Update when the public API changes.
 
-**Purpose:** Client: capture keyboard, raw relative mouse, gamepad. Host: build HID reports for `drivers/vhid` (ADR-0007, spec 0016), SendInput fallback.
+**Purpose:** Client: capture keyboard, raw relative mouse, gamepad. Host: build HID reports for `drivers/vhid` (ADR-0007, ADR-0009, spec 0016), SendInput fallback.
 **Depends on:** mixlink-core (`device_io`).
 **Hot path:** yes — every input event; send immediately, never batch per frame.
 
@@ -29,5 +29,6 @@
 ## Notes
 - The feed goes to the control node `Root\MixLinkVHidCtl` (SYSTEM + Admins only), which shares a WUDFHost
   with the HID nodes; an interface on a HID node is refused by hidclass (spec 0016).
-- Pads are separate nodes `Root\VID_045E&PID_0B13&IG_00` per slot; the inbox `xinputhid` makes them XInput.
+- Pads are separate software devices `SWD\MixLinkPad\000N` per slot (hardware ID
+  `Root\VID_045E&PID_0B13&IG_00`, ADR-0009); the inbox `xinputhid` makes them XInput.
   A target whose pad has no node fails with `NotPaired`.

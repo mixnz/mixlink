@@ -3,7 +3,7 @@
 ; Root nodes, one vhid.dll, one WUDFHost (same DeviceGroupId, spec 0016):
 ; - Root\MixLinkVHid: UMDF 2 HID minidriver (keyboard / mouse); mshidumdf.sys (inbox) sits above it.
 ; - Root\MixLinkVHidCtl: plain UMDF function driver; the service feeds reports through its interface.
-; - Root\VID_045E&PID_0B13&IG_00: a virtual Xbox pad (one node per slot, created by the service), same
+; - Root\VID_045E&PID_0B13&IG_00: a virtual Xbox pad (software device SWD\MixLinkPad\000N per slot), same
 ;   install sections as the HID node; its HID child is HID\VID_045E&PID_0B13&IG_00, which the inbox
 ;   xinputhid.inf binds.
 ; Needs build 22000+.

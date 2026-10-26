@@ -1,6 +1,6 @@
 # 0016 — Virtual HID: keyboard, mouse and virtual Xbox pads with an IOCTL report feed
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-26
 **Roadmap:** T22
 **Plan:** [0016-virtual-hid](../plans/0016-virtual-hid.md) (local only, written by writing-plans skill)
@@ -118,7 +118,7 @@ polling (`input probe --device pad`). Release build, elevated.
 
 ## Acceptance criteria
 - [x] Only SYSTEM and Administrators can open the feed; a normal user's open fails (access denied).
-- [ ] Device Manager shows no vendor-defined MixLink device; with no pad added, no MixLink controller exists.
+- [x] Device Manager shows no vendor-defined MixLink device; with no pad added, no MixLink controller exists.
 - [x] `input try --script all` moves the cursor, types F13–F24, no event flagged injected (LL hook).
 - [x] Holding a key / pad button, then killing the feeder: released at once.
 - [x] A second feeder while the service runs gets "in use by the MixLink service".
@@ -144,6 +144,7 @@ polling (`input probe --device pad`). Release build, elevated.
 | Virtual Xbox pad probe (`pad-add --slot 0`) | With hardware ID `Root\MixLinkXboxPad` the child got `HID\MixLinkXboxPad` (generic `input.inf`): the child ID comes from the parent's **hardware** ID, not its instance ID. With `Root\VID_045E&PID_0B13&IG_00`: child `HID\VID_045E&PID_0B13&IG_00`, driver `xinputhid.inf`, UpperFilters `xinputhid`, name "Xbox Wireless Controller". XInput index 0 connected; WGI `Gamepad` count 1; DirectInput and WGI RawGameController list it (045E:0B13). Steam: "Xbox Series X Controller" (USB) with Details, **no "Begin Setup"**. Container ID not settable on the root node (access denied, logged). |
 | Two pads, root nodes | Both had the null container `{00000000-0000-0000-FFFF-FFFFFFFFFFFF}`: XInput **index 0 and 2** (1 skipped); WGI `Gamepad` 2. |
 | Two pads, software devices | `SWD\MixLinkPad\0000` / `0001`, containers `…0000` / `…0001`, children on `xinputhid.inf`: XInput **index 0 and 1**, WGI `Gamepad` 2, DirectInput 2. Steam: Xbox Series X Controller, no "Begin Setup"; Test: LT 0 → max, A. `pad-remove --slot 1` leaves one. A devnode uninstall alone (`DiUninstallDevice`) did not delete a `ParentPresent` device: it came back at the next enumeration, so removal goes through the software device API (Design). |
+| Drivers installed, no pad | `ROOT\HIDCLASS\0000` children: keyboard, 2 mice only. Both vendor-defined HID devices are USB hardware (`05AC:024F`, `0B05:19AF`). DirectInput none, WGI `Gamepad` 0, XInput none. |
 | Pad in a game, Steam Input off | Wuchang: `rt 100` = thrust, `rt` (500 ms) and `rt 2000` = charged attack. |
 | `input probe --device pad` (XInput), release, elevated | p50 0.14 / **p99 0.47** / max 1.44 ms, 10 000 sent, 0 lost. |
 | Kill the feeder holding `rt 8000` | Steam Test: RT back to 0 at once. |

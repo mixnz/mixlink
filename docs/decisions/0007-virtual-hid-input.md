@@ -1,6 +1,7 @@
 # 0007 — Host input through virtual HID devices
 
-**Status:** accepted · 2026-10-22
+**Status:** accepted · 2026-10-22 · gamepad part superseded by
+[ADR-0009](0009-virtual-xbox-pads.md) (virtual Xbox pads; no generic HID pad, no default ViGEmBus)
 
 ## Context
 `SendInput` marks events as injected (`LLKHF_INJECTED` / `LLMHF_INJECTED`); some games and

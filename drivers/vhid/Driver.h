@@ -1,7 +1,7 @@
 /*++
     Driver.h — MixLink virtual HID (from vhidmini2, Windows-driver-samples, MS-PL).
-    Root nodes, one DLL (spec 0016): the keyboard / mouse HID node (keyboard 1, mouse relative 2,
-    mouse absolute 3), virtual Xbox pad nodes (one per slot) and the control node the service feeds
+    Nodes of one DLL (spec 0016): the keyboard / mouse HID node (keyboard 1, mouse relative 2,
+    mouse absolute 3), virtual Xbox pad software devices (one per slot) and the control node the service feeds
     them through (Control.c). All run in one WUDFHost (same WUDF DeviceGroupId).
 --*/
 #pragma once

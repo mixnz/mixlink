@@ -2,13 +2,13 @@
 
 > Replace content each update; keep ≤ 80 lines. History lives in git, not here.
 
-**Updated:** 2026-10-25
+**Updated:** 2026-10-26
 **Phase:** 1 — LAN MVP
 
 ## Done
 Details live in each spec; one line per item here.
 - Phase 0: repo rules, architecture docs, gate (`scripts/gate.sh`), CI on dispatch (`scripts/ask-ci.sh`),
-  `/execute` `/land` `/watch-ci`, Cargo workspace (toolchain 1.99.1). ADRs 0001–0008 accepted.
+  `/execute` `/land` `/watch-ci`, Cargo workspace (toolchain 1.99.1). ADRs 0001–0009 accepted.
 - T1 app shells (0002): Tauri launcher + host tray, `apps/stream` winit + D3D11 `Presenter`, launcher ↔
   stream JSON-lines IPC, npm workspace with `@mixlink/i18n` (`en` only); `build.sh release` → `dist/`.
 - T14 spike S1 (0003): ADR-0004 holds; `drivers/build.ps1` (NuGet WDK `10.0.28000.2526`), per-machine signing.
@@ -36,11 +36,15 @@ Details live in each spec; one line per item here.
   `host.json`), restore the layout; in Session 0 through a console-session helper (`display-agent`, CCD is
   denied there); service start restores a crash-left layout and adds a headless 1080p60 monitor. Main PC runs
   pass (spec 0015 → Results), incl. headless cold boot.
+- T22 virtual HID (0016): only the service (SYSTEM / Admins) feeds `vhid` through a control node; feeder exit =
+  everything released; NKRO keyboard, relative + absolute mouse reach UAC and the lock screen. Pads are virtual
+  Xbox Series pads (ADR-0009): software devices `SWD\MixLinkPad\000N` per slot, inbox `xinputhid`, XInput
+  index = slot, Steam with no setup. `input pad | pad-add | pad-remove | probe`. p99: kbd 0.69, abs 0.43, pad 0.47 ms.
 
 ## In progress
 - T21 open rows (spec 0015): frame grab of login / lock screen on the headless monitor (T7 harness), power cut
   during a session, iGPU + dGPU host.
-- Main PC: T21 drivers installed from `target\drivers`, MixLink service removed after the runs.
+- Main PC: drivers from `target\drivers` (T22 runs end with `drivers uninstall`), MixLink service removed.
 - Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
   machine: ViGEmBus may still be installed (Settings → Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
 
@@ -48,14 +52,15 @@ Details live in each spec; one line per item here.
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
 - 60 Hz clients: `Present` blocks the video thread at vblank, AUs wait 2–6 ms before decode (spec 0013 →
   Latency impact). Use the frame-latency waitable object in T9 or phase 3.
-- Roadmap phase 1: T5 (discovery in the service), T22 (virtual HID), T7 unblocked. Needs a
-  roadmap row: physical monitor plugged in while headless is main (login prompt stays on the virtual monitor).
-- Spec 0014 open rows: Steam itself holding the pad (exit 3 proven with a held-handle helper only), tampered
-  package with the remove-first install. Check when T22 / T12 use the pad with Steam.
+- Roadmap phase 1: T5 (discovery in the service), T7 unblocked. Needs a roadmap row: physical monitor
+  plugged in while headless is main (login prompt stays on the virtual monitor).
+- Spec 0014 open row: tampered package with the remove-first install. (Steam open on a pad: `drivers
+  uninstall` passes, pads unplug, spec 0016.)
+- T12 creates a pad per client gamepad; rumble (report 0x03) is kept per pad, not yet sent to the client.
 - Inputs for later rows: T7 ← 0005, 0007 Verdict (encode levers, QSV pool), 0015 (frame share: only the first
   running swapchain publishes, replace with a share per monitor); T9 ← 0015 (`session::begin` / `end` per client
   session, HDR row later); T11 ← 0007 (10 ms loopback, silence fill); T22 / T12 ← 0006 Verdict; T9 decides cursor
-  shape recovery. T22 releases its driver handle before `drivers uninstall` (the service is stopped first).
+  shape recovery.
 - Phase 3 notes: keep CPU / NIC awake while streaming, pacing, measure all power modes (spec 0011).
 
 ## Open questions

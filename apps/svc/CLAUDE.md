@@ -18,14 +18,15 @@ installs our drivers (spec 0014), drives the virtual display (0015), holds virtu
   `topology.rs`, `store.rs` (`topology.json`), `ports.rs` (`DisplayDriver`, `DisplayConfig`), `session.rs`
   (`begin` / `end` / `start_up`), `agent.rs` (helper protocol). Windows: `service.rs` (thread `svc-display`;
   Session 0 → helper), `commands.rs`. `host_config.rs`: `%ProgramData%\MixLink\host.json`.
-- `input/` (spec 0016, Windows): `open_feeder` (open `vhid`, feed neutral reports to own it; `run.rs` holds
-  it), `status.rs`, `script.rs` (`steps`, `play` for `input try`), `commands.rs`.
+- `input/` (spec 0016, ADR-0009): `feeder.rs` (`open_feeder`; `run.rs` holds it), `pads.rs` (`PadHost`, `add`,
+  `remove`, `remove_all`), `pad_ids.rs`, `padmap.rs`, `script.rs`, `probe*.rs`, `status.rs`, `commands.rs`.
 - `platform/windows/` (all `unsafe`): `service.rs`, `install.rs` (`is_running`), `pipe.rs`, `security.rs`,
   `console.rs` (Ctrl+C); drivers: `cert.rs` + `cert_der.rs`, `sign.rs`, `trust_store.rs`, `catalog.rs`,
   `driver_store.rs`, `devices.rs` (root nodes, veto), `drivers_reg.rs`, `dir_security.rs`, `drivers_host.rs`
   (`WindowsDriverHost`, `is_elevated`); display: `vdisplay.rs`, `ccd.rs` + `display_config.rs`,
-  `display_agent.rs` + `console_process.rs` (helper as SYSTEM in the console session), `gpu_name.rs`.
-- `tests/console_mode.rs`: the binary with `--console --pipe <name>` serves the pipe.
+  `display_agent.rs` + `console_process.rs` (helper as SYSTEM in the console session), `gpu_name.rs`;
+  input: `pad_nodes.rs` (`WindowsPadHost`, software devices), `xinput.rs`, `raw_input.rs` (probes).
+- `input_args.rs` (input CLI). `tests/console_mode.rs`: the binary with `--console --pipe <name>` serves the pipe.
 
 ## Modes (process contract)
 - No args: started by the service manager. `--console [--pipe <name>]`: same work in this session.
@@ -37,14 +38,13 @@ installs our drivers (spec 0014), drives the virtual display (0015), holds virtu
   packages, certs. Both stop the service first and start it again. `drivers status`: no admin.
 - `display status`, `display try --client <32 hex> --mode WxH@Hz --topology virtual-only|extend|keep` (admin,
   service stopped). Hidden: `display probe | reject-check`, `display-agent --in <f> --out <f>` (the helper).
-- `input status` (admin): driver, wire version, report sizes, dropped, feeder. `input try --script keys|chord|mouse|
-  abs|pad|all|hold [--delay <s>]` (admin): scripted input as the feeder; "in use" while the service runs.
+- Input (admin; "in use" while the service runs): `input status`, `try --script <name> [--delay <s>]`, `pad
+  [--slot n] [--delay <s>]` (type `a`, `rt 500`), `pad-add | pad-remove --slot n`, hidden `probe`.
 - Service mode logs to `%ProgramData%\MixLink\logs\svc.log`; console mode to stderr (`RUST_LOG`).
 - Exit codes: 0 ok, 1 error, 2 usage, 3 a program holds a MixLink device open (`drivers install | uninstall`).
 
 ## Notes
 - Pipe input comes from any interactive user and we run as SYSTEM: parse strictly, close on surprises. Never log
   pipe bodies above `debug`. Signing tests: user-scope key, built `vhid` (skipped if absent).
-- Service and `--console` hold the `vdisplay` and `vhid` handles for life; closing them departs our monitors and
-  releases every key / button. Manual checks (elevated): `install`, `sc qc|qfailure|stop|start`, `uninstall`
-  twice; drivers: spec 0014; display: 0015; input: 0016 → Results.
+- Service and `--console` hold `vdisplay` + `vhid` for life; closing departs our monitors, releases every key.
+  Manual checks (elevated): `install`, `sc qc|qfailure|stop|start`, `uninstall` twice; specs 0014-0016 Results.
