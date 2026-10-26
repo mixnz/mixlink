@@ -73,6 +73,63 @@ ControlQuery(
     return STATUS_SUCCESS;
 }
 
+// Strict checks first (spec 0016): exact size, version, known target, exact length, zero padding.
+static BOOLEAN
+FeedInValid(
+    _In_ const ML_FEED_IN* In
+    )
+{
+    UCHAR len = FeedPayloadSize(In->Target);
+    ULONG i;
+
+    if (In->Version != ML_WIRE_VERSION || In->Reserved != 0 || len == 0 || In->Len != len) {
+        return FALSE;
+    }
+    for (i = len; i < sizeof(In->Payload); i++) {
+        if (In->Payload[i] != 0) {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+static NTSTATUS
+ControlFeed(
+    _In_ WDFREQUEST Request
+    )
+{
+    NTSTATUS      status;
+    ML_FEED_IN*   in;
+    size_t        inLen;
+    ML_FEED_IN    feed;
+    WDFFILEOBJECT file;
+    WDFREQUEST    read = NULL;
+
+    // HOT PATH
+    status = WdfRequestRetrieveInputBuffer(Request, sizeof(ML_FEED_IN), (PVOID*)&in, &inLen);
+    if (!NT_SUCCESS(status) || inLen != sizeof(ML_FEED_IN) || !FeedInValid(in)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    feed = *in;
+    file = WdfRequestGetFileObject(Request);
+
+    AcquireSRWLockExclusive(&g_FeedLock);
+    if (g_Hid == NULL) {
+        status = STATUS_DEVICE_NOT_CONNECTED;
+    } else if (g_Hid->FeedOwner != NULL && g_Hid->FeedOwner != file) {
+        status = STATUS_SHARING_VIOLATION;
+    } else {
+        g_Hid->FeedOwner = file;
+        read = FeedReportLocked(g_Hid, feed.Target, feed.Payload, feed.Len);
+    }
+    ReleaseSRWLockExclusive(&g_FeedLock);
+
+    if (read != NULL) {
+        FeedCompleteRead(read, feed.Target, feed.Payload, feed.Len);
+    }
+    return status;
+}
+
 static VOID
 ControlIoDeviceControl(
     _In_ WDFQUEUE   Queue,
@@ -88,6 +145,9 @@ ControlIoDeviceControl(
     UNREFERENCED_PARAMETER(InputBufferLength);
 
     switch (IoControlCode) {
+    case IOCTL_MIXLINK_VHID_FEED:
+        status = ControlFeed(Request);
+        break;
     case IOCTL_MIXLINK_VHID_QUERY:
         AcquireSRWLockExclusive(&g_FeedLock);
         status = ControlQuery(Request);
@@ -100,10 +160,25 @@ ControlIoDeviceControl(
     WdfRequestComplete(Request, status);
 }
 
+// The feeder's handle closed (service stopped or killed, `input try` ended): release every key,
+// button and stick it held, so nothing stays pressed (spec 0016, release-all).
 static VOID
 ControlFileCleanup(
     _In_ WDFFILEOBJECT FileObject
     )
 {
-    UNREFERENCED_PARAMETER(FileObject);
+    FEED_PENDING pending[FEED_NEUTRAL_COUNT];
+    ULONG        count = 0;
+    ULONG        i;
+
+    AcquireSRWLockExclusive(&g_FeedLock);
+    if (g_Hid != NULL && g_Hid->FeedOwner == FileObject) {
+        g_Hid->FeedOwner = NULL;
+        count = FeedReleaseAllLocked(g_Hid, pending);
+    }
+    ReleaseSRWLockExclusive(&g_FeedLock);
+
+    for (i = 0; i < count; i++) {
+        FeedCompleteRead(pending[i].Read, pending[i].Id, pending[i].Data, pending[i].Len);
+    }
 }

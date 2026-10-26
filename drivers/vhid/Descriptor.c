@@ -1,26 +1,26 @@
 /*++
-    Descriptor.c — HID report descriptor (spec 0006 → Design, plan 0006 Global Constraints).
-    Input payload sizes must match PAYLOAD_* in Driver.h.
+    Descriptor.c — HID report descriptor (spec 0006 layouts; NKRO keyboard, triggers and no vendor
+    collection from spec 0016). Payload sizes must match PAYLOAD_* in Driver.h and crates/input/src/hid/.
 --*/
 #include "Driver.h"
 
 const HID_REPORT_DESCRIPTOR G_ReportDescriptor[] = {
-    // Keyboard (ID 1): modifiers, reserved byte, 6-key array = 8 bytes.
+    // Keyboard (ID 1), NKRO bitmap (spec 0016): modifiers, usages 0x04..0x73, 0x87..0x8B,
+    // 3 bits padding = 16 bytes.
     0x05, 0x01,                     // USAGE_PAGE (Generic Desktop)
     0x09, 0x06,                     // USAGE (Keyboard)
     0xA1, 0x01,                     // COLLECTION (Application)
     0x85, REPORT_ID_KEYBOARD,       //   REPORT_ID
     0x05, 0x07,                     //   USAGE_PAGE (Keyboard)
-    0x19, 0xE0, 0x29, 0xE7,         //   USAGE_MIN/MAX (LeftControl..RightGUI)
     0x15, 0x00, 0x25, 0x01,         //   LOGICAL 0..1
-    0x75, 0x01, 0x95, 0x08,         //   8 x 1 bit
-    0x81, 0x02,                     //   INPUT (Data,Var,Abs)
-    0x75, 0x08, 0x95, 0x01,         //   1 x 8 bits
-    0x81, 0x01,                     //   INPUT (Const) reserved
-    0x19, 0x00, 0x2A, 0xFF, 0x00,   //   USAGE_MIN/MAX (0..255)
-    0x15, 0x00, 0x26, 0xFF, 0x00,   //   LOGICAL 0..255
-    0x75, 0x08, 0x95, 0x06,         //   6 x 8 bits
-    0x81, 0x00,                     //   INPUT (Data,Ary,Abs)
+    0x75, 0x01,                     //   REPORT_SIZE 1
+    0x19, 0xE0, 0x29, 0xE7,         //   USAGE_MIN/MAX (LeftControl..RightGUI)
+    0x95, 0x08, 0x81, 0x02,         //   8 bits INPUT (Data,Var,Abs)
+    0x19, 0x04, 0x29, 0x73,         //   USAGE_MIN/MAX (A..F24)
+    0x95, 0x70, 0x81, 0x02,         //   112 bits INPUT (Data,Var,Abs)
+    0x19, 0x87, 0x29, 0x8B,         //   USAGE_MIN/MAX (International1..5)
+    0x95, 0x05, 0x81, 0x02,         //   5 bits INPUT (Data,Var,Abs)
+    0x95, 0x03, 0x81, 0x01,         //   3 bits INPUT (Const)
     0xC0,                           // END_COLLECTION
 
     // Mouse relative (ID 2): buttons, X/Y 16-bit, wheel, AC Pan = 7 bytes.
@@ -56,7 +56,7 @@ const HID_REPORT_DESCRIPTOR G_ReportDescriptor[] = {
     0x75, 0x10, 0x95, 0x02, 0x81, 0x02, //   INPUT (Data,Var,Abs)
     0xC0, 0xC0,
 
-    // Gamepad (ID 4): 16 buttons, hat, X/Y/Rx/Ry 16-bit, Z/Rz 8-bit = 13 bytes.
+    // Gamepad (ID 4): 16 buttons, hat, X/Y/Rx/Ry 16-bit, triggers 16-bit = 15 bytes.
     0x05, 0x01, 0x09, 0x05,         // USAGE (Game Pad)
     0xA1, 0x01,
     0x85, REPORT_ID_GAMEPAD,
@@ -73,23 +73,11 @@ const HID_REPORT_DESCRIPTOR G_ReportDescriptor[] = {
     0x09, 0x30, 0x09, 0x31, 0x09, 0x33, 0x09, 0x34, // X, Y, Rx, Ry
     0x15, 0x00, 0x27, 0xFF, 0xFF, 0x00, 0x00, //   LOGICAL 0..65535
     0x75, 0x10, 0x95, 0x04, 0x81, 0x02,
-    0x09, 0x32, 0x09, 0x35,         //   Z, Rz (triggers)
-    0x15, 0x00, 0x26, 0xFF, 0x00,
-    0x75, 0x08, 0x95, 0x02, 0x81, 0x02,
-    0xC0,
-
-    // Control (ID 5): output [target][13 bytes], feature [ULONG dropped].
-    0x06, 0x00, 0xFF,               // USAGE_PAGE (Vendor 0xFF00)
-    0x09, 0x01,
-    0xA1, 0x01,
-    0x85, REPORT_ID_CONTROL,
-    0x09, 0x02,
-    0x15, 0x00, 0x26, 0xFF, 0x00,
-    0x75, 0x08, 0x95, CONTROL_OUTPUT_LEN - 1,
-    0x91, 0x02,                     //   OUTPUT (Data,Var,Abs)
-    0x09, 0x03,
-    0x95, CONTROL_FEATURE_LEN - 1,
-    0xB1, 0x02,                     //   FEATURE (Data,Var,Abs)
+    // Triggers, layout A (spec 0016): what the Xbox Bluetooth HID descriptor uses.
+    0x05, 0x02,                     //   USAGE_PAGE (Simulation Controls)
+    0x09, 0xC5, 0x09, 0xC4,         //   Brake (LT), Accelerator (RT)
+    0x15, 0x00, 0x26, 0xFF, 0x03,   //   LOGICAL 0..1023
+    0x75, 0x10, 0x95, 0x02, 0x81, 0x02,
     0xC0,
 };
 

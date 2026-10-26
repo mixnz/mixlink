@@ -1,11 +1,12 @@
 /*++
-    Feed.c — control output report → input report of the target collection.
-    HOT PATH: FeedWrite / FeedRead run per input event: no allocation, no logging.
+    Feed.c — reports from the control node (spec 0016) → input reports of the HID node.
+    HOT PATH: FeedReportLocked / FeedCompleteRead / FeedRead run per input event: no allocation,
+    no logging. g_FeedLock guards the ring and the manual queue; reads complete outside it.
 --*/
 #include "Driver.h"
 
-static UCHAR
-PayloadSize(
+UCHAR
+FeedPayloadSize(
     _In_ UCHAR ReportId
     )
 {
@@ -18,20 +19,50 @@ PayloadSize(
     }
 }
 
-// Completes a pending IOCTL_HID_READ_REPORT with [Id][Data..Len].
-static NTSTATUS
-CompleteRead(
-    _In_ WDFREQUEST        Request,
+NTSTATUS
+FeedCompleteRead(
+    _In_ WDFREQUEST        Read,
     _In_ UCHAR             Id,
     _In_reads_bytes_(Len) const UCHAR* Data,
     _In_ UCHAR             Len
     )
 {
-    UCHAR report[1 + PAYLOAD_MAX];
+    UCHAR    report[1 + PAYLOAD_MAX];
+    NTSTATUS status;
 
+    // HOT PATH
     report[0] = Id;
     RtlCopyMemory(report + 1, Data, Len);
-    return RequestCopyFromBuffer(Request, report, (size_t)Len + 1);
+    status = RequestCopyFromBuffer(Read, report, (size_t)Len + 1);
+    WdfRequestComplete(Read, status);
+    return status;
+}
+
+WDFREQUEST
+FeedReportLocked(
+    _In_ PDEVICE_CONTEXT   Context,
+    _In_ UCHAR             Id,
+    _In_reads_bytes_(Len) const UCHAR* Data,
+    _In_ UCHAR             Len
+    )
+{
+    REPORT_RING* ring = &Context->Ring;
+    WDFREQUEST   read;
+
+    // HOT PATH
+    if (NT_SUCCESS(WdfIoQueueRetrieveNextRequest(Context->ManualQueue, &read))) {
+        return read;
+    }
+    if (ring->Count == REPORT_RING_SIZE) {
+        ring->Dropped++;
+    } else {
+        RING_ENTRY* entry = &ring->Entries[(ring->Head + ring->Count) % REPORT_RING_SIZE];
+        entry->Id = Id;
+        entry->Len = Len;
+        RtlCopyMemory(entry->Data, Data, Len);
+        ring->Count++;
+    }
+    return NULL;
 }
 
 NTSTATUS
@@ -52,8 +83,9 @@ FeedRead(
         ring->Head = (ring->Head + 1) % REPORT_RING_SIZE;
         ring->Count--;
         ReleaseSRWLockExclusive(&g_FeedLock);
-        *Complete = TRUE;
-        return CompleteRead(Request, entry.Id, entry.Data, entry.Len);
+        // FeedCompleteRead completes the request itself.
+        *Complete = FALSE;
+        return FeedCompleteRead(Request, entry.Id, entry.Data, entry.Len);
     }
     // Forwarded under the lock, so a report fed meanwhile either finds this read or goes to the ring.
     status = WdfRequestForwardToIoQueue(Request, Context->ManualQueue);
@@ -62,76 +94,39 @@ FeedRead(
     return status;
 }
 
-NTSTATUS
-FeedWrite(
+// Neutral report per collection (spec 0016, release-all). Absolute mouse is left out so the cursor
+// does not jump. Gamepad: hat 8 = centred, sticks 0x8000, triggers 0.
+static const struct {
+    UCHAR Id;
+    UCHAR Len;
+    UCHAR Data[PAYLOAD_MAX];
+} s_Neutral[FEED_NEUTRAL_COUNT] = {
+    { REPORT_ID_KEYBOARD,  PAYLOAD_KEYBOARD,  { 0 } },
+    { REPORT_ID_MOUSE_REL, PAYLOAD_MOUSE_REL, { 0 } },
+    { REPORT_ID_GAMEPAD,   PAYLOAD_GAMEPAD,   { 0, 0, 8, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0, 0, 0, 0 } },
+};
+
+ULONG
+FeedReleaseAllLocked(
     _In_ PDEVICE_CONTEXT Context,
-    _In_ WDFREQUEST      Request
+    _Out_writes_to_(FEED_NEUTRAL_COUNT, return) FEED_PENDING* Pending
     )
 {
-    HID_XFER_PACKET packet;
-    NTSTATUS        status;
-    UCHAR           target;
-    UCHAR           len;
-    WDFREQUEST      read;
+    ULONG count = 0;
+    ULONG i;
 
-    // HOT PATH
-    status = RequestGetHidXferPacket_ToWriteToDevice(Request, &packet);
-    if (!NT_SUCCESS(status)) {
-        return status;
-    }
-    if (packet.reportId != REPORT_ID_CONTROL || packet.reportBufferLen < CONTROL_OUTPUT_LEN) {
-        return STATUS_INVALID_PARAMETER;
-    }
-    // reportBuffer = [ID 5][target][payload].
-    target = packet.reportBuffer[1];
-    len = PayloadSize(target);
-    if (len == 0) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    AcquireSRWLockExclusive(&g_FeedLock);
-    status = WdfIoQueueRetrieveNextRequest(Context->ManualQueue, &read);
-    if (!NT_SUCCESS(status)) {
-        REPORT_RING* ring = &Context->Ring;
-        if (ring->Count == REPORT_RING_SIZE) {
-            ring->Dropped++;
-        } else {
-            RING_ENTRY* entry = &ring->Entries[(ring->Head + ring->Count) % REPORT_RING_SIZE];
-            entry->Id = target;
-            entry->Len = len;
-            RtlCopyMemory(entry->Data, packet.reportBuffer + 2, len);
-            ring->Count++;
+    // Reports still queued were fed by the closed feeder: drop them, then release everything.
+    Context->Ring.Count = 0;
+    Context->Ring.Head = 0;
+    for (i = 0; i < FEED_NEUTRAL_COUNT; i++) {
+        WDFREQUEST read = FeedReportLocked(Context, s_Neutral[i].Id, s_Neutral[i].Data, s_Neutral[i].Len);
+        if (read != NULL) {
+            Pending[count].Read = read;
+            Pending[count].Id = s_Neutral[i].Id;
+            Pending[count].Len = s_Neutral[i].Len;
+            Pending[count].Data = s_Neutral[i].Data;
+            count++;
         }
     }
-    ReleaseSRWLockExclusive(&g_FeedLock);
-    if (NT_SUCCESS(status)) {
-        WdfRequestComplete(read, CompleteRead(read, target, packet.reportBuffer + 2, len));
-    }
-
-    WdfRequestSetInformation(Request, packet.reportBufferLen);
-    return STATUS_SUCCESS;
-}
-
-NTSTATUS
-FeedGetFeature(
-    _In_ PDEVICE_CONTEXT Context,
-    _In_ WDFREQUEST      Request
-    )
-{
-    HID_XFER_PACKET packet;
-    NTSTATUS        status;
-    ULONG           dropped = Context->Ring.Dropped;
-
-    status = RequestGetHidXferPacket_ToReadFromDevice(Request, &packet);
-    if (!NT_SUCCESS(status)) {
-        return status;
-    }
-    if (packet.reportId != REPORT_ID_CONTROL || packet.reportBufferLen < CONTROL_FEATURE_LEN) {
-        return STATUS_INVALID_PARAMETER;
-    }
-    // UMDF output buffers are write-only: write the ID too, never read it back.
-    packet.reportBuffer[0] = REPORT_ID_CONTROL;
-    RtlCopyMemory(packet.reportBuffer + 1, &dropped, sizeof(dropped));
-    WdfRequestSetInformation(Request, CONTROL_FEATURE_LEN);
-    return STATUS_SUCCESS;
+    return count;
 }

@@ -1,13 +1,25 @@
 //! Byte layout of the `vhid` control IOCTLs (spec 0016), mirrored in `drivers/vhid/Control.h`.
 //! Fields are little-endian and packed; every request starts with a u32 `version`.
 
+use crate::hid::report::{Report, Target};
+
 /// `CTL_CODE(FILE_DEVICE_UNKNOWN, 0x900, METHOD_BUFFERED, FILE_ANY_ACCESS)`.
 pub const IOCTL_FEED: u32 = 0x0022_2400;
 pub const IOCTL_QUERY: u32 = 0x0022_2404;
 
 pub const WIRE_VERSION: u32 = 1;
+pub const FEED_SIZE: usize = 24;
 pub const QUERY_IN_SIZE: usize = 4;
 pub const QUERY_SIZE: usize = 16;
+const FEED_PAYLOAD_AT: usize = 8;
+
+/// Payload sizes this build expects, in `QUERY` order.
+const SIZES: [usize; 4] = [
+    Target::Keyboard.payload_len(),
+    Target::MouseRel.payload_len(),
+    Target::MouseAbs.payload_len(),
+    Target::Gamepad.payload_len(),
+];
 
 /// `QUERY` flags bit 0: a feeder owns the device.
 const FLAG_FEEDER_HELD: u32 = 1;
@@ -28,6 +40,20 @@ pub enum WireError {
     Short,
     #[error("the driver speaks another wire version")]
     Version,
+    #[error("the driver's report layouts differ from this program's")]
+    Sizes,
+}
+
+/// `FEED`: version, target report ID, payload length, reserved 0, payload (zero-padded to 16 B).
+// HOT PATH
+pub fn encode_feed(report: &Report) -> [u8; FEED_SIZE] {
+    let payload = report.payload();
+    let mut out = [0u8; FEED_SIZE];
+    out[0..4].copy_from_slice(&WIRE_VERSION.to_le_bytes());
+    out[4] = report.target() as u8;
+    out[5] = u8::try_from(payload.len()).unwrap_or(0);
+    out[FEED_PAYLOAD_AT..FEED_PAYLOAD_AT + payload.len()].copy_from_slice(payload);
+    out
 }
 
 pub fn encode_query() -> [u8; QUERY_IN_SIZE] {
@@ -44,6 +70,13 @@ pub fn decode_query(bytes: &[u8]) -> Result<QueryReply, WireError> {
     let version = u32_at(0);
     if version != WIRE_VERSION {
         return Err(WireError::Version);
+    }
+    if bytes[12..16]
+        .iter()
+        .zip(SIZES)
+        .any(|(&got, want)| usize::from(got) != want)
+    {
+        return Err(WireError::Sizes);
     }
     Ok(QueryReply {
         version,

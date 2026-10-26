@@ -7,7 +7,7 @@ fn reply(feeder_held: bool, dropped: u32) -> QueryReply {
         version: 1,
         dropped,
         feeder_held,
-        sizes: [8, 7, 5, 13],
+        sizes: [16, 7, 5, 15],
     }
 }
 
@@ -16,7 +16,7 @@ fn free_driver() {
     let text = format_status(&reply(false, 0));
     assert!(text.contains("wire version 1"), "{text}");
     assert!(
-        text.contains("keyboard 8 B, mouse 7 B / 5 B, gamepad 13 B"),
+        text.contains("keyboard 16 B, mouse 7 B / 5 B, gamepad 15 B"),
         "{text}"
     );
     assert!(text.contains("Dropped reports: 0"), "{text}");

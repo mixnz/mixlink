@@ -1,7 +1,7 @@
 /*++
     Driver.h — MixLink virtual HID (from vhidmini2, Windows-driver-samples, MS-PL).
-    One root-enumerated device, five top-level collections (spec 0006 → Design):
-    keyboard (1), mouse relative (2), mouse absolute (3), gamepad (4), vendor control (5).
+    Two root nodes, one DLL (spec 0016): the HID node (keyboard 1, mouse relative 2, mouse
+    absolute 3, gamepad 4) and the control node the service feeds them through (Control.c).
 --*/
 #pragma once
 
@@ -11,23 +11,17 @@
 
 typedef UCHAR HID_REPORT_DESCRIPTOR, *PHID_REPORT_DESCRIPTOR;
 
-// Report IDs and input payload sizes (without the ID byte).
+// Report IDs and input payload sizes (without the ID byte); mirrored in crates/input/src/hid/.
 #define REPORT_ID_KEYBOARD      0x01
 #define REPORT_ID_MOUSE_REL     0x02
 #define REPORT_ID_MOUSE_ABS     0x03
 #define REPORT_ID_GAMEPAD       0x04
-#define REPORT_ID_CONTROL       0x05
 
-#define PAYLOAD_KEYBOARD        8
+#define PAYLOAD_KEYBOARD        16
 #define PAYLOAD_MOUSE_REL       7
 #define PAYLOAD_MOUSE_ABS       5
-#define PAYLOAD_GAMEPAD         13
-#define PAYLOAD_MAX             13
-
-// Control output report: [ID 5][target ID][PAYLOAD_MAX bytes, zero-padded].
-#define CONTROL_OUTPUT_LEN      (2 + PAYLOAD_MAX)
-// Control feature report: [ID 5][ULONG dropped reports].
-#define CONTROL_FEATURE_LEN     (1 + sizeof(ULONG))
+#define PAYLOAD_GAMEPAD         15
+#define PAYLOAD_MAX             16
 
 #define REPORT_RING_SIZE        64
 
@@ -41,14 +35,15 @@ typedef UCHAR HID_REPORT_DESCRIPTOR, *PHID_REPORT_DESCRIPTOR;
 #define VHID_DEVICE_STRING          L"MixLink Virtual Input"
 #define VHID_DEVICE_STRING_INDEX    5
 
+#define VHID_CONTROL_HARDWARE_ID    L"Root\\MixLinkVHidCtl"
+
 typedef struct _RING_ENTRY {
     UCHAR Id;
     UCHAR Len;
     UCHAR Data[PAYLOAD_MAX];
 } RING_ENTRY;
 
-// Reports written while hidclass had no read pending. Only touched from the
-// sequential default queue, so no lock is needed.
+// Reports fed while hidclass had no read pending. Guarded by g_FeedLock.
 typedef struct _REPORT_RING {
     RING_ENTRY Entries[REPORT_RING_SIZE];
     ULONG Head;     // next entry to read
@@ -81,15 +76,33 @@ extern const USHORT G_ReportDescriptorLength;
 extern PDEVICE_CONTEXT g_Hid;
 extern SRWLOCK g_FeedLock;
 
-#define VHID_CONTROL_HARDWARE_ID    L"Root\\MixLinkVHidCtl"
-
 // Control.c
 NTSTATUS ControlDeviceAdd(_Inout_ PWDFDEVICE_INIT DeviceInit);
 
 // Feed.c
+#define FEED_NEUTRAL_COUNT      3
+
+// A read taken under g_FeedLock, completed after it is released.
+typedef struct _FEED_PENDING {
+    WDFREQUEST   Read;
+    UCHAR        Id;
+    UCHAR        Len;
+    const UCHAR* Data;
+} FEED_PENDING;
+
+UCHAR FeedPayloadSize(_In_ UCHAR ReportId);
+// Caller holds g_FeedLock. Returns the pending read to complete with this report once the lock is
+// released, or NULL when the report went to the ring (or was dropped: ring full).
+WDFREQUEST FeedReportLocked(
+    _In_ PDEVICE_CONTEXT Context, _In_ UCHAR Id, _In_reads_bytes_(Len) const UCHAR* Data, _In_ UCHAR Len);
+// Completes Read with [Id][Data..Len].
+NTSTATUS FeedCompleteRead(
+    _In_ WDFREQUEST Read, _In_ UCHAR Id, _In_reads_bytes_(Len) const UCHAR* Data, _In_ UCHAR Len);
 NTSTATUS FeedRead(_In_ PDEVICE_CONTEXT Context, _In_ WDFREQUEST Request, _Out_ BOOLEAN* Complete);
-NTSTATUS FeedWrite(_In_ PDEVICE_CONTEXT Context, _In_ WDFREQUEST Request);
-NTSTATUS FeedGetFeature(_In_ PDEVICE_CONTEXT Context, _In_ WDFREQUEST Request);
+// Caller holds g_FeedLock: clears the ring and feeds the neutral reports. Returns how many entries
+// of Pending must be completed after the lock is released.
+ULONG FeedReleaseAllLocked(
+    _In_ PDEVICE_CONTEXT Context, _Out_writes_to_(FEED_NEUTRAL_COUNT, return) FEED_PENDING* Pending);
 
 // Strings.c
 NTSTATUS GetString(_In_ WDFREQUEST Request);
@@ -100,5 +113,3 @@ NTSTATUS RequestCopyFromBuffer(
     _In_ WDFREQUEST Request,
     _In_reads_bytes_(NumBytesToCopyFrom) const VOID* SourceBuffer,
     _In_ size_t NumBytesToCopyFrom);
-NTSTATUS RequestGetHidXferPacket_ToReadFromDevice(_In_ WDFREQUEST Request, _Out_ HID_XFER_PACKET* Packet);
-NTSTATUS RequestGetHidXferPacket_ToWriteToDevice(_In_ WDFREQUEST Request, _Out_ HID_XFER_PACKET* Packet);

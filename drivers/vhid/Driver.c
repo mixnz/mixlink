@@ -170,13 +170,6 @@ EvtIoDeviceControl(
     case IOCTL_HID_READ_REPORT:
         status = FeedRead(context, Request, &complete);
         break;
-    case IOCTL_HID_WRITE_REPORT:
-    case IOCTL_UMDF_HID_SET_OUTPUT_REPORT:
-        status = FeedWrite(context, Request);
-        break;
-    case IOCTL_UMDF_HID_GET_FEATURE:
-        status = FeedGetFeature(context, Request);
-        break;
     case IOCTL_HID_GET_STRING:
         status = GetString(Request);
         break;
@@ -184,7 +177,7 @@ EvtIoDeviceControl(
         status = GetIndexedString(Request);
         break;
     default:
-        // SET_FEATURE, GET_INPUT_REPORT, idle, activate/deactivate: not used.
+        // Output / feature reports, GET_INPUT_REPORT, idle, activate/deactivate: not used.
         status = STATUS_NOT_IMPLEMENTED;
         break;
     }

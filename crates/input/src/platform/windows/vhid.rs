@@ -8,7 +8,8 @@ use windows::Win32::Foundation::{
 };
 use windows::core::GUID;
 
-use super::vhid_wire::{self, IOCTL_QUERY, QUERY_SIZE, QueryReply, WireError};
+use super::vhid_wire::{self, IOCTL_FEED, IOCTL_QUERY, QUERY_SIZE, QueryReply, WireError};
+use crate::hid::report::Report;
 
 /// `MIXLINK_VHID_INTERFACE` in `drivers/vhid/Control.h`.
 const INTERFACE: GUID = GUID::from_u128(0x1ad24e8a_2048_46bd_b35c_bfad0cfefa8d);
@@ -42,11 +43,14 @@ pub struct VHid {
 }
 
 impl VHid {
+    /// Opens the control node and checks the driver's wire version and report layouts.
     pub fn open() -> Result<VHid, VHidError> {
         let handle = device_io::open_interface(&INTERFACE)
             .map_err(|error| map_error("CreateFileW(vhid)", error))?
             .ok_or(VHidError::Missing)?;
-        Ok(VHid { handle })
+        let vhid = VHid { handle };
+        vhid.query()?;
+        Ok(vhid)
     }
 
     pub fn query(&self) -> Result<QueryReply, VHidError> {
@@ -55,6 +59,26 @@ impl VHid {
         let len = device_io::ioctl(&self.handle, IOCTL_QUERY, &input, &mut out)
             .map_err(|error| map_error("DeviceIoControl(QUERY)", error))?;
         Ok(vhid_wire::decode_query(&out[..len.min(QUERY_SIZE)])?)
+    }
+
+    /// Sends one report. `InUse` when another handle is the feeder.
+    // HOT PATH
+    pub fn feed(&self, report: &Report) -> Result<(), VHidError> {
+        let input = vhid_wire::encode_feed(report);
+        device_io::ioctl(&self.handle, IOCTL_FEED, &input, &mut [])
+            .map_err(|error| map_error("DeviceIoControl(FEED)", error))?;
+        Ok(())
+    }
+}
+
+/// Where reports go: `VHid`, or a fake in tests.
+pub trait ReportSink {
+    fn feed(&mut self, report: &Report) -> Result<(), VHidError>;
+}
+
+impl ReportSink for VHid {
+    fn feed(&mut self, report: &Report) -> Result<(), VHidError> {
+        VHid::feed(self, report)
     }
 }
 
