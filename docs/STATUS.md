@@ -44,7 +44,7 @@ Details live in each spec; one line per item here.
 ## In progress
 - T21 open rows (spec 0015): frame grab of login / lock screen on the headless monitor (T7 harness), power cut
   during a session, iGPU + dGPU host.
-- Main PC: drivers from `target\drivers` (T22 runs end with `drivers uninstall`), MixLink service removed.
+- Main PC: drivers installed from `target\drivers` (T22 build, no pad added), MixLink service removed.
 - Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
   machine: ViGEmBus may still be installed (Settings → Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
 
