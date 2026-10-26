@@ -9,9 +9,17 @@
 ## Layout
 - `platform/windows/vhid_wire.rs` (+ tests): IOCTL bytes = `drivers/vhid/Control.h`.
 - `platform/windows/vhid.rs`: `VHid` feeder. FFI lives in `core::device_io`, so this crate has no `unsafe`.
-- Planned: `event.rs`, `capture/`, `hid/` (report builders), `platform/windows/{raw_input,xinput,send_input}.rs`.
+- `hid/` (pure, no heap, tests in `hid_tests.rs`): `report.rs`, `keyboard.rs`, `mouse.rs`, `gamepad.rs`;
+  layouts = `drivers/vhid/Descriptor.c`.
+- Planned: `event.rs`, `capture/`, `platform/windows/{raw_input,xinput,send_input}.rs`.
 
 ## Public API
+- `hid::report`: `PAYLOAD_MAX` (16), `Target` (`Keyboard` 1, `MouseRel` 2, `MouseAbs` 3, `Gamepad` 4; `payload_len`),
+  `Report` (`target`, `payload`), `neutral_reports()` (release-all: keyboard, mouse rel, pad).
+- `hid::keyboard`: `KeyboardState` (`set(usage, down) -> bool`, `clear`, `report`; NKRO).
+- `hid::mouse`: `REL_MAX`, `mouse_rel_reports(buttons, dx, dy, wheel, pan) -> RelReports` (≤ 4, split),
+  `mouse_abs_report(buttons, x, y)`.
+- `hid::gamepad`: `Dpad`, `PadState` (`NEUTRAL`, `report`; sticks i16, +y = down; triggers u16), `TRIGGER_MAX`.
 - `platform::windows::vhid_wire`: `IOCTL_FEED`, `IOCTL_QUERY`, `WIRE_VERSION`, `QueryReply`, `encode_query`,
   `decode_query`, `WireError`.
 - `platform::windows::vhid`: `VHid::open` / `query`, `VHidError` (`Missing`, `AccessDenied`, `InUse`,
