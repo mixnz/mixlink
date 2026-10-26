@@ -1,10 +1,13 @@
-//! Gamepad report (spec 0016): 16 buttons, hat, sticks X/Y/Rx/Ry 16-bit, triggers (layout A:
-//! Simulation Brake / Accelerator, 0..=1023).
+//! Gamepad report (spec 0016): 16 buttons, hat, sticks left X/Y + right Z/Rz, triggers Rx/Ry,
+//! all 16-bit in one INPUT item (layout D).
 
 use super::report::{PAYLOAD_MAX, Report, Target};
 
-/// Trigger logical maximum in the descriptor (layout A).
-pub const TRIGGER_MAX: u16 = 1023;
+/// Raw value of a released trigger. Not 0: SDL (and Steam) distrust an axis whose first value sits
+/// at the very edge (≤ -32767 once scaled) and re-learn its rest the first time it passes near the
+/// centre, so a trigger resting at 0 was taken as a centred axis (spec 0016). 2 / 65535 is far
+/// inside any dead zone. Mirrored by the neutral gamepad report in `drivers/vhid/Feed.c`.
+pub const TRIGGER_REST: u16 = 2;
 
 /// D-pad as the HID hat switch: 0 = up, clockwise to 7 = up-left, 8 = centred (null state).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,8 +95,9 @@ const fn stick(value: i16) -> u16 {
     value.cast_unsigned() ^ 0x8000
 }
 
-/// 0..=65535 → 0..=`TRIGGER_MAX`, rounded.
+/// 0..=65535 → `TRIGGER_REST`..=65535, rounded.
 const fn trigger(value: u16) -> u16 {
-    let scaled = (value as u32 * TRIGGER_MAX as u32 + 32_767) / 65_535;
-    scaled as u16
+    let span = (u16::MAX - TRIGGER_REST) as u32;
+    let scaled = (value as u32 * span + 32_767) / 65_535;
+    TRIGGER_REST + scaled as u16
 }

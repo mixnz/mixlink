@@ -19,7 +19,7 @@
 - `hid::keyboard`: `KeyboardState` (`set(usage, down) -> bool`, `clear`, `report`; NKRO).
 - `hid::mouse`: `REL_MAX`, `mouse_rel_reports(buttons, dx, dy, wheel, pan) -> RelReports` (≤ 4, split),
   `mouse_abs_report(buttons, x, y)`.
-- `hid::gamepad`: `Dpad`, `PadState` (`NEUTRAL`, `report`; sticks i16, +y = down; triggers u16), `TRIGGER_MAX`.
+- `hid::gamepad`: `Dpad`, `PadState` (`NEUTRAL`, `report`; sticks i16, +y = down; triggers Z / Rz u16, layout B).
 - `platform::windows::vhid_wire`: `IOCTL_FEED`, `IOCTL_QUERY`, `WIRE_VERSION`, `QueryReply`, `encode_query`,
   `decode_query`, `WireError`.
 - `platform::windows::vhid`: `VHid::open` / `query`, `VHidError` (`Missing`, `AccessDenied`, `InUse`,

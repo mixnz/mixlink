@@ -23,6 +23,10 @@ typedef UCHAR HID_REPORT_DESCRIPTOR, *PHID_REPORT_DESCRIPTOR;
 #define PAYLOAD_GAMEPAD         15
 #define PAYLOAD_MAX             16
 
+// Raw value of a released trigger: not 0, or SDL / Steam take the trigger for a centred axis
+// (spec 0016). Mirrors TRIGGER_REST in crates/input/src/hid/gamepad.rs.
+#define TRIGGER_REST            2
+
 #define REPORT_RING_SIZE        64
 
 #define VHID_VID                0xDEED
@@ -59,6 +63,9 @@ typedef struct _DEVICE_CONTEXT {
     HID_DESCRIPTOR          HidDescriptor;
     REPORT_RING             Ring;
     WDFFILEOBJECT           FeedOwner;      // control-node file object that feeds (spec 0016)
+    // Last report fed per report ID (index = ID), for GET_INPUT_REPORT: a reader that opens the
+    // device learns where each axis rests (Steam assumed centred triggers without it, spec 0016).
+    UCHAR                   Current[REPORT_ID_GAMEPAD + 1][PAYLOAD_MAX];
 } DEVICE_CONTEXT, *PDEVICE_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_CONTEXT, GetDeviceContext);
@@ -94,11 +101,16 @@ UCHAR FeedPayloadSize(_In_ UCHAR ReportId);
 // Caller holds g_FeedLock. Returns the pending read to complete with this report once the lock is
 // released, or NULL when the report went to the ring (or was dropped: ring full).
 WDFREQUEST FeedReportLocked(
-    _In_ PDEVICE_CONTEXT Context, _In_ UCHAR Id, _In_reads_bytes_(Len) const UCHAR* Data, _In_ UCHAR Len);
+    _In_ PDEVICE_CONTEXT Context, _In_ UCHAR Id, _In_reads_bytes_(Len) const UCHAR* Data,
+    _In_range_(1, PAYLOAD_MAX) UCHAR Len);
 // Completes Read with [Id][Data..Len].
 NTSTATUS FeedCompleteRead(
     _In_ WDFREQUEST Read, _In_ UCHAR Id, _In_reads_bytes_(Len) const UCHAR* Data, _In_ UCHAR Len);
 NTSTATUS FeedRead(_In_ PDEVICE_CONTEXT Context, _In_ WDFREQUEST Request, _Out_ BOOLEAN* Complete);
+// Sets Current to the neutral reports (gamepad centred, triggers 0). Called once at device add.
+VOID FeedInitCurrent(_In_ PDEVICE_CONTEXT Context);
+// IOCTL_UMDF_HID_GET_INPUT_REPORT: [ID][Current[ID]].
+NTSTATUS FeedGetInputReport(_In_ PDEVICE_CONTEXT Context, _In_ WDFREQUEST Request);
 // Caller holds g_FeedLock: clears the ring and feeds the neutral reports. Returns how many entries
 // of Pending must be completed after the lock is released.
 ULONG FeedReleaseAllLocked(
@@ -113,3 +125,4 @@ NTSTATUS RequestCopyFromBuffer(
     _In_ WDFREQUEST Request,
     _In_reads_bytes_(NumBytesToCopyFrom) const VOID* SourceBuffer,
     _In_ size_t NumBytesToCopyFrom);
+NTSTATUS RequestGetHidXferPacket_ToReadFromDevice(_In_ WDFREQUEST Request, _Out_ HID_XFER_PACKET* Packet);

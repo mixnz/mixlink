@@ -43,13 +43,16 @@ FeedReportLocked(
     _In_ PDEVICE_CONTEXT   Context,
     _In_ UCHAR             Id,
     _In_reads_bytes_(Len) const UCHAR* Data,
-    _In_ UCHAR             Len
+    _In_range_(1, PAYLOAD_MAX) UCHAR Len
     )
 {
     REPORT_RING* ring = &Context->Ring;
     WDFREQUEST   read;
 
     // HOT PATH
+    if (Id <= REPORT_ID_GAMEPAD) {
+        RtlCopyMemory(Context->Current[Id], Data, Len);
+    }
     if (NT_SUCCESS(WdfIoQueueRetrieveNextRequest(Context->ManualQueue, &read))) {
         return read;
     }
@@ -95,7 +98,7 @@ FeedRead(
 }
 
 // Neutral report per collection (spec 0016, release-all). Absolute mouse is left out so the cursor
-// does not jump. Gamepad: hat 8 = centred, sticks 0x8000, triggers 0.
+// does not jump. Gamepad: hat 8 = centred, sticks 0x8000, triggers at TRIGGER_REST.
 static const struct {
     UCHAR Id;
     UCHAR Len;
@@ -103,7 +106,7 @@ static const struct {
 } s_Neutral[FEED_NEUTRAL_COUNT] = {
     { REPORT_ID_KEYBOARD,  PAYLOAD_KEYBOARD,  { 0 } },
     { REPORT_ID_MOUSE_REL, PAYLOAD_MOUSE_REL, { 0 } },
-    { REPORT_ID_GAMEPAD,   PAYLOAD_GAMEPAD,   { 0, 0, 8, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0, 0, 0, 0 } },
+    { REPORT_ID_GAMEPAD,   PAYLOAD_GAMEPAD,   { 0, 0, 8, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, TRIGGER_REST, 0, TRIGGER_REST, 0 } },
 };
 
 ULONG
@@ -129,4 +132,46 @@ FeedReleaseAllLocked(
         }
     }
     return count;
+}
+
+VOID
+FeedInitCurrent(
+    _In_ PDEVICE_CONTEXT Context
+    )
+{
+    ULONG i;
+
+    RtlZeroMemory(Context->Current, sizeof(Context->Current));
+    for (i = 0; i < FEED_NEUTRAL_COUNT; i++) {
+        RtlCopyMemory(Context->Current[s_Neutral[i].Id], s_Neutral[i].Data, s_Neutral[i].Len);
+    }
+}
+
+NTSTATUS
+FeedGetInputReport(
+    _In_ PDEVICE_CONTEXT Context,
+    _In_ WDFREQUEST      Request
+    )
+{
+    HID_XFER_PACKET packet;
+    NTSTATUS        status;
+    UCHAR           len;
+    UCHAR           data[PAYLOAD_MAX];
+
+    status = RequestGetHidXferPacket_ToReadFromDevice(Request, &packet);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+    len = FeedPayloadSize(packet.reportId);
+    if (len == 0 || packet.reportBufferLen < (ULONG)len + 1) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    AcquireSRWLockShared(&g_FeedLock);
+    RtlCopyMemory(data, Context->Current[packet.reportId], len);
+    ReleaseSRWLockShared(&g_FeedLock);
+    // UMDF output buffers are write-only: write the ID too, never read it back.
+    packet.reportBuffer[0] = packet.reportId;
+    RtlCopyMemory(packet.reportBuffer + 1, data, len);
+    WdfRequestSetInformation(Request, (ULONG_PTR)len + 1);
+    return STATUS_SUCCESS;
 }
