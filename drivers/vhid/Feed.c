@@ -98,7 +98,7 @@ FeedRead(
 }
 
 // Neutral report per collection (spec 0016, release-all). Absolute mouse is left out so the cursor
-// does not jump. Gamepad: hat 8 = centred, sticks 0x8000, triggers at TRIGGER_REST.
+// does not jump. Gamepad: hat 8 = centred, sticks 0x8000, triggers 0.
 static const struct {
     UCHAR Id;
     UCHAR Len;
@@ -106,7 +106,7 @@ static const struct {
 } s_Neutral[FEED_NEUTRAL_COUNT] = {
     { REPORT_ID_KEYBOARD,  PAYLOAD_KEYBOARD,  { 0 } },
     { REPORT_ID_MOUSE_REL, PAYLOAD_MOUSE_REL, { 0 } },
-    { REPORT_ID_GAMEPAD,   PAYLOAD_GAMEPAD,   { 0, 0, 8, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, TRIGGER_REST, 0, TRIGGER_REST, 0 } },
+    { REPORT_ID_GAMEPAD,   PAYLOAD_GAMEPAD,   { 0, 0, 8, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0, 0, 0, 0 } },
 };
 
 ULONG

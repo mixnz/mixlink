@@ -23,10 +23,6 @@ typedef UCHAR HID_REPORT_DESCRIPTOR, *PHID_REPORT_DESCRIPTOR;
 #define PAYLOAD_GAMEPAD         15
 #define PAYLOAD_MAX             16
 
-// Raw value of a released trigger: not 0, or SDL / Steam take the trigger for a centred axis
-// (spec 0016). Mirrors TRIGGER_REST in crates/input/src/hid/gamepad.rs.
-#define TRIGGER_REST            2
-
 #define REPORT_RING_SIZE        64
 
 #define VHID_VID                0xDEED

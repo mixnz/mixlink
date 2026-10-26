@@ -117,13 +117,13 @@ relative mouse ~3.3 ms is Windows'. Pad: `xinputhid` adds one kernel filter hop,
 polling (`input probe --device pad`). Release build, elevated.
 
 ## Acceptance criteria
-- [ ] Only SYSTEM and Administrators can open the feed; a normal user's open fails (access denied).
+- [x] Only SYSTEM and Administrators can open the feed; a normal user's open fails (access denied).
 - [ ] Device Manager shows no vendor-defined MixLink device; with no pad added, no MixLink controller exists.
-- [ ] `input try --script all` moves the cursor, types F13–F24, no event flagged injected (LL hook).
+- [x] `input try --script all` moves the cursor, types F13–F24, no event flagged injected (LL hook).
 - [ ] Holding a key / pad button, then killing the feeder: released at once.
-- [ ] A second feeder while the service runs gets "in use by the MixLink service".
-- [ ] Keys and mouse reach the UAC prompt and the lock screen (`uac`, `lock` scripts).
-- [ ] Keyboard: 10 keys held at once all arrive (NKRO); one game from spec 0006 walks / looks.
+- [x] A second feeder while the service runs gets "in use by the MixLink service".
+- [x] Keys and mouse reach the UAC prompt and the lock screen (`uac`, `lock` scripts).
+- [x] Keyboard: 10 keys held at once all arrive (NKRO); one game from spec 0006 walks / looks.
 - [ ] `pad-add --slot 0`: Windows shows an Xbox controller with `xinputhid`; XInput reads slot 0; WGI lists
   one `Gamepad`; Steam shows an Xbox controller **without "Begin Setup"**, LT / RT 0 → max.
 - [ ] Wuchang (XInput-only): with Steam Input off, RT stab and held RT charged attack work.
@@ -138,6 +138,8 @@ polling (`input probe --device pad`). Release build, elevated.
 |---|---|
 | Interface on the HID node | **Fails.** Admin open → `0x8007001F` (hidclass refuses the create on its FDO); normal user → access denied. User chose the control node. |
 | Control node paired | **Pass.** `input status`: wire version 1, feeder free; normal user: access denied. |
+| Keyboard / mouse checks (driver with Get Input Report) | **Pass.** `input status`: sizes 16 / 7 / 5 / 15, feeder free. LL hook: 65 keyboard + 1997 mouse events from `all` + `chord`, 0 injected. `hold` + `taskkill`: F13 auto-repeat stopped at the kill (128 events in 30 s, not ~900). Second feeder: "in use by the MixLink service". UAC: cursor moved, Tab moved focus. Lock screen: cursor moved, Space showed the PIN box. `walk` in a spec 0006 game: walks and looks. |
+| `input probe`, 10 000 events, release, elevated | kbd p50 0.30 / **p99 0.69** / max 2.22 ms; mouse rel 0.22 / **2.38** / 55.4 ms; mouse abs 0.16 / **0.43** / 0.98 ms; 0 lost each. |
 | Generic pad in Steam | Steam reads only the **first axis INPUT item** of a generic HID pad: triggers in a second item never moved in Steam's test screen (Simulation Brake / Accelerator, Z / Rz, Rx / Ry all tried); one item for all six axes fixed that. Its setup wizard then needs ramped pulls (a one-report jump never binds) and assumes every axis rests at the centre, so a trigger resting at the minimum is split into two half-axis bindings (`lefttrigger:-a3`, `rightshoulder:+a3`), varying run to run. `SDL_GAMECONTROLLERCONFIG` is ignored by Steam. Verdict: generic pads dropped for virtual Xbox pads. |
 
 ## Open questions

@@ -1,4 +1,4 @@
-use super::gamepad::{Dpad, PadState, TRIGGER_REST};
+use super::gamepad::{Dpad, PadState};
 use super::keyboard::KeyboardState;
 use super::mouse::{REL_MAX, mouse_abs_report, mouse_rel_reports};
 use super::report::{PAYLOAD_MAX, Report, Target, neutral_reports};
@@ -145,23 +145,7 @@ fn pad_neutral_bytes() {
     assert_eq!(r.target(), Target::Gamepad);
     assert_eq!(
         r.payload(),
-        &[
-            0,
-            0,
-            8,
-            0,
-            0x80,
-            0,
-            0x80,
-            0,
-            0x80,
-            0,
-            0x80,
-            TRIGGER_REST as u8,
-            0,
-            TRIGGER_REST as u8,
-            0
-        ]
+        &[0, 0, 8, 0, 0x80, 0, 0x80, 0, 0x80, 0, 0x80, 0, 0, 0, 0]
     );
 }
 
@@ -179,11 +163,11 @@ fn pad_stick_and_trigger() {
     assert_eq!(&p[3..5], &[0x00, 0x00]);
     assert_eq!(&p[5..7], &[0xFF, 0xFF]);
     assert_eq!(u16::from_le_bytes([p[11], p[12]]), 65_535);
-    assert_eq!(u16::from_le_bytes([p[13], p[14]]), 32_769);
+    assert_eq!(u16::from_le_bytes([p[13], p[14]]), 32_768);
     let rest = PadState::NEUTRAL.report();
     assert_eq!(
         u16::from_le_bytes([rest.payload()[11], rest.payload()[12]]),
-        TRIGGER_REST
+        0
     );
 }
 
