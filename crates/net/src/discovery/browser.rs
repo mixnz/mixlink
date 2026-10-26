@@ -1,4 +1,4 @@
-//! Client side of discovery (spec 0017): probes the LAN, merges replies (and mDNS events) into a
+//! Client side of discovery (spec 0017): probes the LAN, browses mDNS, merges both into a
 //! `HostList`, and reports each change.
 
 use std::io::ErrorKind;
@@ -16,7 +16,7 @@ use crate::discovery::error::DiscoveryError;
 use crate::discovery::list::{HostEntry, HostList, Source};
 use crate::discovery::local_net::LocalNet;
 use crate::discovery::wire::{MAX_REPLY, PROBE, decode_reply};
-use crate::platform::{disable_udp_connreset, local_ipv4_nets};
+use crate::platform::{MdnsBrowse, disable_udp_connreset, local_ipv4_nets};
 
 /// Longest wait for a reply before the loop looks at events, expiry and the stop flag.
 const RECV_POLL: Duration = Duration::from_millis(100);
@@ -73,13 +73,22 @@ impl Browser {
         if let Err(error) = disable_udp_connreset(&socket) {
             log::debug!("SIO_UDP_CONNRESET not disabled: {error}");
         }
-        let (_events_tx, events) = mpsc::channel();
+        let (events_tx, events) = mpsc::channel();
+        let mdns = cfg
+            .mdns
+            .then(|| MdnsBrowse::start(events_tx))
+            .and_then(|result| {
+                result
+                    .inspect_err(|error| log::warn!("mDNS browse unavailable: {error}"))
+                    .ok()
+            });
         let stop = Arc::new(AtomicBool::new(false));
         let snapshot = Arc::new(Mutex::new(Vec::new()));
         let mut worker = Worker {
             cfg,
             socket,
             events,
+            mdns,
             on_change,
             snapshot: Arc::clone(&snapshot),
             list: HostList::new(),
@@ -123,6 +132,7 @@ struct Worker {
     cfg: BrowserConfig,
     socket: UdpSocket,
     events: Receiver<DiscoveryEvent>,
+    mdns: Option<MdnsBrowse>,
     on_change: OnChange,
     snapshot: Arc<Mutex<Vec<HostEntry>>>,
     list: HostList,
@@ -137,9 +147,13 @@ impl Worker {
         let mut buf = [0u8; MAX_REPLY + 1];
         while !stop.load(Ordering::Relaxed) {
             let mut changed = false;
-            if Instant::now() >= next_probe {
+            let tick = Instant::now() >= next_probe;
+            if tick {
                 self.probe();
                 next_probe = Instant::now() + self.cfg.probe_every;
+            }
+            if let Some(mdns) = &mut self.mdns {
+                mdns.poll(tick);
             }
             match self.socket.recv_from(&mut buf) {
                 Ok((len, src)) => {

@@ -23,7 +23,11 @@ windows = { workspace = true, features = [
   "Win32_NetworkManagement_Ndis",
   "Win32_Networking_WinSock",
   "Win32_System_IO",
+  "Win32_System_SystemInformation",
 ] }
+
+[dev-dependencies]
+env_logger.workspace = true
 
 [lints]
 workspace = true

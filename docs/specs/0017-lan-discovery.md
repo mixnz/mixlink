@@ -47,7 +47,7 @@ within 5 s.
 | `caps` | comma list; `v1` for now; receivers ignore values they do not know |
 | `port` | `host.json` `net.session_port` (mDNS: SRV record; broadcast: JSON field) |
 
-### mDNS (`crates/net/src/discovery/platform/windows/`)
+### mDNS (`crates/net/src/platform/windows/`)
 - Host: `DnsServiceRegister` instance `<name>._mixlink._udp.local` with TXT `id`, `name`, `ver`,
   `caps`, SRV port = session port; `DnsServiceDeRegister` on stop, so a goodbye goes out.
   Instance name clash: Windows renames the instance; clients key on `id`, not on the instance name.
@@ -122,3 +122,14 @@ stream; a 5 B probe per 1.5 s is negligible on the host.
 
 ## Open questions
 - None blocking. Whether `DnsServiceBrowse` reports goodbyes is settled by the plan's first probe.
+
+## Results
+Main PC, Win11, `cargo run -p mixlink-net --example dnssd_probe` (2026-10-26):
+
+| Check | Result |
+|---|---|
+| `register` seen by `browse` (mDNS only) | ~1 s after registering |
+| Deregister (goodbye) | host gone from the list at once (< 0.1 s) |
+| Registering process killed (no deregister call) | gone in 0.3 s: the system responder sends the goodbye itself |
+| Host alive 14 s, mDNS only | stays listed: per-tick resolves keep it younger than the 5 s expiry |
+| Register as LocalSystem in Session 0 | open: needs an elevated shell (checked with the service in the svc task) |

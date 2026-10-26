@@ -1,4 +1,5 @@
-//! Host side of discovery (spec 0017): answers broadcast probes on the discovery port.
+//! Host side of discovery (spec 0017): registers the mDNS service and answers broadcast probes
+//! on the discovery port.
 
 use std::io::ErrorKind;
 use std::net::{Ipv4Addr, UdpSocket};
@@ -11,7 +12,7 @@ use crate::discovery::advert::Advert;
 use crate::discovery::error::DiscoveryError;
 use crate::discovery::limiter::ReplyLimiter;
 use crate::discovery::wire::{encode_reply, is_probe};
-use crate::platform::disable_udp_connreset;
+use crate::platform::{MdnsRegistration, disable_udp_connreset};
 
 /// How often the responder checks for a stop.
 const STOP_POLL: Duration = Duration::from_millis(200);
@@ -30,6 +31,8 @@ pub struct Advertiser {
     stop: Arc<AtomicBool>,
     responder: Option<JoinHandle<()>>,
     port: Option<u16>,
+    /// Dropping it deregisters (mDNS goodbye).
+    _mdns: Option<MdnsRegistration>,
 }
 
 impl Advertiser {
@@ -48,13 +51,23 @@ impl Advertiser {
                 (None, None)
             }
         };
-        if responder.is_none() {
+        let mdns = cfg
+            .mdns
+            .then(|| MdnsRegistration::register(&advert))
+            .and_then(|result| {
+                result
+                    .inspect(|_| log::info!("mDNS service registered"))
+                    .inspect_err(|error| log::error!("mDNS registration failed: {error}"))
+                    .ok()
+            });
+        if responder.is_none() && mdns.is_none() {
             return Err(DiscoveryError::NothingStarted);
         }
         Ok(Advertiser {
             stop,
             responder,
             port,
+            _mdns: mdns,
         })
     }
 
