@@ -1,5 +1,6 @@
 //! Scripted input for `input try` (spec 0016). Side-effect free: F13..F24 only, mouse moves that
-//! come back home, pad sweeps that end centred.
+//! come back home, pad sweeps that end centred. The check scripts (`uac`, `lock`, `walk`) press
+//! only Tab, Space or W, for the window the user put in front.
 
 use std::time::Duration;
 
@@ -13,6 +14,9 @@ pub use crate::args::Script;
 const F13: u8 = 0x68;
 const F24: u8 = 0x73;
 const F22: u8 = 0x71;
+const TAB: u8 = 0x2B;
+const SPACE: u8 = 0x2C;
+const KEY_W: u8 = 0x1A;
 const ABS_MAX: u16 = 32_767;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,7 +50,35 @@ pub fn steps(script: Script) -> Vec<Step> {
             all
         }
         Script::Hold => vec![step(0, Action::Key(F13, true))],
+        Script::Uac => then_taps(mouse(0), TAB, 3),
+        Script::Lock => then_taps(mouse(0), SPACE, 1),
+        Script::Walk => walk(),
     }
+}
+
+/// `first`, then `usage` tapped `times`, 300 ms apart.
+fn then_taps(mut first: Vec<Step>, usage: u8, times: u32) -> Vec<Step> {
+    let start = first.last().map_or(0, |s| s.at_ms) + 300;
+    for i in 0..times {
+        let at = start + 300 * i;
+        first.push(step(at, Action::Key(usage, true)));
+        first.push(step(at + 50, Action::Key(usage, false)));
+    }
+    first
+}
+
+/// W held 1 s, then look 300 px right and back (10 px every 10 ms).
+fn walk() -> Vec<Step> {
+    let mut out = vec![step(0, Action::Key(KEY_W, true))];
+    out.push(step(1000, Action::Key(KEY_W, false)));
+    let mut at = 1200;
+    for dx in [10, -10] {
+        for _ in 0..30 {
+            out.push(step(at, Action::Rel(dx, 0)));
+            at += 10;
+        }
+    }
+    out
 }
 
 /// Feeds `steps` in time order. `wait(d)` sleeps up to `d` and returns true to stop early; stopping

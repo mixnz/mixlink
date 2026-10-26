@@ -281,3 +281,38 @@ fn input_try_bad_script() {
     assert!(parse(&["input", "try", "--script", "keys", "--delay", "x"]).is_err());
     assert!(parse(&["input", "try", "--script", "keys", "--delay", "601"]).is_err());
 }
+
+#[test]
+fn input_probe_parses() {
+    assert_eq!(
+        parse(&["input", "probe", "--device", "pad", "--count", "500"]).unwrap(),
+        Mode::Input(InputCmd::Probe {
+            device: ProbeDevice::Pad,
+            count: 500
+        })
+    );
+    assert_eq!(
+        parse(&["input", "probe", "--device", "kbd"]).unwrap(),
+        Mode::Input(InputCmd::Probe {
+            device: ProbeDevice::Kbd,
+            count: 10_000
+        })
+    );
+    assert!(parse(&["input", "probe", "--device", "wgi"]).is_err());
+    assert!(parse(&["input", "probe", "--device", "rel", "--count", "0"]).is_err());
+    assert!(!USAGE.contains("probe"), "hidden command");
+}
+
+#[test]
+fn input_pad_parses() {
+    assert_eq!(
+        parse(&["input", "pad"]).unwrap(),
+        Mode::Input(InputCmd::Pad { delay_s: 0 })
+    );
+    assert_eq!(
+        parse(&["input", "pad", "--delay", "3"]).unwrap(),
+        Mode::Input(InputCmd::Pad { delay_s: 3 })
+    );
+    assert!(parse(&["input", "pad", "a"]).is_err());
+    assert!(parse(&["input", "pad", "--delay", "601"]).is_err());
+}

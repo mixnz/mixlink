@@ -60,12 +60,35 @@ const TRY_DPI: u16 = 96;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputCmd {
     Status,
+    /// Presses pad controls typed on stdin (`a`, `lt 2000`, ...) for mapping wizards and games
+    /// (`input::padmap`); each press waits `delay_s` first (time to switch to the game).
+    Pad {
+        delay_s: u32,
+    },
     /// Plays `script` after `delay_s` seconds (time to focus a game, UAC prompt or lock screen).
     Try {
         script: Script,
         delay_s: u32,
     },
+    /// Hidden: latency of `count` events through the driver to Raw Input (`input::probe`).
+    Probe {
+        device: ProbeDevice,
+        count: u32,
+    },
 }
+
+/// Which `vhid` collection `input probe` measures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProbeDevice {
+    Kbd,
+    Rel,
+    Abs,
+    Pad,
+}
+
+/// `input probe` default and largest event count.
+const PROBE_COUNT: u32 = 10_000;
+const MAX_PROBE_COUNT: u32 = 100_000;
 
 /// Scripted input for `input try`, side-effect free (`input::script`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,6 +103,12 @@ pub enum Script {
     All,
     /// F13 down and never released: the release-all check (kill the process, or Ctrl+C).
     Hold,
+    /// Mouse square, then Tab ×3 (UAC prompt check: moves focus, never confirms).
+    Uac,
+    /// Mouse square, then Space (lock screen check: shows the sign-in box).
+    Lock,
+    /// W held 1 s, look right then back (game check).
+    Walk,
 }
 
 /// Longest `input try --delay`.
@@ -99,7 +128,8 @@ pub enum DriversCmd {
 pub const USAGE: &str = "usage: mixlink-svc [--console [--pipe <name>] | install | uninstall]\n       \
      mixlink-svc drivers [install [--from <dir>] | uninstall | status]\n       \
      mixlink-svc display [status | try --client <32 hex> --mode <W>x<H>@<Hz> --topology virtual-only|extend|keep]\n       \
-     mixlink-svc input [status | try --script keys|chord|mouse|abs|pad|all|hold [--delay <s>]]";
+     mixlink-svc input [status | pad [--delay <s>] | try --script <name> [--delay <s>]]\n       \
+     scripts: keys chord mouse abs pad all hold uac lock walk";
 
 /// Parses the arguments after the program name.
 pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, String> {
@@ -151,6 +181,10 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, Strin
         }),
         ["display", "reject-check"] => Ok(Mode::Display(DisplayCmd::RejectCheck)),
         ["input", "status"] => Ok(Mode::Input(InputCmd::Status)),
+        ["input", "pad"] => Ok(Mode::Input(InputCmd::Pad { delay_s: 0 })),
+        ["input", "pad", "--delay", delay] => Ok(Mode::Input(InputCmd::Pad {
+            delay_s: parse_delay(delay)?,
+        })),
         ["input", "try", "--script", script] => Ok(Mode::Input(InputCmd::Try {
             script: parse_script(script)?,
             delay_s: 0,
@@ -159,8 +193,35 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, Strin
             script: parse_script(script)?,
             delay_s: parse_delay(delay)?,
         })),
+        ["input", "probe", "--device", device] => Ok(Mode::Input(InputCmd::Probe {
+            device: parse_probe_device(device)?,
+            count: PROBE_COUNT,
+        })),
+        ["input", "probe", "--device", device, "--count", count] => {
+            Ok(Mode::Input(InputCmd::Probe {
+                device: parse_probe_device(device)?,
+                count: parse_count(count)?,
+            }))
+        }
         _ => Err(format!("unknown arguments: {}", args.join(" "))),
     }
+}
+
+fn parse_probe_device(text: &str) -> Result<ProbeDevice, String> {
+    match text {
+        "kbd" => Ok(ProbeDevice::Kbd),
+        "rel" => Ok(ProbeDevice::Rel),
+        "abs" => Ok(ProbeDevice::Abs),
+        "pad" => Ok(ProbeDevice::Pad),
+        _ => Err(format!("--device must be kbd, rel, abs or pad, got {text}")),
+    }
+}
+
+fn parse_count(text: &str) -> Result<u32, String> {
+    text.parse::<u32>()
+        .ok()
+        .filter(|n| (1..=MAX_PROBE_COUNT).contains(n))
+        .ok_or_else(|| format!("--count must be 1..={MAX_PROBE_COUNT}, got {text}"))
 }
 
 fn parse_script(text: &str) -> Result<Script, String> {
@@ -172,8 +233,11 @@ fn parse_script(text: &str) -> Result<Script, String> {
         "pad" => Ok(Script::Pad),
         "all" => Ok(Script::All),
         "hold" => Ok(Script::Hold),
+        "uac" => Ok(Script::Uac),
+        "lock" => Ok(Script::Lock),
+        "walk" => Ok(Script::Walk),
         _ => Err(format!(
-            "--script must be keys, chord, mouse, abs, pad, all or hold, got {text}"
+            "--script must be keys, chord, mouse, abs, pad, all, hold, uac, lock or walk, got {text}"
         )),
     }
 }

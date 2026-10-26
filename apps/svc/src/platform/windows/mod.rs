@@ -16,6 +16,7 @@ pub mod drivers_reg;
 pub mod gpu_name;
 pub mod install;
 pub mod pipe;
+pub mod raw_input;
 pub mod security;
 pub mod service;
 pub mod sign;

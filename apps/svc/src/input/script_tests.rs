@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use mixlink_input::hid::gamepad::PadState;
+use mixlink_input::hid::keyboard::KeyboardState;
 use mixlink_input::hid::report::{Report, Target};
 use mixlink_input::platform::windows::vhid::{ReportSink, VHidError};
 
@@ -138,4 +139,33 @@ fn play_stops_when_wait_says_so() {
     let mut stop_now = |_: Duration| true;
     play(&steps(Script::Keys), &mut sink, &mut stop_now).unwrap();
     assert_eq!(sink.reports.len(), 1);
+}
+
+#[test]
+fn check_scripts_release_everything() {
+    for script in [Script::Uac, Script::Lock, Script::Walk] {
+        let reports = played(script);
+        assert!(!reports.is_empty(), "{script:?}");
+        let mut keyboard = KeyboardState::default();
+        for (usage, down) in keys(&steps(script)) {
+            keyboard.set(usage, down);
+        }
+        assert_eq!(
+            keyboard,
+            KeyboardState::default(),
+            "{script:?} leaves a key down"
+        );
+    }
+}
+
+#[test]
+fn check_scripts_use_only_their_keys() {
+    let used = |script| {
+        let mut all: Vec<u8> = keys(&steps(script)).iter().map(|k| k.0).collect();
+        all.dedup();
+        all
+    };
+    assert_eq!(used(Script::Uac), [TAB]);
+    assert_eq!(used(Script::Lock), [SPACE]);
+    assert_eq!(used(Script::Walk), [KEY_W]);
 }

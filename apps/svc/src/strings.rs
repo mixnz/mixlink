@@ -101,6 +101,43 @@ pub const INPUT_TRY_DONE: &str = "Done. Every key and button is released.";
 pub const INPUT_TRY_HOLD: &str =
     "F13 is held down. Press Ctrl+C or end this process to check that it gets released.";
 
+/// `input pad` start-up help (spec 0016).
+pub fn input_pad_help(controls: &str) -> String {
+    format!(
+        "Type a control and press Enter to press it for 0.5 s, or add a time in ms (lt 2000).\n\
+         Controls: {controls}\n\
+         prime: move every trigger and stick once. q: quit."
+    )
+}
+
+pub fn input_pad_pressed(hold_ms: u32) -> String {
+    format!("Pressed for {hold_ms} ms.")
+}
+
+pub fn input_pad_unknown(text: &str, controls: &str) -> String {
+    format!("Unknown control \"{text}\". Controls: {controls}")
+}
+
+pub const INPUT_PAD_PRIMED: &str = "Moved every trigger and stick once.";
+
+/// `input probe` result line (spec 0016).
+pub fn probe_summary(
+    device: &str,
+    p50_us: f64,
+    p99_us: f64,
+    max_us: f64,
+    sent: usize,
+    received: usize,
+    lost: usize,
+) -> String {
+    format!(
+        "{device}: p50 {:.2} ms, p99 {:.2} ms, max {:.2} ms; sent {sent}, received {received}, lost {lost}",
+        p50_us / 1000.0,
+        p99_us / 1000.0,
+        max_us / 1000.0
+    )
+}
+
 #[cfg(test)]
 #[path = "strings_tests.rs"]
 mod tests;
