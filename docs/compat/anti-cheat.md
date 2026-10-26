@@ -16,7 +16,7 @@ also with the virtual monitor as main display, and still launches after the driv
 | — | FACEIT | not tested | — |
 
 Not tested for any game: playing a match, input from the MixLink virtual devices, delayed (server-side)
-bans. A new row needs the same four cases (A–D) as spec 0008.
+bans. The virtual Xbox pads (ADR-0009, VID `045E` PID `0B13`) did not exist during spike S5. A new row needs the same four cases (A–D) as spec 0008.
 
 ## Warning (user-facing, EN)
 Final copy for the installer and the client. Shown before the drivers are installed, and linked from the
@@ -27,6 +27,8 @@ natively then.
 
 **Body:**
 - MixLink adds a virtual display and a virtual keyboard, mouse and gamepad to this PC.
+- Your gamepad shows up on this PC as an Xbox controller, with Microsoft's device ID, so games and
+  Steam pick it up without setup. Some anti-cheats check for virtual controllers.
 - We checked that Apex Legends and Elden Ring still start with them installed. We haven't tested
   Valorant, BattlEye games or FACEIT.
 - No anti-cheat maker has approved MixLink. Playing online over a stream is at your own risk. Some

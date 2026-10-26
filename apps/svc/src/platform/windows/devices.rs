@@ -43,7 +43,7 @@ pub fn veto_app(kind: PNP_VETO_TYPE, name: &[u16]) -> Option<String> {
     (!app.is_empty()).then_some(app)
 }
 
-struct DevInfo(HDEVINFO);
+pub(crate) struct DevInfo(pub(crate) HDEVINFO);
 
 impl Drop for DevInfo {
     fn drop(&mut self) {
@@ -52,20 +52,20 @@ impl Drop for DevInfo {
     }
 }
 
-fn class_guid(spec: &DriverSpec) -> Result<GUID, SvcError> {
+pub(crate) fn class_guid(spec: &DriverSpec) -> Result<GUID, SvcError> {
     GUID::try_from(spec.class_guid.trim_matches(['{', '}']))
         .map_err(SvcError::win32("GUID::try_from"))
 }
 
-fn devinfo_data() -> SP_DEVINFO_DATA {
+pub(crate) fn devinfo_data() -> SP_DEVINFO_DATA {
     SP_DEVINFO_DATA {
         cbSize: u32::try_from(size_of::<SP_DEVINFO_DATA>()).unwrap_or(u32::MAX),
         ..SP_DEVINFO_DATA::default()
     }
 }
 
-/// Every node (present or not) of `spec`'s class whose hardware IDs hold `spec.hardware_id`.
-fn find_devices(spec: &DriverSpec) -> Result<(DevInfo, Vec<SP_DEVINFO_DATA>), SvcError> {
+/// Every node (present or not) of `spec`'s class whose hardware IDs hold `id`.
+fn find_devices(spec: &DriverSpec, id: &str) -> Result<(DevInfo, Vec<SP_DEVINFO_DATA>), SvcError> {
     let guid = class_guid(spec)?;
     // SAFETY: the GUID outlives the call; no enumerator, no window; flags 0 = all nodes of the class.
     let set = unsafe {
@@ -100,18 +100,18 @@ fn find_devices(spec: &DriverSpec) -> Result<(DevInfo, Vec<SP_DEVINFO_DATA>), Sv
                 None,
             )
         };
-        if read.is_ok() && hardware_ids_match(&ids, spec.hardware_id) {
+        if read.is_ok() && hardware_ids_match(&ids, id) {
             found.push(data);
         }
     }
     Ok((set, found))
 }
 
-/// Creates the root node when none exists, then installs `inf`'s driver on every matching node.
-pub fn ensure_device(spec: &DriverSpec, inf: &Path) -> Result<(), SvcError> {
-    let (_, existing) = find_devices(spec)?;
+/// Creates the root node `id` when none exists, then installs `inf`'s driver on every matching node.
+pub fn ensure_device(spec: &DriverSpec, id: &str, inf: &Path) -> Result<(), SvcError> {
+    let (_, existing) = find_devices(spec, id)?;
     let created = if existing.is_empty() {
-        Some(create_node(spec)?)
+        Some(create_node(spec, id)?)
     } else {
         None
     };
@@ -119,7 +119,7 @@ pub fn ensure_device(spec: &DriverSpec, inf: &Path) -> Result<(), SvcError> {
     let updated = unsafe {
         UpdateDriverForPlugAndPlayDevicesW(
             None,
-            &HSTRING::from(spec.hardware_id),
+            &HSTRING::from(id),
             &HSTRING::from(inf.as_os_str()),
             INSTALLFLAG_NONINTERACTIVE,
             None,
@@ -136,7 +136,7 @@ pub fn ensure_device(spec: &DriverSpec, inf: &Path) -> Result<(), SvcError> {
     Ok(())
 }
 
-fn create_node(spec: &DriverSpec) -> Result<(DevInfo, SP_DEVINFO_DATA), SvcError> {
+fn create_node(spec: &DriverSpec, id: &str) -> Result<(DevInfo, SP_DEVINFO_DATA), SvcError> {
     let guid = class_guid(spec)?;
     // SAFETY: the GUID outlives the call; no window.
     let set = unsafe { SetupDiCreateDeviceInfoList(Some(&guid), None) }
@@ -156,7 +156,7 @@ fn create_node(spec: &DriverSpec) -> Result<(DevInfo, SP_DEVINFO_DATA), SvcError
         )
     }
     .map_err(SvcError::win32("SetupDiCreateDeviceInfoW"))?;
-    let ids = multi_sz(spec.hardware_id);
+    let ids = multi_sz(id);
     // SAFETY: plain byte view of `ids`, which outlives the call.
     let bytes = unsafe {
         std::slice::from_raw_parts(ids.as_ptr().cast::<u8>(), size_of_val(ids.as_slice()))
@@ -170,40 +170,60 @@ fn create_node(spec: &DriverSpec) -> Result<(DevInfo, SP_DEVINFO_DATA), SvcError
     Ok((set, data))
 }
 
-/// Removes every node of `spec`. Stops at the first node a program holds open.
-pub fn remove_devices(spec: &DriverSpec) -> Result<RemoveOutcome, SvcError> {
-    let (set, nodes) = find_devices(spec)?;
+/// Removes every node of `spec` with hardware ID `id`. Stops at the first node a program holds open.
+pub fn remove_devices(spec: &DriverSpec, id: &str) -> Result<RemoveOutcome, SvcError> {
+    let (set, nodes) = find_devices(spec, id)?;
     if nodes.is_empty() {
         return Ok(RemoveOutcome::NoDevice);
     }
     for data in &nodes {
-        let mut veto = PNP_VetoTypeUnknown;
-        let mut name = [0u16; 260];
-        // SAFETY: valid devnode; `veto` and `name` are live locals; no UI (no CM_REMOVE_UI_OK).
-        let removed = unsafe {
-            CM_Query_And_Remove_SubTreeW(
-                data.DevInst,
-                Some(&mut veto),
-                Some(&mut name),
-                CM_REMOVE_NO_RESTART,
-            )
-        };
-        if removed == CR_REMOVE_VETOED {
-            return Ok(RemoveOutcome::Held {
-                app: veto_app(veto, &name),
-            });
+        if let held @ RemoveOutcome::Held { .. } = remove_node(&set, data)? {
+            return Ok(held);
         }
-        // Any other result (e.g. a node that is not present) still goes to DiUninstallDevice.
-        // SAFETY: valid set and element from find_devices.
-        unsafe { DiUninstallDevice(HWND::default(), set.0, data, 0, None) }
-            .map_err(SvcError::win32("DiUninstallDevice"))?;
     }
     Ok(RemoveOutcome::Removed)
 }
 
-/// State of the first node with `spec`'s hardware ID.
+/// Removes one node of `set`: `Held` when a program vetoes it, else `Removed`.
+pub(crate) fn remove_node(
+    set: &DevInfo,
+    data: &SP_DEVINFO_DATA,
+) -> Result<RemoveOutcome, SvcError> {
+    let mut veto = PNP_VetoTypeUnknown;
+    let mut name = [0u16; 260];
+    // SAFETY: valid devnode; `veto` and `name` are live locals; no UI (no CM_REMOVE_UI_OK).
+    let removed = unsafe {
+        CM_Query_And_Remove_SubTreeW(
+            data.DevInst,
+            Some(&mut veto),
+            Some(&mut name),
+            CM_REMOVE_NO_RESTART,
+        )
+    };
+    if removed == CR_REMOVE_VETOED {
+        return Ok(RemoveOutcome::Held {
+            app: veto_app(veto, &name),
+        });
+    }
+    // Any other result (e.g. a node that is not present) still goes to DiUninstallDevice.
+    uninstall_node(set, data)?;
+    Ok(RemoveOutcome::Removed)
+}
+
+/// Deletes the devnode of a node that is no longer present (no query-remove: PnP vetoes that with
+/// "already removed").
+pub(crate) fn uninstall_node(set: &DevInfo, data: &SP_DEVINFO_DATA) -> Result<(), SvcError> {
+    // SAFETY: valid set and element owned by the caller.
+    unsafe { DiUninstallDevice(HWND::default(), set.0, data, 0, None) }
+        .map_err(SvcError::win32("DiUninstallDevice"))
+}
+
+/// State of the first node with `spec`'s first hardware ID (the main node).
 pub fn device_state(spec: &DriverSpec) -> Result<DeviceState, SvcError> {
-    let (_, nodes) = find_devices(spec)?;
+    let Some(id) = spec.hardware_ids.first() else {
+        return Ok(DeviceState::Missing);
+    };
+    let (_, nodes) = find_devices(spec, id)?;
     let Some(data) = nodes.first() else {
         return Ok(DeviceState::Missing);
     };

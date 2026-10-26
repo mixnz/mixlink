@@ -28,8 +28,12 @@ fn vhid() -> &'static DriverSpec {
 fn drivers_table() {
     let names: Vec<_> = DRIVERS.iter().map(|d| d.name).collect();
     assert_eq!(names, ["vdisplay", "vhid"]);
-    assert_eq!(DRIVERS[0].hardware_id, r"Root\MixLinkVDisplay");
-    assert_eq!(DRIVERS[1].hardware_id, r"Root\MixLinkVHid");
+    assert_eq!(DRIVERS[0].hardware_ids, [r"Root\MixLinkVDisplay"]);
+    // HID node first (created first, removed last), then the control node (spec 0016).
+    assert_eq!(
+        DRIVERS[1].hardware_ids,
+        [r"Root\MixLinkVHid", r"Root\MixLinkVHidCtl"]
+    );
     assert_eq!(DRIVERS[1].cat, "vhid.cat");
 }
 

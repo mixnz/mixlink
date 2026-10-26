@@ -9,10 +9,13 @@ use mixlink_core::config::DisplaySettings;
 
 use crate::display;
 use crate::error::SvcError;
+use crate::input::{open_feeder, pads};
 use crate::pipe::server::listen;
+use crate::platform::windows::pad_nodes::WindowsPadHost;
 use crate::platform::windows::pipe::create_instance;
 use crate::platform::windows::security::PipeSecurity;
 use crate::stop::StopSignal;
+use mixlink_input::platform::windows::vhid::VHid;
 
 /// How long `run` keeps poking the listener awake after a stop.
 const WAKE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -23,6 +26,8 @@ pub struct RunOptions {
     pub pipe: String,
     /// `Some`: start the virtual display (spec 0015). Tests that only exercise the pipe pass `None`.
     pub display: Option<DisplaySettings>,
+    /// Open the virtual input driver and hold it as its feeder (spec 0016). Pipe-only tests pass `false`.
+    pub input: bool,
 }
 
 /// Serves the pipe until `stop` is set. `on_ready` runs once the pipe accepts clients;
@@ -48,6 +53,14 @@ pub fn run(
         Some(settings) => Some(display::service::spawn(Arc::clone(stop), settings)?),
         None => None,
     };
+    // Pad nodes left by a crash go first; pads come and go per session (spec 0016).
+    if opts.input
+        && let Err(error) = pads::remove_all(&mut WindowsPadHost)
+    {
+        log::warn!("leftover virtual Xbox controllers not removed: {error}");
+    }
+    // Held until `run` returns; closing it releases every key and button (spec 0016).
+    let _feeder = opts.input.then(open_input).flatten();
     on_ready();
     stop.wait();
     wake_listener(&opts.pipe, &listener);
@@ -61,6 +74,21 @@ pub fn run(
     }
     log::info!("stopped");
     Ok(())
+}
+
+/// The feeder, or `None` with a warning: without the driver the service still runs (the `SendInput`
+/// fallback comes with the input path).
+fn open_input() -> Option<VHid> {
+    match open_feeder() {
+        Ok(vhid) => {
+            log::info!("virtual input ready");
+            Some(vhid)
+        }
+        Err(error) => {
+            log::warn!("virtual input unavailable: {error}");
+            None
+        }
+    }
 }
 
 /// The listener blocks in `ConnectNamedPipe`; a throwaway client connection lets it see the stop.

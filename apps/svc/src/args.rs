@@ -7,6 +7,8 @@ use mixlink_core::ids::DeviceId;
 use mixlink_core::svc_ipc::PIPE_NAME;
 use mixlink_proto::control::DisplayInfo;
 
+use crate::input_args::parse_input;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Mode {
     /// Started by the service manager.
@@ -19,6 +21,7 @@ pub enum Mode {
     Uninstall,
     Drivers(DriversCmd),
     Display(DisplayCmd),
+    Input(InputCmd),
     /// The display helper the service starts in the console session (spec 0015); not for people.
     DisplayAgent {
         input: PathBuf,
@@ -55,6 +58,8 @@ pub enum TryTopology {
 /// Mode from the command line: dpi 96, SDR.
 const TRY_DPI: u16 = 96;
 
+pub use crate::input_args::{InputCmd, PAD_SLOTS, ProbeDevice, Script};
+
 /// `drivers ...` subcommands (spec 0014).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DriversCmd {
@@ -68,7 +73,10 @@ pub enum DriversCmd {
 
 pub const USAGE: &str = "usage: mixlink-svc [--console [--pipe <name>] | install | uninstall]\n       \
      mixlink-svc drivers [install [--from <dir>] | uninstall | status]\n       \
-     mixlink-svc display [status | try --client <32 hex> --mode <W>x<H>@<Hz> --topology virtual-only|extend|keep]";
+     mixlink-svc display [status | try --client <32 hex> --mode <W>x<H>@<Hz> --topology virtual-only|extend|keep]\n       \
+     mixlink-svc input [status | pad [--slot <0-3>] [--delay <s>] | try --script <name> [--slot <0-3>] [--delay <s>]]\n       \
+     mixlink-svc input [pad-add --slot <0-3> | pad-remove --slot <0-3>]\n       \
+     scripts: keys chord mouse abs pad all hold uac lock walk";
 
 /// Parses the arguments after the program name.
 pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, String> {
@@ -119,6 +127,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, Strin
             output: PathBuf::from(output),
         }),
         ["display", "reject-check"] => Ok(Mode::Display(DisplayCmd::RejectCheck)),
+        ["input", rest @ ..] => parse_input(rest).map(Mode::Input),
         _ => Err(format!("unknown arguments: {}", args.join(" "))),
     }
 }

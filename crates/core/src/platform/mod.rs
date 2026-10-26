@@ -10,6 +10,8 @@ pub use fallback::Mmcss;
 #[cfg(not(windows))]
 pub(crate) use fallback::{now_raw, ticks_per_sec};
 #[cfg(windows)]
+pub use windows::device_io;
+#[cfg(windows)]
 pub use windows::mmcss::Mmcss;
 #[cfg(windows)]
 pub(crate) use windows::qpc::{now_raw, ticks_per_sec};

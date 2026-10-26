@@ -11,13 +11,16 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Control.c" />
     <ClCompile Include="Driver.c" />
     <ClCompile Include="Descriptor.c" />
     <ClCompile Include="Feed.c" />
+    <ClCompile Include="PadDescriptor.c" />
     <ClCompile Include="Strings.c" />
     <ClCompile Include="Util.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Control.h" />
     <ClInclude Include="Driver.h" />
   </ItemGroup>
   <ItemGroup>

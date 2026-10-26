@@ -242,3 +242,145 @@ fn display_agent() {
         }
     );
 }
+
+#[test]
+fn input_status_parses() {
+    assert_eq!(
+        parse(&["input", "status"]).unwrap(),
+        Mode::Input(InputCmd::Status)
+    );
+}
+
+#[test]
+fn input_unknown_rejected() {
+    assert!(parse(&["input"]).is_err());
+    assert!(parse(&["input", "stat"]).is_err());
+}
+
+#[test]
+fn input_try_parses() {
+    assert_eq!(
+        parse(&["input", "try", "--script", "all", "--delay", "5"]).unwrap(),
+        Mode::Input(InputCmd::Try {
+            script: Script::All,
+            delay_s: 5,
+            slot: 0
+        })
+    );
+    assert_eq!(
+        parse(&["input", "try", "--script", "chord"]).unwrap(),
+        Mode::Input(InputCmd::Try {
+            script: Script::Chord,
+            delay_s: 0,
+            slot: 0
+        })
+    );
+}
+
+#[test]
+fn input_try_bad_script() {
+    assert!(parse(&["input", "try", "--script", "dance"]).is_err());
+    assert!(parse(&["input", "try", "--script", "keys", "--delay", "x"]).is_err());
+    assert!(parse(&["input", "try", "--script", "keys", "--delay", "601"]).is_err());
+}
+
+#[test]
+fn input_probe_parses() {
+    assert_eq!(
+        parse(&["input", "probe", "--device", "pad", "--count", "500"]).unwrap(),
+        Mode::Input(InputCmd::Probe {
+            device: ProbeDevice::Pad,
+            count: 500,
+            slot: 0
+        })
+    );
+    assert_eq!(
+        parse(&["input", "probe", "--device", "kbd"]).unwrap(),
+        Mode::Input(InputCmd::Probe {
+            device: ProbeDevice::Kbd,
+            count: 10_000,
+            slot: 0
+        })
+    );
+    assert!(parse(&["input", "probe", "--device", "wgi"]).is_err());
+    assert!(parse(&["input", "probe", "--device", "rel", "--count", "0"]).is_err());
+    assert!(!USAGE.contains("probe"), "hidden command");
+}
+
+#[test]
+fn input_pad_parses() {
+    assert_eq!(
+        parse(&["input", "pad"]).unwrap(),
+        Mode::Input(InputCmd::Pad {
+            delay_s: 0,
+            slot: 0
+        })
+    );
+    assert_eq!(
+        parse(&["input", "pad", "--delay", "3"]).unwrap(),
+        Mode::Input(InputCmd::Pad {
+            delay_s: 3,
+            slot: 0
+        })
+    );
+    assert!(parse(&["input", "pad", "a"]).is_err());
+    assert!(parse(&["input", "pad", "--delay", "601"]).is_err());
+}
+
+#[test]
+fn input_pad_add_remove_parse() {
+    assert_eq!(
+        parse(&["input", "pad-add", "--slot", "0"]).unwrap(),
+        Mode::Input(InputCmd::PadAdd { slot: 0 })
+    );
+    assert_eq!(
+        parse(&["input", "pad-remove", "--slot", "3"]).unwrap(),
+        Mode::Input(InputCmd::PadRemove { slot: 3 })
+    );
+    assert!(parse(&["input", "pad-add", "--slot", "4"]).is_err());
+    assert!(parse(&["input", "pad-add"]).is_err());
+}
+
+#[test]
+fn input_slot_flags_parse_in_any_order() {
+    assert_eq!(
+        parse(&["input", "pad", "--slot", "2", "--delay", "3"]).unwrap(),
+        Mode::Input(InputCmd::Pad {
+            delay_s: 3,
+            slot: 2
+        })
+    );
+    assert_eq!(
+        parse(&["input", "pad", "--delay", "3", "--slot", "2"]).unwrap(),
+        Mode::Input(InputCmd::Pad {
+            delay_s: 3,
+            slot: 2
+        })
+    );
+    assert_eq!(
+        parse(&["input", "try", "--slot", "1", "--script", "pad"]).unwrap(),
+        Mode::Input(InputCmd::Try {
+            script: Script::Pad,
+            delay_s: 0,
+            slot: 1
+        })
+    );
+    assert_eq!(
+        parse(&["input", "probe", "--device", "pad", "--slot", "3"]).unwrap(),
+        Mode::Input(InputCmd::Probe {
+            device: ProbeDevice::Pad,
+            count: 10_000,
+            slot: 3
+        })
+    );
+}
+
+#[test]
+fn input_flags_reject_repeats_and_strays() {
+    assert!(parse(&["input", "pad", "--slot", "1", "--slot", "2"]).is_err());
+    assert!(parse(&["input", "pad", "--foo", "1"]).is_err());
+    assert!(parse(&["input", "pad", "--slot"]).is_err());
+    assert!(parse(&["input", "try"]).is_err());
+    assert!(parse(&["input", "probe", "--count", "5"]).is_err());
+    assert!(parse(&["input", "status", "--slot", "1"]).is_err());
+}

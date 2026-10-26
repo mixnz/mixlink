@@ -6,6 +6,9 @@ mod display;
 mod drivers;
 mod error;
 mod host_config;
+#[cfg(windows)]
+mod input;
+mod input_args;
 mod log_setup;
 mod pipe;
 mod platform;
@@ -76,6 +79,10 @@ fn run_mode(mode: Mode) -> Result<(), SvcError> {
             log_setup::init_console_log();
             display::commands::run(&cmd)
         }
+        Mode::Input(cmd) => {
+            log_setup::init_console_log();
+            input::commands::run(&cmd)
+        }
         Mode::DisplayAgent { input, output } => {
             platform::windows::display_agent::serve_one(&input, &output)
         }
@@ -100,6 +107,7 @@ fn run_console(pipe: String) -> Result<(), SvcError> {
     let opts = run::RunOptions {
         pipe,
         display: Some(host_display_settings()),
+        input: true,
     };
     run::run(&stop, &opts, || {
         log::info!("running in console mode; press Ctrl+C to stop");

@@ -35,6 +35,7 @@ impl Server {
         let opts = RunOptions {
             pipe: pipe.clone(),
             display,
+            input: false,
         };
         let thread_stop = Arc::clone(&stop);
         let handle = thread::spawn(move || {
@@ -129,6 +130,7 @@ fn second_server_same_name_is_pipe_taken() {
     let opts = RunOptions {
         pipe: server.pipe.clone(),
         display: None,
+        input: false,
     };
     let result = run(&stop, &opts, || {});
     assert!(matches!(result, Err(SvcError::PipeTaken)), "{result:?}");

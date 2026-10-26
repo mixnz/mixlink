@@ -2297,6 +2297,8 @@ name = "mixlink-input"
 version = "0.1.0"
 dependencies = [
  "mixlink-core",
+ "thiserror 2.0.21",
+ "windows",
 ]
 
 [[package]]
@@ -2364,6 +2366,7 @@ dependencies = [
  "env_logger",
  "log",
  "mixlink-core",
+ "mixlink-input",
  "mixlink-proto",
  "serde",
  "serde_json",

@@ -4,13 +4,15 @@ use std::path::{Path, PathBuf};
 
 use crate::error::SvcError;
 
-/// One of our UMDF driver packages and the root device it binds to.
+/// One of our UMDF driver packages and the root devices it binds to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DriverSpec {
     pub name: &'static str,
     pub inf: &'static str,
     pub cat: &'static str,
-    pub hardware_id: &'static str,
+    /// Root nodes we create, in creation order (removed in reverse). `vhid` has its HID node and its
+    /// control node (spec 0016).
+    pub hardware_ids: &'static [&'static str],
     /// Setup class of the device node we create.
     pub class_name: &'static str,
     pub class_guid: &'static str,
@@ -22,7 +24,7 @@ pub const DRIVERS: [DriverSpec; 2] = [
         name: "vdisplay",
         inf: "vdisplay.inf",
         cat: "vdisplay.cat",
-        hardware_id: r"Root\MixLinkVDisplay",
+        hardware_ids: &[r"Root\MixLinkVDisplay"],
         class_name: "Display",
         class_guid: "{4D36E968-E325-11CE-BFC1-08002BE10318}",
     },
@@ -30,7 +32,7 @@ pub const DRIVERS: [DriverSpec; 2] = [
         name: "vhid",
         inf: "vhid.inf",
         cat: "vhid.cat",
-        hardware_id: r"Root\MixLinkVHid",
+        hardware_ids: &[r"Root\MixLinkVHid", r"Root\MixLinkVHidCtl"],
         class_name: "HIDClass",
         class_guid: "{745A17A0-74D3-11D0-B6FE-00A0C90F57DA}",
     },

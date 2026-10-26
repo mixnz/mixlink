@@ -1,9 +1,7 @@
 /*++
     Util.c — request buffer helpers. From vhidmini2 (Windows-driver-samples, MS-PL).
-
-    HID_XFER_PACKET holds an embedded pointer, which UMDF cannot marshal. mshidumdf.sys
-    rewrites those IRPs as IOCTL_UMDF_HID_Xxx with the report buffer and the report ID
-    passed as separate request buffers.
+    HID_XFER_PACKET holds an embedded pointer UMDF cannot marshal: mshidumdf.sys passes the
+    report ID and the report buffer as separate request buffers.
 --*/
 #include "Driver.h"
 
@@ -65,36 +63,5 @@ RequestGetHidXferPacket_ToReadFromDevice(
     }
     Packet->reportBuffer = (PUCHAR)WdfMemoryGetBuffer(outputMemory, &outputLength);
     Packet->reportBufferLen = (ULONG)outputLength;
-    return STATUS_SUCCESS;
-}
-
-// Driver reads the report: report buffer = input buffer, report ID = output buffer
-// length (the output buffer itself is not readable).
-NTSTATUS
-RequestGetHidXferPacket_ToWriteToDevice(
-    _In_  WDFREQUEST       Request,
-    _Out_ HID_XFER_PACKET* Packet
-    )
-{
-    NTSTATUS  status;
-    WDFMEMORY inputMemory;
-    WDFMEMORY outputMemory;
-    size_t    inputLength;
-    size_t    outputLength;
-
-    RtlZeroMemory(Packet, sizeof(*Packet));
-    status = WdfRequestRetrieveOutputMemory(Request, &outputMemory);
-    if (!NT_SUCCESS(status)) {
-        return status;
-    }
-    WdfMemoryGetBuffer(outputMemory, &outputLength);
-    Packet->reportId = (UCHAR)outputLength;
-
-    status = WdfRequestRetrieveInputMemory(Request, &inputMemory);
-    if (!NT_SUCCESS(status)) {
-        return status;
-    }
-    Packet->reportBuffer = (PUCHAR)WdfMemoryGetBuffer(inputMemory, &inputLength);
-    Packet->reportBufferLen = (ULONG)inputLength;
     return STATUS_SUCCESS;
 }

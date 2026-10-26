@@ -21,10 +21,11 @@
   - `RenderAdapter.{h,cpp}`: `PickRenderAdapter` (most VRAM; hybrid = >1 physical GPU by vendor/device/
     subsystem/revision, since DXGI can list one GPU twice). Not yet tested on an iGPU + dGPU machine.
 - `vhid/`: UMDF HID minidriver from `vhidmini2` (same samples commit, MS-PL, `vhid/LICENSE`), C, below inbox
-  `mshidumdf.sys`. Hardware ID `Root\MixLinkVHid`, VID/PID `DEED/FEED` (sample test IDs). Collections by report
-  ID: 1 keyboard, 2 mouse rel, 3 mouse abs, 4 gamepad, 5 vendor control (`Descriptor.c`). HOT PATH `Feed.c`:
-  control output report `[5][target][13 B]` completes the next pending read, else a 64-entry ring; feature 5 =
-  dropped count. Default queue is sequential (no lock). S3 spike, spec 0006: holds; Col05 shows as a 2nd pad.
+  `mshidumdf.sys`, spec 0016. Nodes in one WUDFHost: `Root\MixLinkVHid` (VID/PID `DEED/FEED`; reports 1 kbd
+  NKRO, 2 mouse rel, 3 mouse abs, `Descriptor.c`), `Root\MixLinkVHidCtl` (control: `Control.{h,c}`, SYSTEM +
+  Admins, one feeder owns all nodes), Xbox pads `SWD\MixLinkPad\000N` (HW ID `Root\VID_045E&PID_0B13&IG_00`,
+  real BT descriptor `PadDescriptor.c`, inbox `xinputhid` on top, ADR-0009). HOT PATH `Feed.c`: `FEED`
+  completes a pending read or keeps the last report (Get Input Report); feeder close = neutral reports.
 - `Directory.Build.props`: imports the NuGet WDK/SDK props from `drivers/packages/` (gitignored).
 - `build.ps1 [-Driver vdisplay|vhid|all]`: restore + build + Inf2Cat → `target/drivers/<name>/pkg/` (catalog unsigned).
 
@@ -41,8 +42,7 @@
 - `SignMode=Off`: the WDK build must never create or use a `WDKTestCert`.
 - Driver isolation: both INFs install the DLL to DIRID 13 (runs from the driver store); `infverif /w`
   passes for both (`scripts/check-drivers.sh`, full gate and CI `drivers` job).
-- Signing and install: `mixlink-svc drivers install | uninstall | status` (spec 0014). Never sign or
-  install with `tools/spikes/s1-signing/` any more.
+- Sign + install only with `mixlink-svc drivers install | uninstall | status` (spec 0014), never `s1-signing`.
 - New `.cpp` files include `Driver.h` first (UMDF_USING_NTSTATUS needs it before WRL).
 - Build for IddCx 1.4 (`IDDCX_VERSION_MINOR` 4, define 6): a 1.11 build fails `IddCxAdapterInitAsync` with
   `STATUS_INVALID_PARAMETER` on 24H2 (IddCx 1.10), so no monitor arrives. Newer DDIs: runtime checks only.
