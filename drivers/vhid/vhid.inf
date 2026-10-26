@@ -1,6 +1,9 @@
 ;
 ; vhid.inf (from vhidmini2 VhidminiUm.inx, Windows-driver-samples, MS-PL)
-; UMDF 2 HID minidriver; mshidumdf.sys (inbox) sits above it. Needs build 22000+.
+; Two root nodes, one vhid.dll, one WUDFHost (same DeviceGroupId, spec 0016):
+; - Root\MixLinkVHid: UMDF 2 HID minidriver; mshidumdf.sys (inbox) sits above it.
+; - Root\MixLinkVHidCtl: plain UMDF function driver; the service feeds reports through its interface.
+; Needs build 22000+.
 ;
 
 [Version]
@@ -26,6 +29,9 @@ vhid.dll=1
 
 [Standard.NT$ARCH$.10.0...22000]
 %DeviceName%=VHid_Install, Root\MixLinkVHid
+%CtlDeviceName%=VHidCtl_Install, Root\MixLinkVHidCtl
+
+; =================== HID node ==================================
 
 [VHid_Install.NT]
 CopyFiles=UMDriverCopy
@@ -35,6 +41,7 @@ Include=WUDFRD.inf
 Needs=WUDFRD_LowerFilter.NT
 
 [VHid_Install.NT.hw]
+AddReg = VHid_Group_AddReg
 Include=MsHidUmdf.inf
 Needs=MsHidUmdf.NT.hw
 Include=WUDFRD.inf
@@ -58,6 +65,34 @@ UmdfFileObjectPolicy=AllowNullAndUnknownFileObjects
 UmdfMethodNeitherAction=Copy
 UmdfFsContextUsePolicy=CanUseFsContext2
 
+; =================== Control node ==================================
+
+[VHidCtl_Install.NT]
+CopyFiles=UMDriverCopy
+Include=WUDFRD.inf
+Needs=WUDFRD.NT
+
+[VHidCtl_Install.NT.hw]
+AddReg = VHid_Group_AddReg, VHidCtl_Security_AddReg
+Include=WUDFRD.inf
+Needs=WUDFRD.NT.HW
+
+[VHidCtl_Install.NT.Services]
+Include=WUDFRD.inf
+Needs=WUDFRD.NT.Services
+
+[VHidCtl_Install.NT.Wdf]
+UmdfService="vhid", VHid_UmdfInstall
+UmdfServiceOrder=vhid
+
+; =================== Shared ==================================
+
+[VHid_Group_AddReg]
+HKR,"WUDF","DeviceGroupId",,"MixLinkVHidGroup" ; both nodes in one WUDFHost (spec 0016)
+
+[VHidCtl_Security_AddReg]
+HKR,,"Security",,"D:P(A;;GA;;;SY)(A;;GA;;;BA)" ; SYSTEM and Administrators only (spec 0016)
+
 [VHid_UmdfInstall]
 UmdfLibraryVersion=$UMDFVERSION$
 ServiceBinary="%13%\vhid.dll"
@@ -69,3 +104,4 @@ vhid.dll
 ManufacturerName="MixLink"
 DiskName="MixLink Virtual Input Installation Disk"
 DeviceName="MixLink Virtual Input"
+CtlDeviceName="MixLink Virtual Input Control"

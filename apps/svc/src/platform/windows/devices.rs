@@ -64,8 +64,8 @@ fn devinfo_data() -> SP_DEVINFO_DATA {
     }
 }
 
-/// Every node (present or not) of `spec`'s class whose hardware IDs hold `spec.hardware_id`.
-fn find_devices(spec: &DriverSpec) -> Result<(DevInfo, Vec<SP_DEVINFO_DATA>), SvcError> {
+/// Every node (present or not) of `spec`'s class whose hardware IDs hold `id`.
+fn find_devices(spec: &DriverSpec, id: &str) -> Result<(DevInfo, Vec<SP_DEVINFO_DATA>), SvcError> {
     let guid = class_guid(spec)?;
     // SAFETY: the GUID outlives the call; no enumerator, no window; flags 0 = all nodes of the class.
     let set = unsafe {
@@ -100,18 +100,18 @@ fn find_devices(spec: &DriverSpec) -> Result<(DevInfo, Vec<SP_DEVINFO_DATA>), Sv
                 None,
             )
         };
-        if read.is_ok() && hardware_ids_match(&ids, spec.hardware_id) {
+        if read.is_ok() && hardware_ids_match(&ids, id) {
             found.push(data);
         }
     }
     Ok((set, found))
 }
 
-/// Creates the root node when none exists, then installs `inf`'s driver on every matching node.
-pub fn ensure_device(spec: &DriverSpec, inf: &Path) -> Result<(), SvcError> {
-    let (_, existing) = find_devices(spec)?;
+/// Creates the root node `id` when none exists, then installs `inf`'s driver on every matching node.
+pub fn ensure_device(spec: &DriverSpec, id: &str, inf: &Path) -> Result<(), SvcError> {
+    let (_, existing) = find_devices(spec, id)?;
     let created = if existing.is_empty() {
-        Some(create_node(spec)?)
+        Some(create_node(spec, id)?)
     } else {
         None
     };
@@ -119,7 +119,7 @@ pub fn ensure_device(spec: &DriverSpec, inf: &Path) -> Result<(), SvcError> {
     let updated = unsafe {
         UpdateDriverForPlugAndPlayDevicesW(
             None,
-            &HSTRING::from(spec.hardware_id),
+            &HSTRING::from(id),
             &HSTRING::from(inf.as_os_str()),
             INSTALLFLAG_NONINTERACTIVE,
             None,
@@ -136,7 +136,7 @@ pub fn ensure_device(spec: &DriverSpec, inf: &Path) -> Result<(), SvcError> {
     Ok(())
 }
 
-fn create_node(spec: &DriverSpec) -> Result<(DevInfo, SP_DEVINFO_DATA), SvcError> {
+fn create_node(spec: &DriverSpec, id: &str) -> Result<(DevInfo, SP_DEVINFO_DATA), SvcError> {
     let guid = class_guid(spec)?;
     // SAFETY: the GUID outlives the call; no window.
     let set = unsafe { SetupDiCreateDeviceInfoList(Some(&guid), None) }
@@ -156,7 +156,7 @@ fn create_node(spec: &DriverSpec) -> Result<(DevInfo, SP_DEVINFO_DATA), SvcError
         )
     }
     .map_err(SvcError::win32("SetupDiCreateDeviceInfoW"))?;
-    let ids = multi_sz(spec.hardware_id);
+    let ids = multi_sz(id);
     // SAFETY: plain byte view of `ids`, which outlives the call.
     let bytes = unsafe {
         std::slice::from_raw_parts(ids.as_ptr().cast::<u8>(), size_of_val(ids.as_slice()))
@@ -170,9 +170,9 @@ fn create_node(spec: &DriverSpec) -> Result<(DevInfo, SP_DEVINFO_DATA), SvcError
     Ok((set, data))
 }
 
-/// Removes every node of `spec`. Stops at the first node a program holds open.
-pub fn remove_devices(spec: &DriverSpec) -> Result<RemoveOutcome, SvcError> {
-    let (set, nodes) = find_devices(spec)?;
+/// Removes every node of `spec` with hardware ID `id`. Stops at the first node a program holds open.
+pub fn remove_devices(spec: &DriverSpec, id: &str) -> Result<RemoveOutcome, SvcError> {
+    let (set, nodes) = find_devices(spec, id)?;
     if nodes.is_empty() {
         return Ok(RemoveOutcome::NoDevice);
     }
@@ -201,9 +201,12 @@ pub fn remove_devices(spec: &DriverSpec) -> Result<RemoveOutcome, SvcError> {
     Ok(RemoveOutcome::Removed)
 }
 
-/// State of the first node with `spec`'s hardware ID.
+/// State of the first node with `spec`'s first hardware ID (the main node).
 pub fn device_state(spec: &DriverSpec) -> Result<DeviceState, SvcError> {
-    let (_, nodes) = find_devices(spec)?;
+    let Some(id) = spec.hardware_ids.first() else {
+        return Ok(DeviceState::Missing);
+    };
+    let (_, nodes) = find_devices(spec, id)?;
     let Some(data) = nodes.first() else {
         return Ok(DeviceState::Missing);
     };

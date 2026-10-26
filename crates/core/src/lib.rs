@@ -10,3 +10,7 @@ pub mod stage;
 pub mod svc_ipc;
 
 mod platform;
+
+/// Device interface open + buffered IOCTL for our drivers (`vdisplay`, `vhid`).
+#[cfg(windows)]
+pub use platform::device_io;

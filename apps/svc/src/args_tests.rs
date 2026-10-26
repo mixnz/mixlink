@@ -242,3 +242,17 @@ fn display_agent() {
         }
     );
 }
+
+#[test]
+fn input_status_parses() {
+    assert_eq!(
+        parse(&["input", "status"]).unwrap(),
+        Mode::Input(InputCmd::Status)
+    );
+}
+
+#[test]
+fn input_unknown_rejected() {
+    assert!(parse(&["input"]).is_err());
+    assert!(parse(&["input", "stat"]).is_err());
+}

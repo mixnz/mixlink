@@ -7,6 +7,10 @@ license.workspace = true
 
 [dependencies]
 mixlink-core.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_Foundation"] }
 
 [lints]
 workspace = true

@@ -6,6 +6,8 @@ mod display;
 mod drivers;
 mod error;
 mod host_config;
+#[cfg(windows)]
+mod input;
 mod log_setup;
 mod pipe;
 mod platform;
@@ -75,6 +77,10 @@ fn run_mode(mode: Mode) -> Result<(), SvcError> {
         Mode::Display(cmd) => {
             log_setup::init_console_log();
             display::commands::run(&cmd)
+        }
+        Mode::Input(cmd) => {
+            log_setup::init_console_log();
+            input::commands::run(&cmd)
         }
         Mode::DisplayAgent { input, output } => {
             platform::windows::display_agent::serve_one(&input, &output)

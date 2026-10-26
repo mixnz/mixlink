@@ -42,19 +42,22 @@ FeedRead(
     )
 {
     REPORT_RING* ring = &Context->Ring;
+    RING_ENTRY   entry;
     NTSTATUS     status;
 
     // HOT PATH
+    AcquireSRWLockExclusive(&g_FeedLock);
     if (ring->Count > 0) {
-        const RING_ENTRY* entry = &ring->Entries[ring->Head];
-        status = CompleteRead(Request, entry->Id, entry->Data, entry->Len);
+        entry = ring->Entries[ring->Head];
         ring->Head = (ring->Head + 1) % REPORT_RING_SIZE;
         ring->Count--;
+        ReleaseSRWLockExclusive(&g_FeedLock);
         *Complete = TRUE;
-        return status;
+        return CompleteRead(Request, entry.Id, entry.Data, entry.Len);
     }
-
+    // Forwarded under the lock, so a report fed meanwhile either finds this read or goes to the ring.
     status = WdfRequestForwardToIoQueue(Request, Context->ManualQueue);
+    ReleaseSRWLockExclusive(&g_FeedLock);
     *Complete = NT_SUCCESS(status) ? FALSE : TRUE;
     return status;
 }
@@ -86,10 +89,9 @@ FeedWrite(
         return STATUS_INVALID_PARAMETER;
     }
 
+    AcquireSRWLockExclusive(&g_FeedLock);
     status = WdfIoQueueRetrieveNextRequest(Context->ManualQueue, &read);
-    if (NT_SUCCESS(status)) {
-        WdfRequestComplete(read, CompleteRead(read, target, packet.reportBuffer + 2, len));
-    } else {
+    if (!NT_SUCCESS(status)) {
         REPORT_RING* ring = &Context->Ring;
         if (ring->Count == REPORT_RING_SIZE) {
             ring->Dropped++;
@@ -100,6 +102,10 @@ FeedWrite(
             RtlCopyMemory(entry->Data, packet.reportBuffer + 2, len);
             ring->Count++;
         }
+    }
+    ReleaseSRWLockExclusive(&g_FeedLock);
+    if (NT_SUCCESS(status)) {
+        WdfRequestComplete(read, CompleteRead(read, target, packet.reportBuffer + 2, len));
     }
 
     WdfRequestSetInformation(Request, packet.reportBufferLen);

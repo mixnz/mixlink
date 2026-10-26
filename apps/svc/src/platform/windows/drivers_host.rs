@@ -147,11 +147,23 @@ impl DriverHost for WindowsDriverHost {
             step: "device",
             detail: format!("{} was not staged", spec.name),
         })?;
-        devices::ensure_device(spec, inf)
+        for id in spec.hardware_ids {
+            devices::ensure_device(spec, id, inf)?;
+        }
+        Ok(())
     }
 
+    /// Reverse creation order: the `vhid` control node goes before its HID node (spec 0016).
     fn remove_devices(&mut self, spec: &DriverSpec) -> Result<RemoveOutcome, SvcError> {
-        devices::remove_devices(spec)
+        let mut outcome = RemoveOutcome::NoDevice;
+        for id in spec.hardware_ids.iter().rev() {
+            match devices::remove_devices(spec, id)? {
+                held @ RemoveOutcome::Held { .. } => return Ok(held),
+                RemoveOutcome::Removed => outcome = RemoveOutcome::Removed,
+                RemoveOutcome::NoDevice => {}
+            }
+        }
+        Ok(outcome)
     }
 
     fn uninstall_package(&mut self, published: &str) -> Result<(), SvcError> {

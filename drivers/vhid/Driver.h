@@ -63,6 +63,7 @@ typedef struct _DEVICE_CONTEXT {
     HID_DEVICE_ATTRIBUTES   HidDeviceAttributes;
     HID_DESCRIPTOR          HidDescriptor;
     REPORT_RING             Ring;
+    WDFFILEOBJECT           FeedOwner;      // control-node file object that feeds (spec 0016)
 } DEVICE_CONTEXT, *PDEVICE_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_CONTEXT, GetDeviceContext);
@@ -74,6 +75,16 @@ EVT_WDF_IO_QUEUE_IO_DEVICE_CONTROL  EvtIoDeviceControl;
 // Descriptor.c
 extern const HID_REPORT_DESCRIPTOR G_ReportDescriptor[];
 extern const USHORT G_ReportDescriptorLength;
+
+// Driver.c: the HID node's context while it exists, and the lock over it, its ring, its manual
+// queue and FeedOwner (spec 0016). Both nodes run in one WUDFHost (same WUDF DeviceGroupId).
+extern PDEVICE_CONTEXT g_Hid;
+extern SRWLOCK g_FeedLock;
+
+#define VHID_CONTROL_HARDWARE_ID    L"Root\\MixLinkVHidCtl"
+
+// Control.c
+NTSTATUS ControlDeviceAdd(_Inout_ PWDFDEVICE_INIT DeviceInit);
 
 // Feed.c
 NTSTATUS FeedRead(_In_ PDEVICE_CONTEXT Context, _In_ WDFREQUEST Request, _Out_ BOOLEAN* Complete);

@@ -4,8 +4,31 @@
 --*/
 #include "Driver.h"
 
+#include <wchar.h>
+
+// The HID node's context while it exists (spec 0016: the control node feeds it). Both nodes share
+// one WUDFHost process through their WUDF DeviceGroupId.
+PDEVICE_CONTEXT g_Hid = NULL;
+SRWLOCK g_FeedLock = SRWLOCK_INIT;
+
 static NTSTATUS DefaultQueueCreate(_In_ WDFDEVICE Device, _Out_ WDFQUEUE* Queue);
 static NTSTATUS ManualQueueCreate(_In_ WDFDEVICE Device, _Out_ WDFQUEUE* Queue);
+static EVT_WDF_OBJECT_CONTEXT_CLEANUP HidContextCleanup;
+
+// TRUE when the node's first hardware ID is the control node's.
+static BOOLEAN
+IsControlNode(
+    _In_ PWDFDEVICE_INIT DeviceInit
+    )
+{
+    WCHAR    ids[128] = { 0 };
+    ULONG    length = 0;
+    NTSTATUS status;
+
+    status = WdfFdoInitQueryProperty(DeviceInit, DevicePropertyHardwareID, sizeof(ids) - sizeof(WCHAR),
+                                     ids, &length);
+    return NT_SUCCESS(status) && _wcsicmp(ids, VHID_CONTROL_HARDWARE_ID) == 0;
+}
 
 NTSTATUS
 DriverEntry(
@@ -31,10 +54,15 @@ EvtDeviceAdd(
     PDEVICE_CONTEXT       context;
     UNREFERENCED_PARAMETER(Driver);
 
+    if (IsControlNode(DeviceInit)) {
+        return ControlDeviceAdd(DeviceInit);
+    }
+
     // mshidumdf.sys is the function driver; we are a filter below it.
     WdfFdoInitSetFilter(DeviceInit);
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&deviceAttributes, DEVICE_CONTEXT);
+    deviceAttributes.EvtCleanupCallback = HidContextCleanup;
     status = WdfDeviceCreate(&DeviceInit, &deviceAttributes, &device);
     if (!NT_SUCCESS(status)) {
         return status;
@@ -60,11 +88,34 @@ EvtDeviceAdd(
     if (!NT_SUCCESS(status)) {
         return status;
     }
-    return ManualQueueCreate(device, &context->ManualQueue);
+    status = ManualQueueCreate(device, &context->ManualQueue);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
+    AcquireSRWLockExclusive(&g_FeedLock);
+    g_Hid = context;
+    ReleaseSRWLockExclusive(&g_FeedLock);
+    return STATUS_SUCCESS;
+}
+
+static VOID
+HidContextCleanup(
+    _In_ WDFOBJECT Object
+    )
+{
+    PDEVICE_CONTEXT context = GetDeviceContext((WDFDEVICE)Object);
+
+    AcquireSRWLockExclusive(&g_FeedLock);
+    if (g_Hid == context) {
+        g_Hid = NULL;
+    }
+    ReleaseSRWLockExclusive(&g_FeedLock);
 }
 
 // Sequential: reads leave this queue as soon as they are forwarded to the manual
-// queue, so writes are never blocked by pending reads, and the ring needs no lock.
+// queue, so writes are never blocked by pending reads. The control node feeds from another
+// thread, so ring and manual queue sit behind g_FeedLock (Feed.c).
 static NTSTATUS
 DefaultQueueCreate(
     _In_  WDFDEVICE Device,

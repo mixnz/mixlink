@@ -50,11 +50,43 @@ pub enum SvcError {
     /// Uninstall stopped: a program holds a device open (`Some` when Windows names it).
     #[error("{}", crate::strings::drivers_held(.0.as_deref()))]
     DeviceHeld(Option<String>),
+    #[error(
+        "The MixLink virtual input driver isn't installed. Install it with `mixlink-svc drivers install`."
+    )]
+    InputDriverMissing,
+    #[error(
+        "MixLink input is in use by the MixLink service. Stop it first with `sc stop MixLink`."
+    )]
+    InputInUse,
+    #[error(
+        "MixLink virtual input isn't ready: its control device can't reach the input device. Reinstall the drivers."
+    )]
+    InputNotPaired,
+    #[cfg(windows)]
+    #[error(
+        "MixLink virtual input driver doesn't match this program ({0}). Reinstall the drivers."
+    )]
+    InputWire(mixlink_input::platform::windows::vhid_wire::WireError),
 }
 
 #[cfg(windows)]
 impl SvcError {
     pub fn win32(call: &'static str) -> impl FnOnce(windows::core::Error) -> SvcError {
         move |source| SvcError::Win32 { call, source }
+    }
+}
+
+#[cfg(windows)]
+impl From<mixlink_input::platform::windows::vhid::VHidError> for SvcError {
+    fn from(error: mixlink_input::platform::windows::vhid::VHidError) -> SvcError {
+        use mixlink_input::platform::windows::vhid::VHidError;
+        match error {
+            VHidError::Missing => SvcError::InputDriverMissing,
+            VHidError::AccessDenied => SvcError::NotAdmin,
+            VHidError::InUse => SvcError::InputInUse,
+            VHidError::NotPaired => SvcError::InputNotPaired,
+            VHidError::Wire(wire) => SvcError::InputWire(wire),
+            VHidError::Win32 { call, source } => SvcError::Win32 { call, source },
+        }
     }
 }

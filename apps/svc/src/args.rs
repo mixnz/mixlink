@@ -19,6 +19,7 @@ pub enum Mode {
     Uninstall,
     Drivers(DriversCmd),
     Display(DisplayCmd),
+    Input(InputCmd),
     /// The display helper the service starts in the console session (spec 0015); not for people.
     DisplayAgent {
         input: PathBuf,
@@ -55,6 +56,12 @@ pub enum TryTopology {
 /// Mode from the command line: dpi 96, SDR.
 const TRY_DPI: u16 = 96;
 
+/// `input ...` subcommands (spec 0016): developer checks of the virtual input driver.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InputCmd {
+    Status,
+}
+
 /// `drivers ...` subcommands (spec 0014).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DriversCmd {
@@ -68,7 +75,8 @@ pub enum DriversCmd {
 
 pub const USAGE: &str = "usage: mixlink-svc [--console [--pipe <name>] | install | uninstall]\n       \
      mixlink-svc drivers [install [--from <dir>] | uninstall | status]\n       \
-     mixlink-svc display [status | try --client <32 hex> --mode <W>x<H>@<Hz> --topology virtual-only|extend|keep]";
+     mixlink-svc display [status | try --client <32 hex> --mode <W>x<H>@<Hz> --topology virtual-only|extend|keep]\n       \
+     mixlink-svc input status";
 
 /// Parses the arguments after the program name.
 pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, String> {
@@ -119,6 +127,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, Strin
             output: PathBuf::from(output),
         }),
         ["display", "reject-check"] => Ok(Mode::Display(DisplayCmd::RejectCheck)),
+        ["input", "status"] => Ok(Mode::Input(InputCmd::Status)),
         _ => Err(format!("unknown arguments: {}", args.join(" "))),
     }
 }
