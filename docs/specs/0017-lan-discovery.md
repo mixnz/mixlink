@@ -1,6 +1,6 @@
 # 0017 — LAN discovery: mDNS + broadcast in the service, host list in the launcher
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-26
 **Roadmap:** T5
 **Plan:** [0017-lan-discovery](../plans/0017-lan-discovery.md) (local only, written by writing-plans skill)
@@ -133,3 +133,18 @@ Main PC, Win11, `cargo run -p mixlink-net --example dnssd_probe` (2026-10-26):
 | Registering process killed (no deregister call) | gone in 0.3 s: the system responder sends the goodbye itself |
 | Host alive 14 s, mDNS only | stays listed: per-tick resolves keep it younger than the 5 s expiry |
 | Register as LocalSystem in Session 0 | open: needs an elevated shell (checked with the service in the svc task) |
+
+Acceptance criteria, as of the branch (automated = unit / loopback tests):
+
+| Criterion | State |
+|---|---|
+| `identity.json` made once, id kept | automated (`identity_tests.rs`); real file needs an elevated run |
+| Host listed within 3 s on two PCs | open: two-PC run |
+| mDNS blocked → broadcast still finds it | automated over loopback (`discovery_loopback.rs`); two-PC run open |
+| Broadcast blocked → mDNS still finds it | main PC, mDNS only (`dnssd_probe`); two-PC run open |
+| Service stop → gone within 5 s | goodbye < 0.1 s on main PC; expiry automated; two-PC run open |
+| Second adapter shows once with the LAN address | automated (`list_tests.rs`); two-PC run open |
+| Other `ver` dimmed with "Needs update" | automated (`hosts_tests.rs`); UI check open |
+| `install` / `uninstall` firewall rule, twice each | open: elevated run |
+| Public network hint in the tray | open: elevated run (category check itself automated) |
+| Malformed probes get no reply, no panic | automated (fuzz + `responder_ignores_garbage`) |

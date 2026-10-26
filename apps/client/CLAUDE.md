@@ -6,11 +6,18 @@
 **Depends on:** all crates.
 **Hot path:** only via crates; this app wires threads and queues, no media logic here.
 
-## Planned layout
-- `src/main.rs` (Tauri setup), `src/commands.rs` (Tauri commands), `src/stream_proc.rs` (spawn + IPC), `ui/` (React + Vite)
+## Layout
+- `src/main.rs` (Tauri setup), `src/commands.rs` (Tauri commands), `src/window.rs` (launcher window),
+  `src/stream_proc.rs` (spawn + IPC), `src/stream_result.rs`, `src/hosts.rs` (LAN discovery, spec 0017),
+  `src/strings.rs`; tests in `<name>_tests.rs`.
+- `ui/` (React + Vite): `src/api/` (typed commands / events), `src/components/HostList/`, `src/i18n/en.ts`.
 
 ## Public API
-- (none yet — fill in names of exported traits/types, one line each)
+- Commands: `start_stream`, `last_stream_result`, `list_hosts() -> HostRow[]`.
+- Events: `stream-result` (`StreamResult`), `hosts-changed` (`HostRow[]`, on every list change).
+- `HostRow` (camelCase): `id` (32 hex), `name`, `address`, `port`, `compatible` (`ver == WIRE_VERSION`).
 
 ## Notes
-- (gotchas an AI session must know before editing this module)
+- The discovery `Browser` runs while the launcher window exists: `window.rs` starts it on open and stops it on
+  `Destroyed` (the window is destroyed while streaming and rebuilt afterwards); the list clears on stop.
+- Broadcast probes use the default discovery port (47800); the launcher does not read a client config yet.

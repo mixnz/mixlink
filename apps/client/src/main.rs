@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod hosts;
 mod stream_proc;
 mod stream_result;
 mod strings;
@@ -11,15 +12,18 @@ use std::process::ExitCode;
 
 use tauri::{Manager, RunEvent};
 
+use crate::hosts::HostsState;
 use crate::stream_proc::StreamState;
 
 fn main() -> ExitCode {
     env_logger::init();
     let app = tauri::Builder::default()
         .manage(StreamState::default())
+        .manage(HostsState::default())
         .invoke_handler(tauri::generate_handler![
             commands::start_stream,
-            commands::last_stream_result
+            commands::last_stream_result,
+            commands::list_hosts
         ])
         .setup(|app| Ok(window::open_main_window(app.handle())?))
         .build(tauri::generate_context!());

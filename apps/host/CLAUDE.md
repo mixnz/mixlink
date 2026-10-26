@@ -14,8 +14,8 @@ Talks to `mixlink-svc` over a named pipe (ADR-0005, spec 0012); the pipeline liv
 
 ## Public API
 - Tauri command `get_svc_status() -> LinkState`; event `svc-status` (payload `LinkState`, only on change:
-  kind or service version; uptime alone does not emit).
-- `LinkState` (serde tag `kind`, camelCase): `connected { svcVersion, uptimeS }`, `notRunning`,
+  kind, service version or `networkPublic`; uptime alone does not emit).
+- `LinkState` (serde tag `kind`, camelCase): `connected { svcVersion, uptimeS, networkPublic }`, `notRunning`,
   `versionMismatch { svcVersion }`.
 - Tray menu ids: `open`, `quit`; tray id `main` (tooltip follows `LinkState`).
 
@@ -23,4 +23,5 @@ Talks to `mixlink-svc` over a named pipe (ADR-0005, spec 0012); the pipeline liv
 - Thread `host-svc-link`: connects to `svc_ipc::PIPE_NAME`, asks `GetStatus` every 1 s, retries every 2 s
   after any error. It is never joined; app exit ends it.
 - Starts hidden (window `main`, `visible: false`); tray left click or Open shows it; X hides; Quit exits.
+- `networkPublic`: the window shows a hint that clients cannot find a host on a Public network (spec 0017).
 - Debug builds load `devUrl` (`npm run dev:host`, port 5174); feature `custom-protocol` embeds `ui/dist`.
