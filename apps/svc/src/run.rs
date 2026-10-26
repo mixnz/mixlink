@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use mixlink_core::config::DisplaySettings;
 
+use crate::discovery::{self, DiscoverySettings};
 use crate::display;
 use crate::error::SvcError;
 use crate::input::{open_feeder, pads};
@@ -28,6 +29,8 @@ pub struct RunOptions {
     pub display: Option<DisplaySettings>,
     /// Open the virtual input driver and hold it as its feeder (spec 0016). Pipe-only tests pass `false`.
     pub input: bool,
+    /// `Some`: advertise the host on the LAN (spec 0017). Tests pass `None`.
+    pub discovery: Option<DiscoverySettings>,
 }
 
 /// Serves the pipe until `stop` is set. `on_ready` runs once the pipe accepts clients;
@@ -61,6 +64,8 @@ pub fn run(
     }
     // Held until `run` returns; closing it releases every key and button (spec 0016).
     let _feeder = opts.input.then(open_input).flatten();
+    // Dropped when `run` returns: stops the responder and sends the mDNS goodbye.
+    let _advertiser = opts.discovery.clone().and_then(discovery::start);
     on_ready();
     stop.wait();
     wake_listener(&opts.pipe, &listener);

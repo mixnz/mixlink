@@ -2370,6 +2370,7 @@ dependencies = [
  "log",
  "mixlink-core",
  "mixlink-input",
+ "mixlink-net",
  "mixlink-proto",
  "serde",
  "serde_json",

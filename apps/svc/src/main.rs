@@ -2,10 +2,12 @@
 //! for development; `install` / `uninstall` register it.
 
 mod args;
+mod discovery;
 mod display;
 mod drivers;
 mod error;
 mod host_config;
+mod identity;
 #[cfg(windows)]
 mod input;
 mod input_args;
@@ -104,19 +106,32 @@ fn run_console(pipe: String) -> Result<(), SvcError> {
     log_setup::init_console_log();
     let stop = Arc::new(stop::StopSignal::new());
     platform::windows::console::install_ctrl_handler(Arc::clone(&stop))?;
-    let opts = run::RunOptions {
-        pipe,
-        display: Some(host_display_settings()),
-        input: true,
-    };
-    run::run(&stop, &opts, || {
+    run::run(&stop, &host_run_options(pipe), || {
         log::info!("running in console mode; press Ctrl+C to stop");
     })
 }
 
-/// `display` part of `%ProgramData%\MixLink\host.json` (defaults when missing or invalid).
+/// Options for service and console mode from `%ProgramData%\MixLink\host.json` (defaults when
+/// missing or invalid) and the host identity. No identity → no discovery (logged).
 #[cfg(windows)]
-pub fn host_display_settings() -> mixlink_core::config::DisplaySettings {
+pub fn host_run_options(pipe: String) -> run::RunOptions {
     let program_data = platform::windows::drivers_host::program_data();
-    host_config::load(&host_config::default_path(&program_data)).display
+    let config = host_config::load(&host_config::default_path(&program_data));
+    let id = identity::load_or_create(
+        &identity::default_path(&program_data),
+        platform::windows::random::random_device_id,
+    );
+    let discovery = match id {
+        Ok(id) => Some(discovery::settings(&config, id)),
+        Err(error) => {
+            log::error!("host id unavailable, LAN discovery off: {error}");
+            None
+        }
+    };
+    run::RunOptions {
+        pipe,
+        display: Some(config.display),
+        input: true,
+        discovery,
+    }
 }

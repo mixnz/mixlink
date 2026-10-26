@@ -17,6 +17,7 @@ pub mod gpu_name;
 pub mod install;
 pub mod pad_nodes;
 pub mod pipe;
+pub mod random;
 pub mod raw_input;
 pub mod security;
 pub mod service;
