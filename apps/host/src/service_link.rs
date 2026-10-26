@@ -23,9 +23,15 @@ const RETRY: Duration = Duration::from_secs(2);
     rename_all_fields = "camelCase"
 )]
 pub enum LinkState {
-    Connected { svc_version: String, uptime_s: u64 },
+    Connected {
+        svc_version: String,
+        uptime_s: u64,
+        network_public: bool,
+    },
     NotRunning,
-    VersionMismatch { svc_version: String },
+    VersionMismatch {
+        svc_version: String,
+    },
 }
 
 /// Decides when a new state is worth an event: uptime ticking alone is not.
@@ -38,9 +44,17 @@ impl LinkTracker {
     pub fn update(&mut self, next: LinkState) -> Option<LinkState> {
         let changed = match (&self.last, &next) {
             (
-                Some(LinkState::Connected { svc_version: a, .. }),
-                LinkState::Connected { svc_version: b, .. },
-            ) => a != b,
+                Some(LinkState::Connected {
+                    svc_version: a,
+                    network_public: pa,
+                    ..
+                }),
+                LinkState::Connected {
+                    svc_version: b,
+                    network_public: pb,
+                    ..
+                },
+            ) => a != b || pa != pb,
             (Some(last), _) => *last != next,
             (None, _) => true,
         };
@@ -97,11 +111,13 @@ fn link_loop(app: &AppHandle) {
     loop {
         match SvcPipe::connect(PIPE_NAME) {
             Ok((mut pipe, svc_version)) => {
-                publish(app, &mut tracker, connected(&svc_version, 0));
+                publish(app, &mut tracker, connected(&svc_version, 0, false));
                 loop {
                     match pipe.status() {
-                        Ok((_, uptime_s)) => {
-                            publish(app, &mut tracker, connected(&svc_version, uptime_s));
+                        Ok(report) => {
+                            let state =
+                                connected(&svc_version, report.uptime_s, report.network_public);
+                            publish(app, &mut tracker, state);
                         }
                         Err(error) => {
                             log::info!("service link lost: {error}");
@@ -121,10 +137,11 @@ fn link_loop(app: &AppHandle) {
     }
 }
 
-fn connected(svc_version: &str, uptime_s: u64) -> LinkState {
+fn connected(svc_version: &str, uptime_s: u64, network_public: bool) -> LinkState {
     LinkState::Connected {
         svc_version: svc_version.to_owned(),
         uptime_s,
+        network_public,
     }
 }
 

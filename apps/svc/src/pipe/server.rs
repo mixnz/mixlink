@@ -9,7 +9,9 @@ use std::time::{Duration, Instant};
 use mixlink_core::ipc::encode_line;
 use mixlink_core::svc_ipc::{LineRead, MAX_LINE, read_line_limited};
 
+use crate::net_check::{PUBLIC_CHECK_TTL, PublicCheck};
 use crate::pipe::session::{Reply, Session, too_long_reply};
+use crate::platform::windows::network_category::any_public_network;
 use crate::platform::windows::pipe::{create_instance, wait_client};
 use crate::platform::windows::security::PipeSecurity;
 use crate::stop::StopSignal;
@@ -59,15 +61,26 @@ pub fn listen(
     }
 }
 
+/// A failed check reads as "not Public": the hint is advice, not worth an error.
+fn probe_public() -> bool {
+    any_public_network().unwrap_or_else(|error| {
+        log::debug!("network category check failed: {error}");
+        false
+    })
+}
+
 /// Answers one client until it disconnects or sends something unexpected.
 fn serve(file: File, started: Instant) {
     let mut reader = BufReader::new(&file);
     let mut writer = &file;
     let mut session = Session::new();
+    let mut public = PublicCheck::new(PUBLIC_CHECK_TTL);
     let mut line = Vec::new();
     loop {
         let reply = match read_line_limited(&mut reader, &mut line, MAX_LINE) {
-            Ok(LineRead::Line) => session.handle_line(&line, started.elapsed()),
+            Ok(LineRead::Line) => session.handle_line(&line, started.elapsed(), || {
+                public.get(Instant::now(), probe_public)
+            }),
             Ok(LineRead::TooLong) => too_long_reply(),
             Ok(LineRead::Eof) => return,
             Err(error) => {

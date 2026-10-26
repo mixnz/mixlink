@@ -12,6 +12,7 @@ mod identity;
 mod input;
 mod input_args;
 mod log_setup;
+mod net_check;
 mod pipe;
 mod platform;
 #[cfg(windows)]
@@ -66,6 +67,11 @@ fn run_mode(mode: Mode) -> Result<(), SvcError> {
                 InstallOutcome::Updated => strings::UPDATED,
             };
             eprintln!("{message}");
+            // Ports as the service reads them now; changing them in host.json needs `install` again.
+            let program_data = platform::windows::drivers_host::program_data();
+            let net = host_config::load(&host_config::default_path(&program_data)).net;
+            platform::windows::firewall::add_rule(&std::env::current_exe()?, &net)?;
+            eprintln!("{}", strings::FIREWALL_ADDED);
             Ok(())
         }
         Mode::Uninstall => {
@@ -74,6 +80,8 @@ fn run_mode(mode: Mode) -> Result<(), SvcError> {
                 UninstallOutcome::NotInstalled => strings::NOT_INSTALLED,
             };
             eprintln!("{message}");
+            platform::windows::firewall::remove_rule()?;
+            eprintln!("{}", strings::FIREWALL_REMOVED);
             Ok(())
         }
         Mode::Drivers(cmd) => drivers::run(&cmd),

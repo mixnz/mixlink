@@ -52,11 +52,13 @@ pub enum SvcToTray {
     Status {
         state: SvcState,
         uptime_s: u64,
+        /// A connected network is Public, where the firewall rule does not apply (spec 0017).
+        /// Absent (older service) = `false`.
+        #[serde(default)]
+        network_public: bool,
     },
     /// The request was refused; the service closes the connection after it.
-    Error {
-        message: String,
-    },
+    Error { message: String },
 }
 
 /// What the service is doing; streaming and pairing states come with those features.
@@ -64,6 +66,32 @@ pub enum SvcToTray {
 #[serde(rename_all = "camelCase")]
 pub enum SvcState {
     Idle,
+}
+
+/// The fields of a `SvcToTray::Status`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StatusReport {
+    pub state: SvcState,
+    pub uptime_s: u64,
+    pub network_public: bool,
+}
+
+impl StatusReport {
+    /// `None` for any other message.
+    pub fn from_status(msg: SvcToTray) -> Option<StatusReport> {
+        match msg {
+            SvcToTray::Status {
+                state,
+                uptime_s,
+                network_public,
+            } => Some(StatusReport {
+                state,
+                uptime_s,
+                network_public,
+            }),
+            SvcToTray::Hello { .. } | SvcToTray::Error { .. } => None,
+        }
+    }
 }
 
 /// Result of [`read_line_limited`].
@@ -184,11 +212,9 @@ impl SvcPipe {
     }
 
     /// Asks for the service state and uptime in seconds.
-    pub fn status(&mut self) -> Result<(SvcState, u64), SvcPipeError> {
-        match self.request(&TrayToSvc::GetStatus)? {
-            SvcToTray::Status { state, uptime_s } => Ok((state, uptime_s)),
-            SvcToTray::Hello { .. } | SvcToTray::Error { .. } => Err(SvcPipeError::Unexpected),
-        }
+    pub fn status(&mut self) -> Result<StatusReport, SvcPipeError> {
+        StatusReport::from_status(self.request(&TrayToSvc::GetStatus)?)
+            .ok_or(SvcPipeError::Unexpected)
     }
 }
 

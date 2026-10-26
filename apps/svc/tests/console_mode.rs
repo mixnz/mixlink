@@ -27,6 +27,6 @@ fn console_mode_serves_pipe() {
     let status = connected.map(|mut pipe| pipe.status());
     child.kill().unwrap();
     child.wait().unwrap();
-    let (state, _) = status.expect("pipe never came up").unwrap();
-    assert_eq!(state, SvcState::Idle);
+    let report = status.expect("pipe never came up").unwrap();
+    assert_eq!(report.state, SvcState::Idle);
 }

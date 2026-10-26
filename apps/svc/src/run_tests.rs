@@ -79,10 +79,11 @@ fn round_trip_hello_and_status() {
     let server = Server::start();
     let (mut pipe, version) = SvcPipe::connect(&server.pipe).unwrap();
     assert_eq!(version, env!("CARGO_PKG_VERSION"));
-    let (state, first) = pipe.status().unwrap();
+    let report = pipe.status().unwrap();
+    let (state, first) = (report.state, report.uptime_s);
     assert_eq!(state, SvcState::Idle);
     thread::sleep(Duration::from_millis(1100));
-    let (_, second) = pipe.status().unwrap();
+    let second = pipe.status().unwrap().uptime_s;
     assert!(second > first, "uptime {first} -> {second}");
     drop(pipe);
     server.shutdown();
@@ -108,7 +109,7 @@ fn bad_json_and_status_before_hello_close() {
         file.write_all(line).unwrap();
         assert!(read_reply_then_eof(&file).contains("\"Error\""));
     }
-    assert_eq!(good.status().unwrap().0, SvcState::Idle);
+    assert_eq!(good.status().unwrap().state, SvcState::Idle);
     drop(good);
     server.shutdown();
 }
@@ -153,7 +154,7 @@ fn silent_client_does_not_block_others() {
     let server = Server::start();
     let _silent = raw_client(&server.pipe);
     let (mut pipe, _) = SvcPipe::connect(&server.pipe).unwrap();
-    assert_eq!(pipe.status().unwrap().0, SvcState::Idle);
+    assert_eq!(pipe.status().unwrap().state, SvcState::Idle);
     drop(pipe);
     server.shutdown();
 }

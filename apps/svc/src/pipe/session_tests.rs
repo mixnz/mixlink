@@ -17,15 +17,17 @@ fn is_error_and_close(reply: &Reply) -> bool {
 #[test]
 fn status_before_hello_is_refused() {
     let mut session = Session::new();
-    assert!(is_error_and_close(
-        &session.handle_line(GET_STATUS, Duration::ZERO)
-    ));
+    assert!(is_error_and_close(&session.handle_line(
+        GET_STATUS,
+        Duration::ZERO,
+        || false
+    )));
 }
 
 #[test]
 fn hello_then_status() {
     let mut session = Session::new();
-    let reply = session.handle_line(&hello(1), Duration::ZERO);
+    let reply = session.handle_line(&hello(1), Duration::ZERO, || false);
     assert_eq!(
         reply.msg,
         SvcToTray::Hello {
@@ -34,12 +36,13 @@ fn hello_then_status() {
         }
     );
     assert!(!reply.close);
-    let reply = session.handle_line(GET_STATUS, Duration::from_secs(3));
+    let reply = session.handle_line(GET_STATUS, Duration::from_secs(3), || false);
     assert_eq!(
         reply.msg,
         SvcToTray::Status {
             state: SvcState::Idle,
-            uptime_s: 3
+            uptime_s: 3,
+            network_public: false
         }
     );
     assert!(!reply.close);
@@ -48,7 +51,7 @@ fn hello_then_status() {
 #[test]
 fn other_version_gets_hello_and_close() {
     let mut session = Session::new();
-    let reply = session.handle_line(&hello(2), Duration::ZERO);
+    let reply = session.handle_line(&hello(2), Duration::ZERO, || false);
     assert!(matches!(
         reply.msg,
         SvcToTray::Hello {
@@ -62,29 +65,59 @@ fn other_version_gets_hello_and_close() {
 #[test]
 fn invalid_json_is_refused() {
     let mut session = Session::new();
-    assert!(is_error_and_close(
-        &session.handle_line(b"{nope\n", Duration::ZERO)
-    ));
+    assert!(is_error_and_close(&session.handle_line(
+        b"{nope\n",
+        Duration::ZERO,
+        || false
+    )));
 }
 
 #[test]
 fn non_utf8_is_refused() {
     let mut session = Session::new();
-    assert!(is_error_and_close(
-        &session.handle_line(&[0xff, 0xfe, b'\n'], Duration::ZERO)
-    ));
+    assert!(is_error_and_close(&session.handle_line(
+        &[0xff, 0xfe, b'\n'],
+        Duration::ZERO,
+        || false
+    )));
 }
 
 #[test]
 fn second_hello_is_refused() {
     let mut session = Session::new();
-    session.handle_line(&hello(1), Duration::ZERO);
-    assert!(is_error_and_close(
-        &session.handle_line(&hello(1), Duration::ZERO)
-    ));
+    session.handle_line(&hello(1), Duration::ZERO, || false);
+    assert!(is_error_and_close(&session.handle_line(
+        &hello(1),
+        Duration::ZERO,
+        || false
+    )));
 }
 
 #[test]
 fn too_long_reply_closes() {
     assert!(is_error_and_close(&too_long_reply()));
+}
+
+#[test]
+fn status_reports_network_public() {
+    let mut session = Session::new();
+    session.handle_line(&hello(1), Duration::ZERO, || false);
+    let reply = session.handle_line(GET_STATUS, Duration::ZERO, || true);
+    assert_eq!(
+        reply.msg,
+        SvcToTray::Status {
+            state: SvcState::Idle,
+            uptime_s: 0,
+            network_public: true
+        }
+    );
+}
+
+#[test]
+fn hello_does_not_probe() {
+    let mut session = Session::new();
+    let reply = session.handle_line(&hello(1), Duration::ZERO, || {
+        panic!("network probed for Hello")
+    });
+    assert!(!reply.close);
 }

@@ -17,6 +17,7 @@ fn every_message_round_trips() {
         SvcToTray::Status {
             state: SvcState::Idle,
             uptime_s: 42,
+            network_public: true,
         },
         SvcToTray::Error {
             message: "bad".to_owned(),
@@ -32,10 +33,11 @@ fn status_encodes_exactly() {
     let msg = SvcToTray::Status {
         state: SvcState::Idle,
         uptime_s: 3,
+        network_public: false,
     };
     assert_eq!(
         encode_line(&msg).unwrap(),
-        "{\"type\":\"Status\",\"state\":\"idle\",\"uptime_s\":3}\n"
+        "{\"type\":\"Status\",\"state\":\"idle\",\"uptime_s\":3,\"network_public\":false}\n"
     );
 }
 
@@ -108,4 +110,34 @@ fn connect_missing_pipe_is_not_running() {
     let name = format!(r"\\.\pipe\mixlink-test-none-{}", std::process::id());
     let result = SvcPipe::connect(&name);
     assert!(matches!(result, Err(SvcPipeError::NotRunning)));
+}
+
+#[test]
+fn status_without_network_public_decodes_false() {
+    let msg = decode_line::<SvcToTray>(r#"{"type":"Status","state":"idle","uptime_s":7}"#).unwrap();
+    assert_eq!(
+        msg,
+        SvcToTray::Status {
+            state: SvcState::Idle,
+            uptime_s: 7,
+            network_public: false,
+        }
+    );
+}
+
+#[test]
+fn status_report_from_message() {
+    let msg = SvcToTray::Status {
+        state: SvcState::Idle,
+        uptime_s: 9,
+        network_public: true,
+    };
+    assert_eq!(
+        StatusReport::from_status(msg),
+        Some(StatusReport {
+            state: SvcState::Idle,
+            uptime_s: 9,
+            network_public: true,
+        })
+    );
 }
