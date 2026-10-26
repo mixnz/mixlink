@@ -3,7 +3,7 @@
 use mixlink_core::config::Topology;
 use mixlink_proto::control::DisplayInfo;
 
-use super::topology::{RestorePlan, Snapshot};
+use super::topology::{RestorePlan, SavedTarget, Snapshot};
 use super::wire::{AddMonitor, QueryReply};
 use crate::error::SvcError;
 
@@ -17,12 +17,14 @@ pub trait DisplayConfig {
     fn find_mixlink(&mut self, product: u16) -> Result<Option<String>, SvcError>;
     /// Whether any active display is not a MixLink monitor.
     fn has_physical_active(&mut self) -> Result<bool, SvcError>;
-    /// Makes `monitor_path` the main display at `mode`; others off or to its right.
+    /// Makes `monitor_path` the main display at `mode`; `others` (the displays from before the
+    /// monitor arrived) off or to its right.
     fn switch_to(
         &mut self,
         monitor_path: &str,
         mode: &DisplayInfo,
         topology: Topology,
+        others: &[SavedTarget],
     ) -> Result<(), SvcError>;
     fn restore(&mut self, plan: &RestorePlan) -> Result<(), SvcError>;
 }

@@ -72,7 +72,13 @@ fn run_mode(mode: Mode) -> Result<(), SvcError> {
             Ok(())
         }
         Mode::Drivers(cmd) => drivers::run(&cmd),
-        Mode::Display(cmd) => display::commands::run(&cmd),
+        Mode::Display(cmd) => {
+            log_setup::init_console_log();
+            display::commands::run(&cmd)
+        }
+        Mode::DisplayAgent { input, output } => {
+            platform::windows::display_agent::serve_one(&input, &output)
+        }
     }
 }
 

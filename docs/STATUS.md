@@ -31,17 +31,16 @@ Details live in each spec; one line per item here.
 - T20 driver tooling (0014): `mixlink-svc drivers install | uninstall | status` (per-machine cert, catalog check,
   no prompt; install removes what is there first; exit 3 when a program holds `vhid`); `vdisplay` isolated
   (DIRID 13); driver build in full gate, CI `drivers` job, `build.sh release` (`dist/drivers/`). Two machine runs pass.
-- T21 virtual display (0015), code done: `vdisplay` has no monitor until the service's `ADD_MONITOR` IOCTL
-  (≤ 4, modes from the request, handle close departs them); stable EDID per client (`MXL`, serial from the id);
-  `session::begin` / `end` save, switch (`virtualOnly` / `extend`, `host.json`), restore the layout; service start
-  restores a crash-left layout and adds a headless 1080p60 monitor; `mixlink-svc display status | try`.
+- T21 virtual display (0015): `vdisplay` has no monitor until the service's `ADD_MONITOR` IOCTL (≤ 4, handle
+  close departs them); stable EDID per client; `session::begin` / `end` save, switch (`virtualOnly` / `extend`,
+  `host.json`), restore the layout; in Session 0 through a console-session helper (`display-agent`, CCD is
+  denied there); service start restores a crash-left layout and adds a headless 1080p60 monitor. Main PC runs
+  pass (spec 0015 → Results), incl. headless cold boot.
 
 ## In progress
-- T21 manual acceptance (spec 0015 → Acceptance criteria, Results): reinstall drivers from this build, owner
-  cleanup on kill, `reject-check`, both layouts, Session 0 `display probe` via `schtasks` (decides whether the
-  service needs a console-session helper), headless boot / login screen, iGPU + dGPU row. Only the desktop
-  probe ran so far (CCD read + apply work in session 1; `MXL_MFG_ID` byte order confirmed).
-- Main PC: MixLink drivers from `dist/` (pre-T21 build, S2 sample monitor active) until the T21 runs reinstall.
+- T21 open rows (spec 0015): frame grab of login / lock screen on the headless monitor (T7 harness), power cut
+  during a session, iGPU + dGPU host. Fixes from the machine runs are not committed yet.
+- Main PC: T21 drivers installed from `target\drivers`, MixLink service removed after the runs.
 - Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
   machine: ViGEmBus may still be installed (Settings → Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
 
@@ -49,7 +48,8 @@ Details live in each spec; one line per item here.
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
 - 60 Hz clients: `Present` blocks the video thread at vblank, AUs wait 2–6 ms before decode (spec 0013 →
   Latency impact). Use the frame-latency waitable object in T9 or phase 3.
-- Roadmap phase 1: T5 (discovery in the service), T22 (virtual HID) unblocked; T7 after the T21 runs.
+- Roadmap phase 1: T5 (discovery in the service), T22 (virtual HID), T7 unblocked. Needs a
+  roadmap row: physical monitor plugged in while headless is main (login prompt stays on the virtual monitor).
 - Spec 0014 open rows: Steam itself holding the pad (exit 3 proven with a held-handle helper only), tampered
   package with the remove-first install. Check when T22 / T12 use the pad with Steam.
 - Inputs for later rows: T7 ← 0005, 0007 Verdict (encode levers, QSV pool), 0015 (frame share: only the first

@@ -94,13 +94,22 @@ so the session logic is tested with a fake.
 - **Switch:** find the new virtual target by monitor device path, give it the client mode at desktop
   origin (0, 0), so it is the main display. `virtualOnly`: every other path inactive. `extend`: other paths
   stay active, moved right of the virtual monitor.
+  - A MixLink target counts as found only once it has a monitor device path (right after `ADD_MONITOR` it
+    reports its EDID ids with an empty path).
+  - `extend` places the displays from the snapshot taken before `ADD_MONITOR`: when a known client monitor
+    arrives, Windows first applies the layout it remembers for that monitor set (e.g. `virtualOnly`).
+  - A path taken from an inactive display reports scan-line ordering "unspecified"; with a refresh rate
+    set and no target mode, SetDisplayConfig refuses that (`ERROR_INVALID_PARAMETER`), so it becomes
+    progressive.
 - **Restore:** map saved targets to today's paths by monitor device path, apply, delete the file.
   A saved monitor that is gone is skipped; if none is left, fall back to `SDC_TOPOLOGY_EXTEND`.
-- **Session 0 risk:** CCD calls may fail or act on the wrong desktop from the service. The first plan task
-  checks it in service mode at the desktop and at the login screen. Fallback: the service starts
-  `mixlink-svc display-agent <op>` as SYSTEM in the active console session (`WTSGetActiveConsoleSessionId`,
-  token session id set, `CreateProcessAsUserW`, desktop `winsta0\default` or `winlogon`), the op and file
-  path as arguments, result as exit code. Same pure code in both cases.
+- **Session 0:** `QueryDisplayConfig` from the service fails with `ERROR_ACCESS_DENIED` (Results). In
+  Session 0 the service therefore uses a helper (`display/agent.rs`, `platform/windows/display_agent.rs`):
+  per call it writes the request as JSON into the snapshot folder, runs `mixlink-svc display-agent --in <f>
+  --out <f>` as SYSTEM in the active console session (own token, `TokenSessionId` set, `CreateProcessAsUserW`,
+  `winsta0\default`, ≤ 10 s, then killed) and reads the JSON reply. The helper attaches to the input desktop
+  (`OpenInputDesktop` + `SetThreadDesktop`) and calls the same `CcdConfig`. Outside Session 0 (`display try`)
+  `CcdConfig` runs in process.
 
 ### Session flow (`apps/svc/src/display/session.rs`, pure over traits)
 - `begin(client_id, DisplayInfo, Topology)`: save topology → `ADD_MONITOR` → wait until its path shows up
@@ -111,7 +120,9 @@ so the session logic is tested with a fake.
 ### Service start
 1. Open the driver; not there yet → retry every 500 ms up to 30 s (auto-start can beat the adapter init).
 2. Leftover `topology.json` → restore (crash or power loss during a session).
-3. No active path on a non-MixLink target → add the headless monitor.
+3. No active path with a real non-MixLink monitor → add the headless monitor. With nothing plugged in,
+   Windows keeps one path active (1024x768) whose target has no monitor device path; it does not count.
+   The active displays seen here are logged at `info`.
 - The service keeps the handle for its lifetime. `drivers install | uninstall` stop the service first
   (else the open handle vetoes the removal) and start it again after when it was running.
 
@@ -122,6 +133,9 @@ so the session logic is tested with a fake.
 | `display try --client <32 hex> --mode 2560x1440@120 [--topology virtual-only\|extend\|keep]` | `begin`, then waits for Enter / Ctrl+C, then `end`; `keep` adds the monitor only and leaves the layout alone |
 - `display try` refuses while the `MixLink` service runs (two owners of the topology). Killing it mid-way
   is the crash test: monitor leaves with the handle, the next start restores the layout.
+- Hidden: `display probe --out <file>` (layout read + re-apply, Session 0 check), `display reject-check`
+  (malformed `ADD_MONITOR` requests), `display-agent --in <f> --out <f>` (the helper). `RUST_LOG=debug`
+  logs each path handed to SetDisplayConfig.
 
 ### Render adapter
 The driver keeps choosing (`PickRenderAdapter`: most VRAM, set only on hybrid machines). `QUERY` returns
@@ -143,29 +157,49 @@ refresh removes scaling and rate mismatch, and the virtual monitor as main displ
 baseline (specs 0004, 0005). Session start cost (add + switch) is measured and reported in Results.
 
 ## Acceptance criteria
-- [ ] Fresh boot, driver installed, service stopped: no MixLink monitor exists.
-- [ ] `display try` with 2560x1440@120 and 1920x1080@60: Windows shows a "MixLink" monitor at exactly that
+- [x] Driver installed, service stopped: no MixLink monitor exists (after install; not checked on a cold boot).
+- [x] `display try` with 2560x1440@120 and 1920x1080@60: Windows shows a "MixLink" monitor at exactly that
       mode and refresh, as main display; Enter → monitor gone, previous layout back (positions, main, modes).
-- [ ] `virtual-only` turns physical monitors off during `try`; `extend` keeps them on at the right.
-- [ ] Two client ids: each keeps its own scale set in Windows Settings across `try` runs.
+- [x] `virtual-only` turns physical monitors off during `try`; `extend` keeps them on at the right.
+- [x] Two client ids: each keeps its own scale set in Windows Settings across `try` runs.
 - [ ] `display try` killed from Task Manager: the monitor goes away; next service start restores the layout
       and deletes `topology.json`. Power cut during `try`: layout right after the next boot.
+      (Kill + service-start restore pass; power cut not tried.)
 - [ ] Headless (no physical monitor active), service running: a virtual monitor exists from boot, the login
       screen and lock screen render to it (checked with the S2 harness or a DDA grab).
-- [ ] Host with a monitor, service running: no headless monitor is added.
-- [ ] `drivers uninstall` with the service running: stops it, removes everything, exit 0; `drivers install`
-      starts it again.
-- [ ] `ADD_MONITOR` with a bad EDID checksum, 0 modes, 17 modes, 8K+ width, `flags = 1`: rejected, no monitor.
-- [ ] iGPU + dGPU machine: `display status` names the dGPU; frames still arrive (S2 harness).
-- [ ] Session start time (`try` → monitor main) reported for both topologies on the main PC.
+      (Monitor from boot passes and the login screen went to it; no frame grab yet, lock screen not tried.)
+- [x] Host with a monitor, service running: no headless monitor is added.
+- [x] `drivers uninstall` with the service running: stops it, removes everything, exit 0; `drivers install`
+      starts it again. (Checked with `drivers install`, which runs the uninstall steps first.)
+- [x] `ADD_MONITOR` with a bad EDID checksum, 0 modes, 17 modes, 8K+ width, `flags = 1`: rejected, no monitor.
+- [ ] iGPU + dGPU machine: `display status` names the dGPU; frames still arrive (S2 harness). No such host yet.
+- [x] Session start time (`try` → monitor main) reported for both topologies on the main PC.
 
 ## Open questions
-- Does IddCx let the driver see file cleanup for the owner rule? (Plan task 1; fallback in Design.)
-- Do the CCD calls work from Session 0? (Plan task 1; fallback `display-agent`.)
-- Is an iGPU + dGPU host available for the render adapter row? If not, the row stays open like spec 0004's.
+- (Answered) IddCx lets the driver see file cleanup: killing the owner departs its monitors within ~2 s.
+- (Answered) CCD from Session 0: `ERROR_ACCESS_DENIED`; the console-session helper works (Design → Topology).
+- iGPU + dGPU host for the render adapter row: none yet; the row stays open like spec 0004's.
+- A physical monitor plugged in while the headless monitor is main: the login prompt stays on the
+  virtual monitor, so a person at the host signs in blind. Reacting to plug / unplug while idle is out of
+  scope here; it needs its own row (move the headless monitor aside or remove it when a monitor arrives).
 
 ## Results
-Manual runs (elevated, main PC) are recorded here as they happen.
-- `display probe` from the desktop (session 1, not elevated): query and re-apply of the current layout
-  work. `edidManufactureId` is EDID bytes 8..10 read little-endian (`DEL` = `0xac10`, `MXL_MFG_ID`), the
-  product code as stored. The S2 sample monitor (`DELD0E6`) is still active from the old driver.
+Main PC (RTX 5070, MSI 3840x2160@160 on DP, Windows IddCx `0x10c00`), elevated, 2026-10-26.
+- `display probe` in session 1: CCD read + re-apply work. `edidManufactureId` is EDID bytes 8..10 read
+  little-endian (`DEL` = `0xac10`, `MXL_MFG_ID`); the product code as stored.
+- Driver reinstall: no monitor until `ADD_MONITOR`; render GPU RTX 5070. `try --topology keep` 2560x1440@120:
+  "MixLink", 120 Hz in Advanced display; Enter removes it. `taskkill` of `try`: monitor gone within ~2 s.
+- `reject-check`: all five malformed requests refused, 0 monitors after.
+- `extend` 2560x1440@120: main at (0,0), MSI right, restore exact; ready in 269 ms (1356 ms when Windows
+  first applied a remembered `virtualOnly` layout). `virtualOnly`: MSI off, restore exact; ready 381–659 ms.
+  1920x1080@60 `extend`: 147–365 ms.
+- Fixed during the runs: restore of a display that was off (`ERROR_INVALID_PARAMETER`, scan-line ordering);
+  switch before the monitor had a device path; `extend` turning the MSI off for a client that had used
+  `virtualOnly` (Windows applies its remembered layout on arrival).
+- Two client ids at 1920x1080@60: 125 % kept for one, default for the other, across runs.
+- Kill during `extend`: layout kept on disk. Service start (Session 0): CCD denied (error 5) → helper added;
+  then the service restored the layout through the helper and deleted the file.
+- `drivers install` with the service running: service stopped, drivers reinstalled, service started, exit 0.
+- Cold boot with the MSI unplugged: Windows keeps a 1024x768 path with no monitor; after excluding it the
+  service added the headless monitor (`Some(1)`, 1920x1080@60) 9 s after boot, and the login prompt was on
+  it (signed in blind after plugging the MSI back). With the MSI plugged in: no headless monitor.

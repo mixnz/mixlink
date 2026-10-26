@@ -43,6 +43,8 @@ pub enum SvcError {
     MonitorTimeout,
     #[error("The MixLink service is running. Stop it first with `sc stop MixLink`.")]
     ServiceRunning,
+    #[error("display helper: {0}")]
+    DisplayAgent(String),
     #[error("screen layout {step} failed: Windows error {code}")]
     Topology { step: &'static str, code: i32 },
     /// Uninstall stopped: a program holds a device open (`Some` when Windows names it).

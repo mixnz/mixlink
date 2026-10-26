@@ -48,6 +48,7 @@ struct FakeConfig {
     polls: Cell<u32>,
     fail_switch: bool,
     physical: bool,
+    snapshots_taken: Cell<u32>,
 }
 
 fn saved() -> Snapshot {
@@ -68,7 +69,15 @@ fn saved() -> Snapshot {
 impl DisplayConfig for FakeConfig {
     fn snapshot(&mut self) -> Result<Snapshot, SvcError> {
         self.log.borrow_mut().push("snapshot".to_owned());
-        Ok(saved())
+        // After the first look, Windows has applied the layout it remembers for this monitor set
+        // (the physical display off), as it does when a known client monitor arrives.
+        let first = self.snapshots_taken.get() == 0;
+        self.snapshots_taken.set(self.snapshots_taken.get() + 1);
+        let mut snapshot = saved();
+        if !first {
+            snapshot.targets.clear();
+        }
+        Ok(snapshot)
     }
 
     fn present_monitors(&mut self) -> Result<Vec<String>, SvcError> {
@@ -93,10 +102,13 @@ impl DisplayConfig for FakeConfig {
         monitor_path: &str,
         _mode: &DisplayInfo,
         topology: Topology,
+        others: &[SavedTarget],
     ) -> Result<(), SvcError> {
-        self.log
-            .borrow_mut()
-            .push(format!("switch {monitor_path} {topology:?}"));
+        let others: Vec<&str> = others.iter().map(|t| t.monitor_path.as_str()).collect();
+        self.log.borrow_mut().push(format!(
+            "switch {monitor_path} {topology:?} [{}]",
+            others.join(",")
+        ));
         if self.fail_switch {
             return Err(SvcError::Topology {
                 step: "switch",
@@ -139,6 +151,7 @@ fn rig(name: &str) -> Rig {
             polls: Cell::new(0),
             fail_switch: false,
             physical: true,
+            snapshots_taken: Cell::new(0),
         },
         store: SnapshotStore::new(dir.join("topology.json")),
         log,
@@ -196,7 +209,7 @@ fn begin_saves_adds_switches_in_order() {
         vec![
             "snapshot",
             "add 0x4d58 -> 1",
-            "switch VIRT0x4d58 VirtualOnly"
+            "switch VIRT0x4d58 VirtualOnly [PHYS]"
         ]
     );
     assert_eq!(r.store.load(), Some(saved()));
@@ -232,7 +245,7 @@ fn begin_failure_undoes_steps() {
         vec![
             "snapshot",
             "add 0x4d58 -> 1",
-            "switch VIRT0x4d58 VirtualOnly",
+            "switch VIRT0x4d58 VirtualOnly [PHYS]",
             "remove 1",
             "restore 1"
         ]
@@ -325,4 +338,12 @@ fn start_up_adds_headless_without_physical() {
     start_up(&mut ports(&mut r), &mut headless).unwrap();
     assert_eq!(entries(&r), vec!["add 0x4d59 -> 1"]);
     assert_eq!(headless, Some(1));
+}
+
+#[test]
+fn begin_extend_keeps_displays_from_before_the_monitor() {
+    let mut r = rig("extend-before");
+    begin_with(&mut r, Some(Topology::Extend), &mut None).unwrap();
+    assert!(entries(&r).contains(&"switch VIRT0x4d58 Extend [PHYS]".to_owned()));
+    assert_eq!(r.config.snapshots_taken.get(), 1);
 }

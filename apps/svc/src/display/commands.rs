@@ -5,9 +5,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
-use windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
-use windows::Win32::System::Threading::GetCurrentProcessId;
-
 use mixlink_core::ids::DeviceId;
 use mixlink_proto::control::DisplayInfo;
 
@@ -20,6 +17,7 @@ use super::status::{format_status, refresh_text};
 use crate::args::{DisplayCmd, TryTopology};
 use crate::error::SvcError;
 use crate::platform::windows::console::install_ctrl_handler;
+use crate::platform::windows::console_process::current_session;
 use crate::platform::windows::display_config::{CcdConfig, probe_report};
 use crate::platform::windows::gpu_name::gpu_name;
 use crate::platform::windows::install::is_running;
@@ -115,13 +113,10 @@ fn wait_enter_or_ctrl_c() -> Result<(), SvcError> {
 
 /// Writes the session id and the layout read / re-apply results to `out` (spec 0015, Session 0 check).
 fn probe(out: &Path) -> Result<(), SvcError> {
-    let mut session = 0u32;
-    // SAFETY: our own process id; `session` is a valid out pointer.
-    let session_text =
-        match unsafe { ProcessIdToSessionId(GetCurrentProcessId(), &raw mut session) } {
-            Ok(()) => session.to_string(),
-            Err(error) => error.to_string(),
-        };
+    let session_text = match current_session() {
+        Ok(session) => session.to_string(),
+        Err(error) => error.to_string(),
+    };
     let text = format!("session: {session_text}\n{}", probe_report());
     std::fs::write(out, text)?;
     Ok(())

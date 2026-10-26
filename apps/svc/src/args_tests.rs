@@ -224,3 +224,21 @@ fn display_try_virtual_only_and_extend() {
         assert_eq!(got, TryTopology::Apply(topology));
     }
 }
+
+#[test]
+fn display_agent() {
+    assert_eq!(
+        parse(&[
+            "display-agent",
+            "--in",
+            r"C:\a b\in.json",
+            "--out",
+            "out.json"
+        ])
+        .unwrap(),
+        Mode::DisplayAgent {
+            input: PathBuf::from(r"C:\a b\in.json"),
+            output: PathBuf::from("out.json"),
+        }
+    );
+}

@@ -24,7 +24,16 @@ pub struct Snapshot {
     pub targets: Vec<SavedTarget>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl Snapshot {
+    pub fn empty() -> Snapshot {
+        Snapshot {
+            version: SNAPSHOT_VERSION,
+            targets: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RestorePlan {
     /// The saved targets that are still present, in saved order.
     Apply(Vec<SavedTarget>),

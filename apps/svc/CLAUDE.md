@@ -17,14 +17,16 @@ installs our drivers (spec 0014), drives the virtual display (spec 0015); later 
   fake host), `status.rs` (`format_status`), `mod.rs` (`run`: the `drivers` commands).
 - `display/` (spec 0015), pure: `wire.rs` (IOCTL bytes = `drivers/vdisplay/Control.h`), `edid.rs` + `cvt.rs`,
   `modes.rs`, `topology.rs` (snapshot, `plan_restore`, `plan_extend`), `store.rs` (`topology.json`), `ports.rs`
-  (`DisplayDriver`, `DisplayConfig`), `session.rs` (`begin` / `end` / `start_up`; fakes in tests). Windows:
-  `service.rs` (thread `svc-display`), `commands.rs`. `host_config.rs`: `%ProgramData%\MixLink\host.json`.
+  (`DisplayDriver`, `DisplayConfig`), `session.rs` (`begin` / `end` / `start_up`; fakes in tests), `agent.rs`
+  (helper JSON protocol, `AgentConfig`). Windows: `service.rs` (thread `svc-display`; Session 0 → helper),
+  `commands.rs`. `host_config.rs`: `%ProgramData%\MixLink\host.json`.
 - `platform/windows/`: `service.rs` (dispatcher, status, `SERVICE_NAME`), `install.rs` (create / update / delete,
   recovery, `is_running`), `pipe.rs`, `security.rs` (pipe ACL), `console.rs` (Ctrl+C); drivers: `cert.rs` +
   `cert_der.rs`, `sign.rs` (`SignerSignEx3`), `trust_store.rs`, `catalog.rs`, `driver_store.rs`, `devices.rs`
   (root nodes, veto), `drivers_reg.rs` (state in HKLM), `dir_security.rs` (SYSTEM + Admins folder ACL),
   `drivers_host.rs` (`WindowsDriverHost`, `is_elevated`, `query_status`); display: `vdisplay.rs` (`VDisplay`),
-  `ccd.rs` + `display_config.rs` (`CcdConfig`, `probe_report`), `gpu_name.rs`. All `unsafe` here.
+  `ccd.rs` + `display_config.rs` (`CcdConfig`), `display_agent.rs` + `console_process.rs` (helper as SYSTEM
+  in the console session), `gpu_name.rs`. All `unsafe` here.
 - `tests/console_mode.rs`: the binary with `--console --pipe <name>` serves the pipe.
 
 ## Modes (process contract)
@@ -36,15 +38,13 @@ installs our drivers (spec 0014), drives the virtual display (spec 0015); later 
   `<exe dir>\drivers\<name>` or `--from` (`target\drivers`). `drivers uninstall` (admin): devices,
   packages, certs. Both stop the service first and start it again. `drivers status`: no admin.
 - `display status`, `display try --client <32 hex> --mode WxH@Hz --topology virtual-only|extend|keep` (admin,
-  service stopped). Hidden: `display probe --out <file>`, `display reject-check`.
+  service stopped). Hidden: `display probe | reject-check`, `display-agent --in <f> --out <f>` (the helper).
 - Service mode logs to `%ProgramData%\MixLink\logs\svc.log`; console mode to stderr (`RUST_LOG`).
 - Exit codes: 0 ok, 1 error, 2 usage, 3 a program holds a MixLink device open (`drivers install | uninstall`).
 
 ## Notes
-- The pipe carries input from any interactive user while we run as SYSTEM: parse strictly, close on
-  anything unexpected, never log message bodies above `debug`.
-- Driver signing tests use a user-scope key and the built `vhid` package (skip when not built).
+- Pipe input comes from any interactive user and we run as SYSTEM: parse strictly, close on surprises.
+- Never log pipe message bodies above `debug`. Signing tests: user-scope key, built `vhid` (skipped if absent).
 - Service and `--console` hold the `vdisplay` handle for their lifetime; closing it departs our monitors.
-
-## Manual checks (elevated terminal; no automated SCM / driver install test)
-- `install` / `sc qc` / `sc qfailure` / `sc stop|start` / `uninstall` twice. Drivers: spec 0014; display: spec 0015.
+- Manual checks (elevated; no automated SCM / driver test): `install`, `sc qc|qfailure|stop|start`, `uninstall`
+  twice; drivers: spec 0014; display: spec 0015 → Results.

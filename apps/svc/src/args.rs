@@ -19,6 +19,11 @@ pub enum Mode {
     Uninstall,
     Drivers(DriversCmd),
     Display(DisplayCmd),
+    /// The display helper the service starts in the console session (spec 0015); not for people.
+    DisplayAgent {
+        input: PathBuf,
+        output: PathBuf,
+    },
 }
 
 /// `display ...` subcommands (spec 0015): developer checks of the virtual display.
@@ -109,6 +114,10 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, Strin
         ["display", "probe", "--out", out] => Ok(Mode::Display(DisplayCmd::Probe {
             out: PathBuf::from(out),
         })),
+        ["display-agent", "--in", input, "--out", output] => Ok(Mode::DisplayAgent {
+            input: PathBuf::from(input),
+            output: PathBuf::from(output),
+        }),
         ["display", "reject-check"] => Ok(Mode::Display(DisplayCmd::RejectCheck)),
         _ => Err(format!("unknown arguments: {}", args.join(" "))),
     }

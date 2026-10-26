@@ -11,7 +11,7 @@ use super::edid::{HEADLESS_ID, HEADLESS_MODE, PRODUCT_CLIENT, PRODUCT_HEADLESS};
 use super::modes::add_request;
 use super::ports::{DisplayConfig, DisplayDriver};
 use super::store::SnapshotStore;
-use super::topology::plan_restore;
+use super::topology::{SavedTarget, Snapshot, plan_restore};
 use crate::error::SvcError;
 
 /// How often and how many times `begin` looks for the new monitor in Windows' list (≤ 5 s).
@@ -44,10 +44,13 @@ pub fn begin<D: DisplayDriver, C: DisplayConfig>(
     headless: &mut Option<u32>,
     sleep: &dyn Fn(Duration),
 ) -> Result<Active, SvcError> {
-    let saved = match topology {
-        Some(_) => p.store.save_if_absent(&p.config.snapshot()?)?,
-        None => false,
+    // The layout before the monitor arrives: Windows may switch to a layout it remembers for this
+    // client's monitor the moment it appears, so `extend` must not read the displays after that.
+    let before = match topology {
+        Some(_) => p.config.snapshot()?,
+        None => Snapshot::empty(),
     };
+    let saved = topology.is_some() && p.store.save_if_absent(&before)?;
     let monitor = match p
         .driver
         .add_monitor(&add_request(client, PRODUCT_CLIENT, mode))
@@ -59,7 +62,7 @@ pub fn begin<D: DisplayDriver, C: DisplayConfig>(
         }
     };
     if let Some(topology) = topology {
-        if let Err(error) = switch(p, mode, topology, sleep) {
+        if let Err(error) = switch(p, mode, topology, &before.targets, sleep) {
             undo(p, Some(monitor), saved);
             return Err(error);
         }
@@ -79,6 +82,7 @@ fn switch<D: DisplayDriver, C: DisplayConfig>(
     p: &mut Ports<'_, D, C>,
     mode: &DisplayInfo,
     topology: Topology,
+    others: &[SavedTarget],
     sleep: &dyn Fn(Duration),
 ) -> Result<(), SvcError> {
     for poll in 0..TARGET_POLLS {
@@ -86,7 +90,7 @@ fn switch<D: DisplayDriver, C: DisplayConfig>(
             sleep(TARGET_POLL);
         }
         if let Some(path) = p.config.find_mixlink(PRODUCT_CLIENT)? {
-            return p.config.switch_to(&path, mode, topology);
+            return p.config.switch_to(&path, mode, topology, others);
         }
     }
     Err(SvcError::MonitorTimeout)

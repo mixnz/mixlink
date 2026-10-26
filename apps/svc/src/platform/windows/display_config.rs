@@ -5,9 +5,11 @@ use mixlink_core::config::Topology;
 use mixlink_proto::control::DisplayInfo;
 use windows::Win32::Devices::Display::{
     DISPLAYCONFIG_MODE_INFO, DISPLAYCONFIG_MODE_INFO_0, DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE,
-    DISPLAYCONFIG_PATH_INFO, DISPLAYCONFIG_PIXELFORMAT_32BPP, DISPLAYCONFIG_RATIONAL,
-    DISPLAYCONFIG_SOURCE_MODE, QDC_ALL_PATHS, QDC_ONLY_ACTIVE_PATHS, SDC_ALLOW_CHANGES, SDC_APPLY,
-    SDC_SAVE_TO_DATABASE, SDC_TOPOLOGY_EXTEND, SDC_USE_SUPPLIED_DISPLAY_CONFIG,
+    DISPLAYCONFIG_PATH_INFO, DISPLAYCONFIG_PATH_TARGET_INFO, DISPLAYCONFIG_PIXELFORMAT_32BPP,
+    DISPLAYCONFIG_RATIONAL, DISPLAYCONFIG_SCANLINE_ORDERING_PROGRESSIVE,
+    DISPLAYCONFIG_SCANLINE_ORDERING_UNSPECIFIED, DISPLAYCONFIG_SOURCE_MODE, QDC_ALL_PATHS,
+    QDC_ONLY_ACTIVE_PATHS, SDC_ALLOW_CHANGES, SDC_APPLY, SDC_SAVE_TO_DATABASE, SDC_TOPOLOGY_EXTEND,
+    SDC_USE_SUPPLIED_DISPLAY_CONFIG,
 };
 use windows::Win32::Foundation::POINTL;
 use windows::Win32::Graphics::Gdi::{
@@ -26,6 +28,22 @@ pub const MXL_MFG_ID: u16 = u16::from_le_bytes(MXL_MFG);
 
 #[derive(Debug, Default)]
 pub struct CcdConfig;
+
+/// An active target that is a real monitor: with no monitor plugged in, Windows keeps one path
+/// active (1024x768) whose target has no monitor device path; it must not count as a display,
+/// or a headless host never gets its headless monitor. MixLink monitors only when `with_mixlink`.
+fn counts_as_display(name: &TargetName, with_mixlink: bool) -> bool {
+    !name.monitor_path.is_empty() && (with_mixlink || name.edid_manufacture_id != MXL_MFG_ID)
+}
+
+/// A MixLink monitor with this product code that Windows has finished setting up. Right after
+/// `ADD_MONITOR` the target already reports the EDID ids but no monitor device path yet; a layout
+/// cannot name it until the path is there.
+fn is_ready_mixlink(name: &TargetName, product: u16) -> bool {
+    name.edid_manufacture_id == MXL_MFG_ID
+        && name.edid_product_code_id == product
+        && !name.monitor_path.is_empty()
+}
 
 /// One display in a layout we apply.
 struct Placement {
@@ -61,7 +79,7 @@ fn active(with_mixlink: bool) -> Result<Vec<SavedTarget>, SvcError> {
     let mut out = Vec::new();
     for path in &config.paths {
         let name = name_of(path)?;
-        if !with_mixlink && name.edid_manufacture_id == MXL_MFG_ID {
+        if !counts_as_display(&name, with_mixlink) {
             continue;
         }
         let Some(mode) = source_mode(&config, path) else {
@@ -142,12 +160,17 @@ fn apply_layout(layout: &[Placement], step: &'static str) -> Result<(), SvcError
         path.flags = DISPLAYCONFIG_PATH_ACTIVE;
         path.sourceInfo.Anonymous.modeInfoIdx = index;
         path.targetInfo.Anonymous.modeInfoIdx = DISPLAYCONFIG_PATH_MODE_IDX_INVALID;
-        path.targetInfo.refreshRate = place.refresh;
+        set_target_refresh(
+            &mut path.targetInfo,
+            place.refresh.Numerator,
+            place.refresh.Denominator,
+        );
         paths.push(path);
     }
     if paths.is_empty() {
         return Err(SvcError::Topology { step, code: 0 });
     }
+    log_layout(step, &paths, &modes);
     ccd::apply(
         Some(&paths),
         Some(&modes),
@@ -185,7 +208,8 @@ impl DisplayConfig for CcdConfig {
                 continue;
             }
             let name = name_of(path)?;
-            if name.edid_manufacture_id == MXL_MFG_ID && name.edid_product_code_id == product {
+            if is_ready_mixlink(&name, product) {
+                log::debug!("find: MixLink monitor at {}", name.monitor_path);
                 return Ok(Some(name.monitor_path));
             }
         }
@@ -201,6 +225,7 @@ impl DisplayConfig for CcdConfig {
         monitor_path: &str,
         mode: &DisplayInfo,
         topology: Topology,
+        others: &[SavedTarget],
     ) -> Result<(), SvcError> {
         let mut layout = vec![Placement {
             monitor_path: monitor_path.to_owned(),
@@ -216,8 +241,7 @@ impl DisplayConfig for CcdConfig {
         match topology {
             Topology::VirtualOnly => {}
             Topology::Extend => {
-                let others = active(false)?;
-                for (target, placed) in others.iter().zip(plan_extend(mode.width, &others)) {
+                for (target, placed) in others.iter().zip(plan_extend(mode.width, others)) {
                     layout.push(placement(target, placed.x, placed.y));
                 }
             }
@@ -272,3 +296,61 @@ pub fn probe_report() -> String {
     }
     out
 }
+
+/// Refresh for a path whose target mode Windows picks (`SDC_ALLOW_CHANGES`). A path taken from an
+/// inactive display reports scan-line ordering "unspecified"; with a refresh rate set,
+/// SetDisplayConfig refuses that with ERROR_INVALID_PARAMETER, so it becomes progressive.
+fn set_target_refresh(
+    target: &mut DISPLAYCONFIG_PATH_TARGET_INFO,
+    numerator: u32,
+    denominator: u32,
+) {
+    target.refreshRate = DISPLAYCONFIG_RATIONAL {
+        Numerator: numerator,
+        Denominator: denominator,
+    };
+    if target.scanLineOrdering == DISPLAYCONFIG_SCANLINE_ORDERING_UNSPECIFIED {
+        target.scanLineOrdering = DISPLAYCONFIG_SCANLINE_ORDERING_PROGRESSIVE;
+    }
+}
+
+/// The paths and source modes `apply_layout` hands to SetDisplayConfig (`RUST_LOG=debug`).
+fn log_layout(step: &str, paths: &[DISPLAYCONFIG_PATH_INFO], modes: &[DISPLAYCONFIG_MODE_INFO]) {
+    if !log::log_enabled!(log::Level::Debug) {
+        return;
+    }
+    for (path, mode) in paths.iter().zip(modes) {
+        // SAFETY: `apply_layout` wrote these unions as a mode index and a source mode.
+        let (target_mode, source) = unsafe {
+            (
+                path.targetInfo.Anonymous.modeInfoIdx,
+                mode.Anonymous.sourceMode,
+            )
+        };
+        let target = &path.targetInfo;
+        log::debug!(
+            "{step}: source {:#x}:{} target {:#x}:{} rot {} scale {} scan {} refresh {}/{} \
+             status {:#x} target mode {target_mode:#x} source {}x{} at {},{}",
+            path.sourceInfo.adapterId.LowPart,
+            path.sourceInfo.id,
+            target.adapterId.LowPart,
+            target.id,
+            target.rotation.0,
+            target.scaling.0,
+            target.scanLineOrdering.0,
+            target.refreshRate.Numerator,
+            target.refreshRate.Denominator,
+            target.statusFlags,
+            source.width,
+            source.height,
+            source.position.x,
+            source.position.y,
+        );
+    }
+    let active = ccd::query(QDC_ONLY_ACTIVE_PATHS).map_or(0, |c| c.paths.len());
+    log::debug!("{step}: {active} active paths before apply");
+}
+
+#[cfg(test)]
+#[path = "display_config_tests.rs"]
+mod tests;
