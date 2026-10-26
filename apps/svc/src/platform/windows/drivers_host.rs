@@ -12,12 +12,14 @@ use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
 use super::cert::{KeyScope, SigningCert, create_signing_cert};
 use super::drivers_reg::{STATE_KEY, delete_state, load_state, save_state};
+use super::pad_nodes::WindowsPadHost;
 use super::{catalog, devices, dir_security, driver_store, sign, trust_store};
 use crate::drivers::flow::{DriverHost, RemoveOutcome};
 use crate::drivers::package::{DRIVERS, DriverSpec, stage_dir};
 use crate::drivers::state::DriverState;
 use crate::drivers::status::{DriverStatus, StatusReport};
 use crate::error::SvcError;
+use crate::input::pads;
 
 /// `%ProgramData%` (as the service log uses it).
 pub fn program_data() -> PathBuf {
@@ -153,8 +155,17 @@ impl DriverHost for WindowsDriverHost {
         Ok(())
     }
 
-    /// Reverse creation order: the `vhid` control node goes before its HID node (spec 0016).
+    /// Pad nodes first, then reverse creation order: the `vhid` control node before its HID node
+    /// (spec 0016).
     fn remove_devices(&mut self, spec: &DriverSpec) -> Result<RemoveOutcome, SvcError> {
+        if spec.name == "vhid"
+            && let Err(error) = pads::remove_all(&mut WindowsPadHost)
+        {
+            return match error {
+                SvcError::DeviceHeld(app) => Ok(RemoveOutcome::Held { app }),
+                other => Err(other),
+            };
+        }
         let mut outcome = RemoveOutcome::NoDevice;
         for id in spec.hardware_ids.iter().rev() {
             match devices::remove_devices(spec, id)? {

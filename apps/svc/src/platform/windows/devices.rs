@@ -206,10 +206,16 @@ pub(crate) fn remove_node(
         });
     }
     // Any other result (e.g. a node that is not present) still goes to DiUninstallDevice.
+    uninstall_node(set, data)?;
+    Ok(RemoveOutcome::Removed)
+}
+
+/// Deletes the devnode of a node that is no longer present (no query-remove: PnP vetoes that with
+/// "already removed").
+pub(crate) fn uninstall_node(set: &DevInfo, data: &SP_DEVINFO_DATA) -> Result<(), SvcError> {
     // SAFETY: valid set and element owned by the caller.
     unsafe { DiUninstallDevice(HWND::default(), set.0, data, 0, None) }
-        .map_err(SvcError::win32("DiUninstallDevice"))?;
-    Ok(RemoveOutcome::Removed)
+        .map_err(SvcError::win32("DiUninstallDevice"))
 }
 
 /// State of the first node with `spec`'s first hardware ID (the main node).

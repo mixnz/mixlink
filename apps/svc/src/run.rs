@@ -9,8 +9,9 @@ use mixlink_core::config::DisplaySettings;
 
 use crate::display;
 use crate::error::SvcError;
-use crate::input::open_feeder;
+use crate::input::{open_feeder, pads};
 use crate::pipe::server::listen;
+use crate::platform::windows::pad_nodes::WindowsPadHost;
 use crate::platform::windows::pipe::create_instance;
 use crate::platform::windows::security::PipeSecurity;
 use crate::stop::StopSignal;
@@ -52,6 +53,12 @@ pub fn run(
         Some(settings) => Some(display::service::spawn(Arc::clone(stop), settings)?),
         None => None,
     };
+    // Pad nodes left by a crash go first; pads come and go per session (spec 0016).
+    if opts.input
+        && let Err(error) = pads::remove_all(&mut WindowsPadHost)
+    {
+        log::warn!("leftover virtual Xbox controllers not removed: {error}");
+    }
     // Held until `run` returns; closing it releases every key and button (spec 0016).
     let _feeder = opts.input.then(open_input).flatten();
     on_ready();

@@ -137,12 +137,32 @@ fn report_for_matches_the_device() {
         (ProbeDevice::Pad, Target::Pad(0)),
     ];
     for (device, target) in cases {
-        assert_eq!(report_for(device, 5, &mut keyboard).target(), target);
+        assert_eq!(report_for(device, 5, &mut keyboard, 0).target(), target);
     }
     // Key events alternate press / release, so the keyboard ends empty after an even count.
     let mut keyboard = KeyboardState::default();
     for i in 0..48 {
-        report_for(ProbeDevice::Kbd, i, &mut keyboard);
+        report_for(ProbeDevice::Kbd, i, &mut keyboard, 0);
     }
     assert!(keyboard.report().payload().iter().all(|&b| b == 0));
+}
+
+#[test]
+fn pad_probe_reports_go_to_the_slot() {
+    let mut keyboard = KeyboardState::default();
+    assert_eq!(
+        report_for(ProbeDevice::Pad, 1, &mut keyboard, 3).target(),
+        Target::Pad(3)
+    );
+}
+
+#[test]
+fn xinput_lx_roundtrip() {
+    for i in [0u32, 1, 12_345, 32_767, 32_768, 70_000] {
+        let raw = i % PAD_PERIOD;
+        // xinputhid maps the HID axis 0..=65535 onto -32768..=32767.
+        let thumb = i16::try_from(i64::from(raw) - 32_768).unwrap();
+        assert_eq!(decode_xinput_lx(thumb), Some(raw), "{i}");
+    }
+    assert_eq!(decode_xinput_lx(0), None, "a centred stick is never a code");
 }

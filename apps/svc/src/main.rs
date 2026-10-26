@@ -8,6 +8,7 @@ mod error;
 mod host_config;
 #[cfg(windows)]
 mod input;
+mod input_args;
 mod log_setup;
 mod pipe;
 mod platform;

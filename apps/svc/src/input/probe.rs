@@ -37,7 +37,7 @@ pub const fn period(device: ProbeDevice) -> u32 {
 
 /// The report for event `i`. `keyboard` keeps key state across events.
 // HOT PATH
-pub fn report_for(device: ProbeDevice, i: u32, keyboard: &mut KeyboardState) -> Report {
+pub fn report_for(device: ProbeDevice, i: u32, keyboard: &mut KeyboardState, slot: u8) -> Report {
     match device {
         ProbeDevice::Kbd => {
             let (usage, down) = encode_key(i);
@@ -50,7 +50,7 @@ pub fn report_for(device: ProbeDevice, i: u32, keyboard: &mut KeyboardState) -> 
             lx: encode_pad_lx(i),
             ..PadState::NEUTRAL
         }
-        .report(0),
+        .report(slot),
     }
 }
 
@@ -111,6 +111,12 @@ pub fn encode_pad_lx(i: u32) -> i16 {
 pub fn decode_pad_lx(raw: u16) -> Option<u32> {
     let v = u32::from(raw);
     (v < PAD_PERIOD).then_some(v)
+}
+
+/// XInput `sThumbLX` of a pad fed with code `i % PAD_PERIOD`: xinputhid maps the HID axis
+/// 0..=65535 onto -32768..=32767, so the report value is the thumb XOR 0x8000.
+pub fn decode_xinput_lx(thumb: i16) -> Option<u32> {
+    decode_pad_lx(thumb.cast_unsigned() ^ 0x8000)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

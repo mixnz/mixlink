@@ -23,3 +23,4 @@ pub mod service;
 pub mod sign;
 pub mod trust_store;
 pub mod vdisplay;
+pub mod xinput;

@@ -125,8 +125,11 @@ pub fn pad_added(slot: u8) -> String {
     format!("Virtual Xbox controller {} added.", slot + 1)
 }
 
-pub fn pad_exists(slot: u8) -> String {
-    format!("Virtual Xbox controller {} is already there.", slot + 1)
+pub fn pad_replaced(slot: u8) -> String {
+    format!(
+        "Virtual Xbox controller {} added again (an old one was left over).",
+        slot + 1
+    )
 }
 
 pub fn pad_removed(slot: u8) -> String {

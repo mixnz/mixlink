@@ -81,10 +81,11 @@ fn walk() -> Vec<Step> {
     out
 }
 
-/// Feeds `steps` in time order. `wait(d)` sleeps up to `d` and returns true to stop early; stopping
-/// leaves held keys to the driver's release-all when the handle closes.
+/// Feeds `steps` in time order, pad steps to pad `slot`. `wait(d)` sleeps up to `d` and returns true
+/// to stop early; stopping leaves held keys to the driver's release-all when the handle closes.
 pub fn play(
     steps: &[Step],
+    slot: u8,
     sink: &mut impl ReportSink,
     wait: &mut dyn FnMut(Duration) -> bool,
 ) -> Result<(), VHidError> {
@@ -108,7 +109,7 @@ pub fn play(
                 }
             }
             Action::Abs(x, y) => sink.feed(&mouse_abs_report(0, x, y))?,
-            Action::Pad(state) => sink.feed(&state.report(0))?,
+            Action::Pad(state) => sink.feed(&state.report(slot))?,
         }
     }
     Ok(())

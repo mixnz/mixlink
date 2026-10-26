@@ -40,7 +40,7 @@ fn keys(steps: &[Step]) -> Vec<(u8, bool)> {
 
 fn played(script: Script) -> Vec<Report> {
     let mut sink = FakeSink::default();
-    play(&steps(script), &mut sink, &mut no_wait).unwrap();
+    play(&steps(script), 0, &mut sink, &mut no_wait).unwrap();
     sink.reports
 }
 
@@ -128,7 +128,7 @@ fn try_reports_held_feeder() {
         in_use: true,
         ..FakeSink::default()
     };
-    let result = play(&steps(Script::Keys), &mut sink, &mut no_wait);
+    let result = play(&steps(Script::Keys), 0, &mut sink, &mut no_wait);
     assert!(matches!(result, Err(VHidError::InUse)));
     assert!(sink.reports.is_empty());
 }
@@ -137,7 +137,7 @@ fn try_reports_held_feeder() {
 fn play_stops_when_wait_says_so() {
     let mut sink = FakeSink::default();
     let mut stop_now = |_: Duration| true;
-    play(&steps(Script::Keys), &mut sink, &mut stop_now).unwrap();
+    play(&steps(Script::Keys), 0, &mut sink, &mut stop_now).unwrap();
     assert_eq!(sink.reports.len(), 1);
 }
 
@@ -168,4 +168,11 @@ fn check_scripts_use_only_their_keys() {
     assert_eq!(used(Script::Uac), [TAB]);
     assert_eq!(used(Script::Lock), [SPACE]);
     assert_eq!(used(Script::Walk), [KEY_W]);
+}
+
+#[test]
+fn pad_steps_go_to_the_slot() {
+    let mut sink = FakeSink::default();
+    play(&steps(Script::Pad), 2, &mut sink, &mut no_wait).unwrap();
+    assert!(sink.reports.iter().all(|r| r.target() == Target::Pad(2)));
 }

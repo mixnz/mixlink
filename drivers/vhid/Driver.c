@@ -48,7 +48,7 @@ NodeRole(
     return _wcsicmp(ids, VHID_PAD_HARDWARE_ID) == 0 ? NODE_ROLE_PAD : NODE_ROLE_KBD_MOUSE;
 }
 
-// Pad slot from the node's instance ID `ROOT\VID_045E&PID_0B13&IG_00\000N` (the service creates it,
+// Pad slot from the node's instance ID `SWD\MixLinkPad\000N` (the service creates it,
 // spec 0016); PAD_SLOTS when it cannot be read.
 static ULONG
 PadSlot(

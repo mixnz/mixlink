@@ -2,8 +2,9 @@
 //!
 //! hidclass derives the HID child's hardware ID from the node's hardware ID (`Root\X` → `HID\X`), so
 //! the node carries `Root\VID_045E&PID_0B13&IG_00`: the child then matches the inbox `xinputhid.inf`
-//! (`HID\VID_045E&PID_0B13&IG_00`) and Windows binds the XInput filter. The instance ID only has to be
-//! unique per slot.
+//! (`HID\VID_045E&PID_0B13&IG_00`) and Windows binds the XInput filter. The node is a software device
+//! (`SWD\`), the only kind whose container ID we can set; each slot needs its own container or XInput
+//! skips a user index.
 
 pub use crate::args::PAD_SLOTS;
 
@@ -19,9 +20,17 @@ pub fn valid_slot(slot: u8) -> bool {
     slot < PAD_SLOTS
 }
 
-/// Full device instance ID of the node for `slot`, e.g. `ROOT\VID_045E&PID_0B13&IG_00\0000`.
+/// Software device enumerator of the pad nodes (`SWD\MixLinkPad\000N`).
+pub const PAD_ENUMERATOR: &str = "MixLinkPad";
+
+/// Instance part of the node for `slot`; the driver reads the slot from this `\000N` tail.
+pub fn pad_instance_suffix(slot: u8) -> String {
+    format!("{slot:04}")
+}
+
+/// Full device instance ID of the node for `slot`, e.g. `SWD\MixLinkPad\0000`.
 pub fn pad_instance_id(slot: u8) -> String {
-    format!(r"ROOT\VID_045E&PID_0B13&IG_00\{slot:04}")
+    format!(r"SWD\{PAD_ENUMERATOR}\{}", pad_instance_suffix(slot))
 }
 
 pub fn pad_container_guid(slot: u8) -> u128 {

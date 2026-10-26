@@ -80,7 +80,7 @@ triggers unreliably (Results), and XInput-only games never see them.
   a Windows.Gaming.Input `Gamepad`. No kernel driver of ours (ADR-0004 holds).
 - hidclass derives the HID child's hardware ID from the node's hardware ID (`Root\X` → `HID\X`), so a
   pad node's hardware ID is `Root\VID_045E&PID_0B13&IG_00`; it also selects the pad model of `vhid.inf`.
-  The instance ID `ROOT\VID_045E&PID_0B13&IG_00\000N` only makes each slot unique (Results: probe).
+  The node is a software device `SWD\MixLinkPad\000N` (Results: two pads).
   WGI admits the pad once without any `UpperFilters` on the node.
 - Driver role from the hardware ID; HID attributes VID `045E`, PID `0B13`; one top-level collection (no
   `&Col0x` suffix, or the hardware ID would not match). Descriptor = the Xbox Series Bluetooth descriptor
@@ -91,9 +91,12 @@ triggers unreliably (Results), and XInput-only games never see them.
 - Rumble report 0x03 (`{03, mask, lt, rt, low, high, duration, delay, repeat}`) is accepted, its last
   value kept per pad for T12, never fails the writer.
 - Each pad node registers in the process-global table by slot (from its instance ID). Container GUID per
-  slot (not the null sentinel, which makes XInput skip a slot: HIDMaestro note).
-- Service `PadNodes`: `add(slot)` creates the node (SetupAPI, explicit instance ID, driver already in the
-  store) and waits until the pad registers; `remove(slot)` removes it (`CM_Query_And_Remove_SubTree`).
+  slot (not the null sentinel, which makes XInput skip a slot); only a software device can carry one.
+- Service `PadNodes`: `add(slot)` creates the node (`SwDeviceCreate` under `HTREE\ROOT\0`, own container,
+  driver already in the store, lifetime `ParentPresent` so it outlives the process) and waits until the
+  pad registers. `remove(slot)` reopens it, sets the lifetime back to the handle and closes it (an unplug:
+  open handles cannot veto), waits until it is gone, then deletes the devnode. PnP keeps a
+  `ParentPresent` device outside its devnode, so a devnode uninstall alone brings it back.
   `drivers install | uninstall` remove leftover pad nodes. Service start removes pad nodes left by a crash.
 
 ### Host side (`crates/input`)
@@ -117,16 +120,16 @@ polling (`input probe --device pad`). Release build, elevated.
 - [x] Only SYSTEM and Administrators can open the feed; a normal user's open fails (access denied).
 - [ ] Device Manager shows no vendor-defined MixLink device; with no pad added, no MixLink controller exists.
 - [x] `input try --script all` moves the cursor, types F13–F24, no event flagged injected (LL hook).
-- [ ] Holding a key / pad button, then killing the feeder: released at once.
+- [x] Holding a key / pad button, then killing the feeder: released at once.
 - [x] A second feeder while the service runs gets "in use by the MixLink service".
 - [x] Keys and mouse reach the UAC prompt and the lock screen (`uac`, `lock` scripts).
 - [x] Keyboard: 10 keys held at once all arrive (NKRO); one game from spec 0006 walks / looks.
-- [ ] `pad-add --slot 0`: Windows shows an Xbox controller with `xinputhid`; XInput reads slot 0; WGI lists
+- [x] `pad-add --slot 0`: Windows shows an Xbox controller with `xinputhid`; XInput reads slot 0; WGI lists
   one `Gamepad`; Steam shows an Xbox controller **without "Begin Setup"**, LT / RT 0 → max.
-- [ ] Wuchang (XInput-only): with Steam Input off, RT stab and held RT charged attack work.
-- [ ] `pad-add` slots 0 and 1: XInput sees two pads (split screen); `pad-remove --slot 1` removes one.
-- [ ] `input probe`, 10 000 events, 0 lost: kbd, abs, pad (XInput) p99 ≤ 1 ms; relative mouse recorded.
-- [ ] `drivers uninstall` with the service holding the feeder removes all `vhid` nodes cleanly.
+- [x] Wuchang (XInput-only): with Steam Input off, RT stab and held RT charged attack work.
+- [x] `pad-add` slots 0 and 1: XInput sees two pads (split screen); `pad-remove --slot 1` removes one.
+- [x] `input probe`, 10 000 events, 0 lost: kbd, abs, pad (XInput) p99 ≤ 1 ms; relative mouse recorded.
+- [x] `drivers uninstall` with the service holding the feeder removes all `vhid` nodes cleanly.
 
 ## Results
 **Machine:** main PC (spec 0006 machine), Windows 11 Pro 26H2, Secure Boot on, test-signing off.
@@ -139,11 +142,16 @@ polling (`input probe --device pad`). Release build, elevated.
 | `input probe`, 10 000 events, release, elevated | kbd p50 0.30 / **p99 0.69** / max 2.22 ms; mouse rel 0.22 / **2.38** / 55.4 ms; mouse abs 0.16 / **0.43** / 0.98 ms; 0 lost each. |
 | Generic pad in Steam | Steam reads only the **first axis INPUT item** of a generic HID pad: triggers in a second item never moved in Steam's test screen (Simulation Brake / Accelerator, Z / Rz, Rx / Ry all tried); one item for all six axes fixed that. Its setup wizard then needs ramped pulls (a one-report jump never binds) and assumes every axis rests at the centre, so a trigger resting at the minimum is split into two half-axis bindings (`lefttrigger:-a3`, `rightshoulder:+a3`), varying run to run. `SDL_GAMECONTROLLERCONFIG` is ignored by Steam. Verdict: generic pads dropped for virtual Xbox pads. |
 | Virtual Xbox pad probe (`pad-add --slot 0`) | With hardware ID `Root\MixLinkXboxPad` the child got `HID\MixLinkXboxPad` (generic `input.inf`): the child ID comes from the parent's **hardware** ID, not its instance ID. With `Root\VID_045E&PID_0B13&IG_00`: child `HID\VID_045E&PID_0B13&IG_00`, driver `xinputhid.inf`, UpperFilters `xinputhid`, name "Xbox Wireless Controller". XInput index 0 connected; WGI `Gamepad` count 1; DirectInput and WGI RawGameController list it (045E:0B13). Steam: "Xbox Series X Controller" (USB) with Details, **no "Begin Setup"**. Container ID not settable on the root node (access denied, logged). |
+| Two pads, root nodes | Both had the null container `{00000000-0000-0000-FFFF-FFFFFFFFFFFF}`: XInput **index 0 and 2** (1 skipped); WGI `Gamepad` 2. |
+| Two pads, software devices | `SWD\MixLinkPad\0000` / `0001`, containers `…0000` / `…0001`, children on `xinputhid.inf`: XInput **index 0 and 1**, WGI `Gamepad` 2, DirectInput 2. Steam: Xbox Series X Controller, no "Begin Setup"; Test: LT 0 → max, A. `pad-remove --slot 1` leaves one. A devnode uninstall alone (`DiUninstallDevice`) did not delete a `ParentPresent` device: it came back at the next enumeration, so removal goes through the software device API (Design). |
+| Pad in a game, Steam Input off | Wuchang: `rt 100` = thrust, `rt` (500 ms) and `rt 2000` = charged attack. |
+| `input probe --device pad` (XInput), release, elevated | p50 0.14 / **p99 0.47** / max 1.44 ms, 10 000 sent, 0 lost. |
+| Kill the feeder holding `rt 8000` | Steam Test: RT back to 0 at once. |
+| `drivers uninstall` with two pads | Steam exited: everything removed, no node or phantom, no package. Steam open on the pad: removed too, exit 0 (pads unplug, no veto). |
 
 ## Open questions
 - (Answered by the probe: the node's hardware ID carries `&IG_00`, see Results.)
-- Container ID per slot is refused on a root node; check in the two-pad run that XInput uses slots 0
-  and 1 without it.
+- (Answered: a root node cannot get a container and XInput skips a slot; software devices fix it.)
 - HIDMaestro (github.com/hifihedgehog/HIDMaestro) is read for ideas only; no code is copied.
 - Microsoft VID/PID on a virtual device: accepted by the user for compatibility (as ViGEm, Sunshine,
   Steam do); the user-facing anti-cheat note (`docs/compat/anti-cheat.md`) gains a line.

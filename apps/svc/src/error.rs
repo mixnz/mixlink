@@ -62,6 +62,8 @@ pub enum SvcError {
         "MixLink virtual input isn't ready: its control device can't reach the input device. Reinstall the drivers."
     )]
     InputNotPaired,
+    #[error("Virtual Xbox controller {} didn't start within 5 seconds.", .0 + 1)]
+    PadTimeout(u8),
     #[cfg(windows)]
     #[error(
         "MixLink virtual input driver doesn't match this program ({0}). Reinstall the drivers."

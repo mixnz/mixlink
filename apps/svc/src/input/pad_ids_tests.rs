@@ -1,10 +1,13 @@
 use super::*;
 
 #[test]
-fn instance_ids_carry_ig_00() {
-    let id = pad_instance_id(0);
-    assert!(id.starts_with(r"ROOT\"), "{id}");
-    assert!(id.contains("VID_045E&PID_0B13&IG_00"), "{id}");
+fn instance_ids_are_software_devices() {
+    assert_eq!(pad_instance_id(0), r"SWD\MixLinkPad\0000");
+    assert_eq!(pad_instance_suffix(2), "0002");
+    assert_eq!(
+        pad_instance_id(1),
+        format!(r"SWD\{PAD_ENUMERATOR}\{}", pad_instance_suffix(1))
+    );
 }
 
 #[test]
