@@ -92,6 +92,15 @@ pub fn monitor_on(width: u32, height: u32, refresh: &str, took_ms: u128) -> Stri
 
 pub const MONITOR_OFF: &str = "MixLink monitor removed.";
 
+/// `input try`: seconds left before the script starts (spec 0016).
+pub fn input_try_countdown(seconds: u32) -> String {
+    format!("Starting in {seconds} s. Switch to the window you want to test.")
+}
+
+pub const INPUT_TRY_DONE: &str = "Done. Every key and button is released.";
+pub const INPUT_TRY_HOLD: &str =
+    "F13 is held down. Press Ctrl+C or end this process to check that it gets released.";
+
 #[cfg(test)]
 #[path = "strings_tests.rs"]
 mod tests;

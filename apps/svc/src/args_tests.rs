@@ -256,3 +256,28 @@ fn input_unknown_rejected() {
     assert!(parse(&["input"]).is_err());
     assert!(parse(&["input", "stat"]).is_err());
 }
+
+#[test]
+fn input_try_parses() {
+    assert_eq!(
+        parse(&["input", "try", "--script", "all", "--delay", "5"]).unwrap(),
+        Mode::Input(InputCmd::Try {
+            script: Script::All,
+            delay_s: 5
+        })
+    );
+    assert_eq!(
+        parse(&["input", "try", "--script", "chord"]).unwrap(),
+        Mode::Input(InputCmd::Try {
+            script: Script::Chord,
+            delay_s: 0
+        })
+    );
+}
+
+#[test]
+fn input_try_bad_script() {
+    assert!(parse(&["input", "try", "--script", "dance"]).is_err());
+    assert!(parse(&["input", "try", "--script", "keys", "--delay", "x"]).is_err());
+    assert!(parse(&["input", "try", "--script", "keys", "--delay", "601"]).is_err());
+}

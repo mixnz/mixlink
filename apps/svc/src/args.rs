@@ -60,7 +60,30 @@ const TRY_DPI: u16 = 96;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputCmd {
     Status,
+    /// Plays `script` after `delay_s` seconds (time to focus a game, UAC prompt or lock screen).
+    Try {
+        script: Script,
+        delay_s: u32,
+    },
 }
+
+/// Scripted input for `input try`, side-effect free (`input::script`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Script {
+    Keys,
+    /// F13..F22 down together for 1 s, then up (NKRO check).
+    Chord,
+    Mouse,
+    Abs,
+    Pad,
+    /// Keys, Mouse, Abs, Pad in turn.
+    All,
+    /// F13 down and never released: the release-all check (kill the process, or Ctrl+C).
+    Hold,
+}
+
+/// Longest `input try --delay`.
+const MAX_TRY_DELAY_S: u32 = 600;
 
 /// `drivers ...` subcommands (spec 0014).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,7 +99,7 @@ pub enum DriversCmd {
 pub const USAGE: &str = "usage: mixlink-svc [--console [--pipe <name>] | install | uninstall]\n       \
      mixlink-svc drivers [install [--from <dir>] | uninstall | status]\n       \
      mixlink-svc display [status | try --client <32 hex> --mode <W>x<H>@<Hz> --topology virtual-only|extend|keep]\n       \
-     mixlink-svc input status";
+     mixlink-svc input [status | try --script keys|chord|mouse|abs|pad|all|hold [--delay <s>]]";
 
 /// Parses the arguments after the program name.
 pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, String> {
@@ -128,8 +151,38 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, Strin
         }),
         ["display", "reject-check"] => Ok(Mode::Display(DisplayCmd::RejectCheck)),
         ["input", "status"] => Ok(Mode::Input(InputCmd::Status)),
+        ["input", "try", "--script", script] => Ok(Mode::Input(InputCmd::Try {
+            script: parse_script(script)?,
+            delay_s: 0,
+        })),
+        ["input", "try", "--script", script, "--delay", delay] => Ok(Mode::Input(InputCmd::Try {
+            script: parse_script(script)?,
+            delay_s: parse_delay(delay)?,
+        })),
         _ => Err(format!("unknown arguments: {}", args.join(" "))),
     }
+}
+
+fn parse_script(text: &str) -> Result<Script, String> {
+    match text {
+        "keys" => Ok(Script::Keys),
+        "chord" => Ok(Script::Chord),
+        "mouse" => Ok(Script::Mouse),
+        "abs" => Ok(Script::Abs),
+        "pad" => Ok(Script::Pad),
+        "all" => Ok(Script::All),
+        "hold" => Ok(Script::Hold),
+        _ => Err(format!(
+            "--script must be keys, chord, mouse, abs, pad, all or hold, got {text}"
+        )),
+    }
+}
+
+fn parse_delay(text: &str) -> Result<u32, String> {
+    text.parse::<u32>()
+        .ok()
+        .filter(|&s| s <= MAX_TRY_DELAY_S)
+        .ok_or_else(|| format!("--delay must be 0..={MAX_TRY_DELAY_S} seconds, got {text}"))
 }
 
 fn parse_topology(text: &str) -> Result<TryTopology, String> {

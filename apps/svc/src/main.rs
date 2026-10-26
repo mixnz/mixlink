@@ -106,6 +106,7 @@ fn run_console(pipe: String) -> Result<(), SvcError> {
     let opts = run::RunOptions {
         pipe,
         display: Some(host_display_settings()),
+        input: true,
     };
     run::run(&stop, &opts, || {
         log::info!("running in console mode; press Ctrl+C to stop");
