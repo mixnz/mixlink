@@ -24,9 +24,9 @@ use windows::core::w;
 use crate::error::SvcError;
 use crate::input::probe::{ProbeDevice, decode_abs, decode_key, decode_pad_lx, decode_rel};
 
-/// Gamepad Raw Input bytes: [ID 4][buttons 2][hat 1][LX 2]... → LX at 4..6.
-const PAD_LX_OFFSET: usize = 4;
-const PAD_REPORT_ID: u8 = 4;
+/// Xbox pad Raw Input bytes: [ID 1][LX 2]... → LX at 1..3.
+const PAD_LX_OFFSET: usize = 1;
+const PAD_REPORT_ID: u8 = 1;
 
 extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     // SAFETY: forwards the message unchanged to the default procedure.

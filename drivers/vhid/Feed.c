@@ -1,7 +1,8 @@
 /*++
-    Feed.c — reports from the control node (spec 0016) → input reports of the HID node.
-    HOT PATH: FeedReportLocked / FeedCompleteRead / FeedRead run per input event: no allocation,
-    no logging. g_FeedLock guards the ring and the manual queue; reads complete outside it.
+    Feed.c — reports from the control node (spec 0016) → input reports of a HID node (keyboard /
+    mouse or a virtual Xbox pad). HOT PATH: FeedReportLocked / FeedCompleteRead / FeedRead run per
+    input event: no allocation, no logging. g_FeedLock guards rings, manual queues, Current and
+    Rumble; reads complete outside it.
 --*/
 #include "Driver.h"
 
@@ -14,7 +15,6 @@ FeedPayloadSize(
     case REPORT_ID_KEYBOARD:  return PAYLOAD_KEYBOARD;
     case REPORT_ID_MOUSE_REL: return PAYLOAD_MOUSE_REL;
     case REPORT_ID_MOUSE_ABS: return PAYLOAD_MOUSE_ABS;
-    case REPORT_ID_GAMEPAD:   return PAYLOAD_GAMEPAD;
     default:                  return 0;
     }
 }
@@ -50,7 +50,7 @@ FeedReportLocked(
     WDFREQUEST   read;
 
     // HOT PATH
-    if (Id <= REPORT_ID_GAMEPAD) {
+    if (Id < CURRENT_IDS) {
         RtlCopyMemory(Context->Current[Id], Data, Len);
     }
     if (NT_SUCCESS(WdfIoQueueRetrieveNextRequest(Context->ManualQueue, &read))) {
@@ -97,45 +97,55 @@ FeedRead(
     return status;
 }
 
-// Neutral report per collection (spec 0016, release-all). Absolute mouse is left out so the cursor
-// does not jump. Gamepad: hat 8 = centred, sticks 0x8000, triggers 0.
+// Neutral reports (spec 0016, release-all). Keyboard / mouse node: no keys, no buttons; absolute
+// mouse is left out so the cursor does not jump. Pad: sticks 0x8000, triggers 0, hat 0 (centred).
 static const struct {
     UCHAR Id;
     UCHAR Len;
     UCHAR Data[PAYLOAD_MAX];
-} s_Neutral[FEED_NEUTRAL_COUNT] = {
+} s_KbdMouseNeutral[FEED_NEUTRAL_MAX] = {
     { REPORT_ID_KEYBOARD,  PAYLOAD_KEYBOARD,  { 0 } },
     { REPORT_ID_MOUSE_REL, PAYLOAD_MOUSE_REL, { 0 } },
-    { REPORT_ID_GAMEPAD,   PAYLOAD_GAMEPAD,   { 0, 0, 8, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0, 0, 0, 0 } },
 };
+static const UCHAR s_PadNeutral[PAYLOAD_PAD] = { 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80 };
 
 ULONG
 FeedReleaseAllLocked(
     _In_ PDEVICE_CONTEXT Context,
-    _Out_writes_to_(FEED_NEUTRAL_COUNT, return) FEED_PENDING* Pending
+    _Out_writes_to_(FEED_NEUTRAL_MAX, return) FEED_PENDING* Pending
     )
 {
     ULONG count = 0;
     ULONG i;
+    WDFREQUEST read;
 
     // Reports still queued were fed by the closed feeder: drop them, then release everything.
     Context->Ring.Count = 0;
     Context->Ring.Head = 0;
-    for (i = 0; i < FEED_NEUTRAL_COUNT; i++) {
-        WDFREQUEST read = FeedReportLocked(Context, s_Neutral[i].Id, s_Neutral[i].Data, s_Neutral[i].Len);
+    if (Context->Kind == NODE_KIND_PAD) {
+        read = FeedReportLocked(Context, PAD_REPORT_ID_INPUT, s_PadNeutral, PAYLOAD_PAD);
+        if (read != NULL) {
+            Pending[0].Read = read;
+            Pending[0].Id = PAD_REPORT_ID_INPUT;
+            Pending[0].Len = PAYLOAD_PAD;
+            Pending[0].Data = s_PadNeutral;
+            count = 1;
+        }
+        return count;
+    }
+    for (i = 0; i < FEED_NEUTRAL_MAX; i++) {
+        read = FeedReportLocked(Context, s_KbdMouseNeutral[i].Id, s_KbdMouseNeutral[i].Data,
+                                s_KbdMouseNeutral[i].Len);
         if (read != NULL) {
             Pending[count].Read = read;
-            Pending[count].Id = s_Neutral[i].Id;
-            Pending[count].Len = s_Neutral[i].Len;
-            Pending[count].Data = s_Neutral[i].Data;
+            Pending[count].Id = s_KbdMouseNeutral[i].Id;
+            Pending[count].Len = s_KbdMouseNeutral[i].Len;
+            Pending[count].Data = s_KbdMouseNeutral[i].Data;
             count++;
         }
     }
     return count;
 }
-
-// Pad input report 0x01 at rest: sticks 0x8000, triggers 0, hat 0 (centred), no buttons.
-static const UCHAR s_PadNeutral[PAYLOAD_PAD] = { 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80 };
 
 UCHAR
 NodeReportSize(
@@ -164,25 +174,32 @@ FeedInitCurrent(
         RtlCopyMemory(Context->Current[PAD_REPORT_ID_INPUT], s_PadNeutral, sizeof(s_PadNeutral));
         return;
     }
-    for (i = 0; i < FEED_NEUTRAL_COUNT; i++) {
-        RtlCopyMemory(Context->Current[s_Neutral[i].Id], s_Neutral[i].Data, s_Neutral[i].Len);
+    for (i = 0; i < FEED_NEUTRAL_MAX; i++) {
+        RtlCopyMemory(Context->Current[s_KbdMouseNeutral[i].Id], s_KbdMouseNeutral[i].Data,
+                      s_KbdMouseNeutral[i].Len);
     }
 }
 
 NTSTATUS
 FeedPadOutput(
-    _In_ WDFREQUEST Request
+    _In_ PDEVICE_CONTEXT Context,
+    _In_ WDFREQUEST      Request
     )
 {
-    NTSTATUS status;
-    PVOID    buffer;
-    size_t   length;
+    NTSTATUS     status;
+    const UCHAR* buffer;
+    size_t       length;
 
-    // Rumble (report 0x03) from xinputhid or a game: accepted so writers never fail; forwarding it
-    // to the client is a later step (spec 0016 → Scope).
-    status = WdfRequestRetrieveInputBuffer(Request, 1, &buffer, &length);
+    // Rumble from xinputhid or a game: [ID 3][8 bytes]. Kept for the client (spec 0016 → Scope);
+    // any other output report is accepted too, so writers never fail.
+    status = WdfRequestRetrieveInputBuffer(Request, 1, (PVOID*)&buffer, &length);
     if (!NT_SUCCESS(status)) {
         return status;
+    }
+    if (buffer[0] == PAD_REPORT_ID_RUMBLE && length >= 1 + PAD_RUMBLE_LEN) {
+        AcquireSRWLockExclusive(&g_FeedLock);
+        RtlCopyMemory(Context->Rumble, buffer + 1, PAD_RUMBLE_LEN);
+        ReleaseSRWLockExclusive(&g_FeedLock);
     }
     WdfRequestSetInformation(Request, length);
     return STATUS_SUCCESS;

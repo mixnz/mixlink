@@ -7,8 +7,8 @@ use std::thread;
 use std::time::Duration;
 
 use mixlink_core::clock;
-use mixlink_input::hid::gamepad::PadState;
 use mixlink_input::hid::keyboard::KeyboardState;
+use mixlink_input::hid::xbox::PadState;
 use mixlink_input::platform::windows::vhid::VHid;
 
 use super::open_feeder;
@@ -158,7 +158,7 @@ fn pad_interactive(delay_s: u32) -> Result<(), SvcError> {
             Command::Skip => {}
             Command::Prime => {
                 for state in padmap::prime_steps() {
-                    vhid.feed(&state.report())?;
+                    vhid.feed(&state.report(0))?;
                     thread::sleep(PRIME_STEP);
                 }
                 eprintln!("{}", strings::INPUT_PAD_PRIMED);
@@ -171,15 +171,15 @@ fn pad_interactive(delay_s: u32) -> Result<(), SvcError> {
                 // Axes ramp in and out like a real trigger or stick; buttons are one step.
                 let ramp = padmap::ramp(state, padmap::RAMP_STEPS);
                 for step in &ramp {
-                    vhid.feed(&step.report())?;
+                    vhid.feed(&step.report(0))?;
                     thread::sleep(RAMP_STEP);
                 }
                 thread::sleep(Duration::from_millis(u64::from(hold_ms)));
                 for step in ramp.iter().rev().skip(1) {
-                    vhid.feed(&step.report())?;
+                    vhid.feed(&step.report(0))?;
                     thread::sleep(RAMP_STEP);
                 }
-                vhid.feed(&PadState::NEUTRAL.report())?;
+                vhid.feed(&PadState::NEUTRAL.report(0))?;
                 eprintln!("{}", strings::input_pad_pressed(hold_ms));
             }
             Command::Unknown(text) => {

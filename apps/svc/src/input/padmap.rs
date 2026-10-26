@@ -1,13 +1,13 @@
 //! Pad controls by name for `input pad` (spec 0016): drive a mapping wizard (Steam "Begin Setup")
 //! by typing `a`, `lt`, ... Ported from the spec 0006 harness.
 
-use mixlink_input::hid::gamepad::{Dpad, PadState};
+use mixlink_input::hid::xbox::{Dpad, PadState, buttons};
 
 /// Every control, in the order a mapping wizard usually asks for them.
-pub const NAMES: [&str; 30] = [
+pub const NAMES: [&str; 26] = [
     "a", "b", "x", "y", "lb", "rb", "back", "start", "ls", "rs", "guide", "share", "up", "down",
     "left", "right", "lt", "rt", "ls-up", "ls-down", "ls-left", "ls-right", "rs-up", "rs-down",
-    "rs-left", "rs-right", "b13", "b14", "b15", "b16",
+    "rs-left", "rs-right",
 ];
 
 pub const DEFAULT_HOLD_MS: u32 = 500;
@@ -17,28 +17,21 @@ const MAX_HOLD_MS: u32 = 10_000;
 /// its edge (+y = down).
 pub fn control(name: &str) -> Option<PadState> {
     let n = PadState::NEUTRAL;
-    let button = |bit: u16| PadState {
-        buttons: 1 << bit,
-        ..n
-    };
+    let button = |bits: u16| PadState { buttons: bits, ..n };
     let dpad = |dpad| PadState { dpad, ..n };
     Some(match name.trim().to_ascii_lowercase().as_str() {
-        "a" => button(0),
-        "b" => button(1),
-        "x" => button(2),
-        "y" => button(3),
-        "lb" => button(4),
-        "rb" => button(5),
-        "back" => button(6),
-        "start" => button(7),
-        "ls" => button(8),
-        "rs" => button(9),
-        "guide" => button(10),
-        "share" => button(11),
-        "b13" => button(12),
-        "b14" => button(13),
-        "b15" => button(14),
-        "b16" => button(15),
+        "a" => button(buttons::A),
+        "b" => button(buttons::B),
+        "x" => button(buttons::X),
+        "y" => button(buttons::Y),
+        "lb" => button(buttons::LB),
+        "rb" => button(buttons::RB),
+        "back" => button(buttons::VIEW),
+        "start" => button(buttons::MENU),
+        "ls" => button(buttons::LS),
+        "rs" => button(buttons::RS),
+        "guide" => button(buttons::GUIDE),
+        "share" => PadState { share: true, ..n },
         "up" => dpad(Dpad::Up),
         "right" => dpad(Dpad::Right),
         "down" => dpad(Dpad::Down),

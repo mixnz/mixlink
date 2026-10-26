@@ -86,7 +86,7 @@ pub enum InputCmd {
 }
 
 /// Virtual Xbox pads: slots 0..PAD_SLOTS (split screen, spec 0016).
-pub const PAD_SLOTS: u8 = 4;
+pub const PAD_SLOTS: u8 = mixlink_input::hid::xbox::PAD_SLOTS;
 
 /// Which `vhid` collection `input probe` measures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

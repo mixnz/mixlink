@@ -1,6 +1,6 @@
 /*++
-    Descriptor.c — HID report descriptor (spec 0006 layouts; NKRO keyboard, triggers and no vendor
-    collection from spec 0016). Payload sizes must match PAYLOAD_* in Driver.h and crates/input/src/hid/.
+    Descriptor.c — HID report descriptor of the keyboard / mouse node (spec 0006 layouts; NKRO
+    keyboard from spec 0016; pads are their own nodes, PadDescriptor.c). Sizes = PAYLOAD_* in Driver.h.
 --*/
 #include "Driver.h"
 
@@ -55,28 +55,6 @@ const HID_REPORT_DESCRIPTOR G_ReportDescriptor[] = {
     0x15, 0x00, 0x26, 0xFF, 0x7F,   //   LOGICAL 0..32767
     0x75, 0x10, 0x95, 0x02, 0x81, 0x02, //   INPUT (Data,Var,Abs)
     0xC0, 0xC0,
-
-    // Gamepad (ID 4): 16 buttons, hat, X/Y/Rx/Ry 16-bit, triggers 16-bit = 15 bytes.
-    0x05, 0x01, 0x09, 0x05,         // USAGE (Game Pad)
-    0xA1, 0x01,
-    0x85, REPORT_ID_GAMEPAD,
-    0x05, 0x09, 0x19, 0x01, 0x29, 0x10, //   Buttons 1..16
-    0x15, 0x00, 0x25, 0x01,
-    0x75, 0x01, 0x95, 0x10, 0x81, 0x02,
-    0x05, 0x01, 0x09, 0x39,         //   Hat switch
-    0x15, 0x00, 0x25, 0x07,         //   LOGICAL 0..7 (8 = centered, null)
-    0x35, 0x00, 0x46, 0x3B, 0x01,   //   PHYSICAL 0..315
-    0x65, 0x14,                     //   UNIT (degrees)
-    0x75, 0x04, 0x95, 0x01, 0x81, 0x42, //   INPUT (Data,Var,Abs,Null)
-    0x65, 0x00, 0x45, 0x00,         //   UNIT none, PHYSICAL_MAX 0
-    0x75, 0x04, 0x95, 0x01, 0x81, 0x01, //   4 bits padding
-    // Sticks left X / Y, right Z / Rz; triggers Rx (LT), Ry (RT). One INPUT item for all six:
-    // spec 0016, Steam read only the first axis INPUT item (triggers in a second one never moved).
-    0x09, 0x30, 0x09, 0x31, 0x09, 0x32, 0x09, 0x35, // X, Y, Z, Rz
-    0x09, 0x33, 0x09, 0x34,                         // Rx, Ry
-    0x15, 0x00, 0x27, 0xFF, 0xFF, 0x00, 0x00, //   LOGICAL 0..65535
-    0x75, 0x10, 0x95, 0x06, 0x81, 0x02,
-    0xC0,
 };
 
 const USHORT G_ReportDescriptorLength = sizeof(G_ReportDescriptor);

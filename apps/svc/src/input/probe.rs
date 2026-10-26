@@ -1,10 +1,10 @@
 //! `input probe` (spec 0016), pure part: sequence codes carried in side-effect-free input, matching
 //! arrivals to send times after the run, nearest-rank summary. Ported from the spec 0006 harness.
 
-use mixlink_input::hid::gamepad::PadState;
 use mixlink_input::hid::keyboard::KeyboardState;
 use mixlink_input::hid::mouse::{mouse_abs_report, mouse_rel_reports};
 use mixlink_input::hid::report::Report;
+use mixlink_input::hid::xbox::PadState;
 
 pub use crate::args::ProbeDevice;
 
@@ -50,7 +50,7 @@ pub fn report_for(device: ProbeDevice, i: u32, keyboard: &mut KeyboardState) -> 
             lx: encode_pad_lx(i),
             ..PadState::NEUTRAL
         }
-        .report(),
+        .report(0),
     }
 }
 
@@ -107,7 +107,7 @@ pub fn encode_pad_lx(i: u32) -> i16 {
     (code ^ 0x8000).cast_signed()
 }
 
-/// `raw` is the report's LX field (bytes 3..5 of the payload).
+/// `raw` is the report's LX field (bytes 0..2 of the payload).
 pub fn decode_pad_lx(raw: u16) -> Option<u32> {
     let v = u32::from(raw);
     (v < PAD_PERIOD).then_some(v)

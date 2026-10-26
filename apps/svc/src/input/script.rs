@@ -4,9 +4,9 @@
 
 use std::time::Duration;
 
-use mixlink_input::hid::gamepad::{Dpad, PadState};
 use mixlink_input::hid::keyboard::KeyboardState;
 use mixlink_input::hid::mouse::{mouse_abs_report, mouse_rel_reports};
+use mixlink_input::hid::xbox::{Dpad, PadState, buttons};
 use mixlink_input::platform::windows::vhid::{ReportSink, VHidError};
 
 pub use crate::args::Script;
@@ -108,7 +108,7 @@ pub fn play(
                 }
             }
             Action::Abs(x, y) => sink.feed(&mouse_abs_report(0, x, y))?,
-            Action::Pad(state) => sink.feed(&state.report())?,
+            Action::Pad(state) => sink.feed(&state.report(0))?,
         }
     }
     Ok(())
@@ -165,7 +165,22 @@ fn abs(start: u32) -> Vec<Step> {
         .collect()
 }
 
-/// Each stick to both ends, both triggers, the d-pad, buttons 1..16 one by one, then centred.
+/// Every Xbox button, in `pad` order.
+const PAD_BUTTONS: [u16; 11] = [
+    buttons::A,
+    buttons::B,
+    buttons::X,
+    buttons::Y,
+    buttons::LB,
+    buttons::RB,
+    buttons::VIEW,
+    buttons::MENU,
+    buttons::GUIDE,
+    buttons::LS,
+    buttons::RS,
+];
+
+/// Each stick to both ends, both triggers, the d-pad, every button and Share one by one, then centred.
 fn pad(start: u32) -> Vec<Step> {
     let n = PadState::NEUTRAL;
     let mut states = vec![
@@ -183,12 +198,10 @@ fn pad(start: u32) -> Vec<Step> {
     for dpad in [Dpad::Up, Dpad::Right, Dpad::Down, Dpad::Left] {
         states.push(PadState { dpad, ..n });
     }
-    for bit in 0..16 {
-        states.push(PadState {
-            buttons: 1 << bit,
-            ..n
-        });
+    for bits in PAD_BUTTONS {
+        states.push(PadState { buttons: bits, ..n });
     }
+    states.push(PadState { share: true, ..n });
     states.push(n);
     (0u32..)
         .zip(states)

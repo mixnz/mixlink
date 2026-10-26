@@ -1,7 +1,7 @@
-use super::gamepad::{Dpad, PadState};
 use super::keyboard::KeyboardState;
 use super::mouse::{REL_MAX, mouse_abs_report, mouse_rel_reports};
 use super::report::{PAYLOAD_MAX, Report, Target, neutral_reports};
+use super::xbox::{Dpad, PAD_SLOTS, PadState, buttons};
 
 fn bit(report: &Report, byte: usize, bit: u8) -> bool {
     report.payload()[byte] & (1 << bit) != 0
@@ -20,9 +20,8 @@ fn payload_lengths() {
     assert_eq!(Target::Keyboard.payload_len(), 16);
     assert_eq!(Target::MouseRel.payload_len(), 7);
     assert_eq!(Target::MouseAbs.payload_len(), 5);
-    assert_eq!(Target::Gamepad.payload_len(), 15);
+    assert_eq!(Target::Pad(0).payload_len(), 16);
     assert_eq!(PAYLOAD_MAX, 16);
-    assert_eq!(Target::Gamepad as u8, 4);
 }
 
 #[test]
@@ -140,17 +139,26 @@ fn abs_clamps() {
 }
 
 #[test]
+fn wire_ids() {
+    assert_eq!(Target::Keyboard.wire_id(), 1);
+    assert_eq!(Target::MouseRel.wire_id(), 2);
+    assert_eq!(Target::MouseAbs.wire_id(), 3);
+    assert_eq!(Target::Pad(0).wire_id(), 0x10);
+    assert_eq!(Target::Pad(3).wire_id(), 0x13);
+}
+
+#[test]
 fn pad_neutral_bytes() {
-    let r = PadState::NEUTRAL.report();
-    assert_eq!(r.target(), Target::Gamepad);
+    let r = PadState::NEUTRAL.report(2);
+    assert_eq!(r.target(), Target::Pad(2));
     assert_eq!(
         r.payload(),
-        &[0, 0, 8, 0, 0x80, 0, 0x80, 0, 0x80, 0, 0x80, 0, 0, 0, 0]
+        &[0, 0x80, 0, 0x80, 0, 0x80, 0, 0x80, 0, 0, 0, 0, 0, 0, 0, 0]
     );
 }
 
 #[test]
-fn pad_stick_and_trigger() {
+fn pad_report_layout() {
     let pad = PadState {
         lx: -32_768,
         ly: 32_767,
@@ -158,56 +166,71 @@ fn pad_stick_and_trigger() {
         rt: 32_768,
         ..PadState::NEUTRAL
     };
-    let p = pad.report();
-    let p = p.payload();
-    assert_eq!(&p[3..5], &[0x00, 0x00]);
-    assert_eq!(&p[5..7], &[0xFF, 0xFF]);
-    assert_eq!(u16::from_le_bytes([p[11], p[12]]), 65_535);
-    assert_eq!(u16::from_le_bytes([p[13], p[14]]), 32_768);
-    let rest = PadState::NEUTRAL.report();
-    assert_eq!(
-        u16::from_le_bytes([rest.payload()[11], rest.payload()[12]]),
-        0
-    );
+    let r = pad.report(0);
+    let p = r.payload();
+    assert_eq!(&p[0..2], &[0x00, 0x00]);
+    assert_eq!(&p[2..4], &[0xFF, 0xFF]);
+    assert_eq!(u16::from_le_bytes([p[8], p[9]]), 1023);
+    assert_eq!(u16::from_le_bytes([p[10], p[11]]), 512);
 }
 
 #[test]
 fn pad_dpad_values() {
     let all = [
-        (Dpad::Up, 0),
-        (Dpad::UpRight, 1),
-        (Dpad::Right, 2),
-        (Dpad::DownRight, 3),
-        (Dpad::Down, 4),
-        (Dpad::DownLeft, 5),
-        (Dpad::Left, 6),
-        (Dpad::UpLeft, 7),
-        (Dpad::Centered, 8),
+        (Dpad::Up, 1),
+        (Dpad::UpRight, 2),
+        (Dpad::Right, 3),
+        (Dpad::DownRight, 4),
+        (Dpad::Down, 5),
+        (Dpad::DownLeft, 6),
+        (Dpad::Left, 7),
+        (Dpad::UpLeft, 8),
+        (Dpad::Centered, 0),
     ];
     for (dpad, hat) in all {
         let pad = PadState {
             dpad,
             ..PadState::NEUTRAL
         };
-        assert_eq!(pad.report().payload()[2], hat, "{dpad:?}");
+        assert_eq!(pad.report(0).payload()[12], hat, "{dpad:?}");
     }
 }
 
 #[test]
-fn pad_buttons_le() {
-    let pad = PadState {
-        buttons: 0x8001,
-        ..PadState::NEUTRAL
+fn pad_buttons_map_to_report_bits() {
+    let bits = |buttons: u16| {
+        let r = PadState {
+            buttons,
+            ..PadState::NEUTRAL
+        }
+        .report(0);
+        u16::from_le_bytes([r.payload()[13], r.payload()[14]])
     };
-    assert_eq!(&pad.report().payload()[0..2], &[0x01, 0x80]);
+    assert_eq!(bits(buttons::A | buttons::MENU), 0x0801);
+    assert_eq!(bits(buttons::B), 1 << 1);
+    assert_eq!(bits(buttons::X), 1 << 3);
+    assert_eq!(bits(buttons::Y), 1 << 4);
+    assert_eq!(bits(buttons::LB | buttons::RB), (1 << 6) | (1 << 7));
+    assert_eq!(bits(buttons::VIEW), 1 << 10);
+    assert_eq!(bits(buttons::GUIDE), 1 << 12);
+    assert_eq!(bits(buttons::LS | buttons::RS), (1 << 13) | (1 << 14));
+    let share = PadState {
+        share: true,
+        ..PadState::NEUTRAL
+    }
+    .report(0);
+    assert_eq!(share.payload()[15], 1);
 }
 
 #[test]
 fn neutral_reports_release_everything() {
     let all = neutral_reports();
+    assert_eq!(all.len(), 2 + usize::from(PAD_SLOTS));
     assert_eq!(all[0].target(), Target::Keyboard);
     assert!(all[0].payload().iter().all(|&b| b == 0));
     assert_eq!(all[1].target(), Target::MouseRel);
     assert!(all[1].payload().iter().all(|&b| b == 0));
-    assert_eq!(all[2], PadState::NEUTRAL.report());
+    for slot in 0..PAD_SLOTS {
+        assert_eq!(all[2 + usize::from(slot)], PadState::NEUTRAL.report(slot));
+    }
 }

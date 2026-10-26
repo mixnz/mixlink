@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use mixlink_input::hid::gamepad::PadState;
 use mixlink_input::hid::keyboard::KeyboardState;
 use mixlink_input::hid::report::{Report, Target};
+use mixlink_input::hid::xbox::PadState;
 use mixlink_input::platform::windows::vhid::{ReportSink, VHidError};
 
 use super::*;
@@ -85,8 +85,8 @@ fn mouse_script_returns_home() {
 fn pad_script_ends_neutral() {
     let reports = played(Script::Pad);
     assert!(reports.len() > 10);
-    assert!(reports.iter().all(|r| r.target() == Target::Gamepad));
-    assert_eq!(*reports.last().unwrap(), PadState::NEUTRAL.report());
+    assert!(reports.iter().all(|r| r.target() == Target::Pad(0)));
+    assert_eq!(*reports.last().unwrap(), PadState::NEUTRAL.report(0));
 }
 
 #[test]

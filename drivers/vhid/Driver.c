@@ -4,12 +4,18 @@
 --*/
 #include "Driver.h"
 
+#include <devpropdef.h>
 #include <wchar.h>
 
-// The HID node's context while it exists (spec 0016: the control node feeds it). Both nodes share
-// one WUDFHost process through their WUDF DeviceGroupId.
-PDEVICE_CONTEXT g_Hid = NULL;
+// Fed nodes (spec 0016: the control node feeds them): index 0 keyboard / mouse, 1 + slot pads. All
+// nodes share one WUDFHost process through their WUDF DeviceGroupId.
+PDEVICE_CONTEXT g_Nodes[FEED_NODES] = { NULL };
+WDFFILEOBJECT g_FeedOwner = NULL;
 SRWLOCK g_FeedLock = SRWLOCK_INIT;
+
+// DEVPKEY_Device_InstanceId, defined here to avoid instantiating every devpkey.h key.
+static const DEVPROPKEY s_InstanceIdKey = {
+    { 0x78c34fc8, 0x104a, 0x4aca, { 0x9e, 0xa4, 0x52, 0x4d, 0x52, 0x99, 0x6e, 0x57 } }, 256 };
 
 static NTSTATUS DefaultQueueCreate(_In_ WDFDEVICE Device, _Out_ WDFQUEUE* Queue);
 static NTSTATUS ManualQueueCreate(_In_ WDFDEVICE Device, _Out_ WDFQUEUE* Queue);
@@ -42,6 +48,33 @@ NodeRole(
     return _wcsicmp(ids, VHID_PAD_HARDWARE_ID) == 0 ? NODE_ROLE_PAD : NODE_ROLE_KBD_MOUSE;
 }
 
+// Pad slot from the node's instance ID `ROOT\VID_045E&PID_0B13&IG_00\000N` (the service creates it,
+// spec 0016); PAD_SLOTS when it cannot be read.
+static ULONG
+PadSlot(
+    _In_ PWDFDEVICE_INIT DeviceInit
+    )
+{
+    WDF_DEVICE_PROPERTY_DATA property;
+    WCHAR                    id[200] = { 0 };
+    ULONG                    length = 0;
+    DEVPROPTYPE              type;
+    NTSTATUS                 status;
+    const WCHAR*             tail;
+
+    WDF_DEVICE_PROPERTY_DATA_INIT(&property, &s_InstanceIdKey);
+    status = WdfFdoInitQueryPropertyEx(DeviceInit, &property, sizeof(id) - sizeof(WCHAR), id, &length,
+                                       &type);
+    if (!NT_SUCCESS(status)) {
+        return PAD_SLOTS;
+    }
+    tail = wcsrchr(id, L'\\');
+    if (tail == NULL || wcslen(tail) != 5 || wcsncmp(tail, L"\\000", 4) != 0) {
+        return PAD_SLOTS;
+    }
+    return tail[4] >= L'0' && tail[4] < L'0' + PAD_SLOTS ? (ULONG)(tail[4] - L'0') : PAD_SLOTS;
+}
+
 NTSTATUS
 DriverEntry(
     _In_ PDRIVER_OBJECT  DriverObject,
@@ -65,11 +98,17 @@ EvtDeviceAdd(
     WDFDEVICE             device;
     PDEVICE_CONTEXT       context;
     NODE_ROLE             role;
+    ULONG                 node = FEED_NODE_KBD_MOUSE;
     UNREFERENCED_PARAMETER(Driver);
 
     role = NodeRole(DeviceInit);
     if (role == NODE_ROLE_CONTROL) {
         return ControlDeviceAdd(DeviceInit);
+    }
+    if (role == NODE_ROLE_PAD) {
+        // A pad whose slot cannot be read still works for Windows, but is never fed.
+        ULONG slot = PadSlot(DeviceInit);
+        node = slot < PAD_SLOTS ? 1 + slot : FEED_NODES;
     }
 
     // mshidumdf.sys is the function driver; we are a filter below it.
@@ -120,10 +159,10 @@ EvtDeviceAdd(
         return status;
     }
 
-    // Pad nodes join the feed table by slot later (spec 0016); only the keyboard / mouse node is fed now.
-    if (context->Kind == NODE_KIND_KBD_MOUSE) {
+    context->Node = node;
+    if (node < FEED_NODES) {
         AcquireSRWLockExclusive(&g_FeedLock);
-        g_Hid = context;
+        g_Nodes[node] = context;
         ReleaseSRWLockExclusive(&g_FeedLock);
     }
     return STATUS_SUCCESS;
@@ -137,8 +176,8 @@ HidContextCleanup(
     PDEVICE_CONTEXT context = GetDeviceContext((WDFDEVICE)Object);
 
     AcquireSRWLockExclusive(&g_FeedLock);
-    if (g_Hid == context) {
-        g_Hid = NULL;
+    if (context->Node < FEED_NODES && g_Nodes[context->Node] == context) {
+        g_Nodes[context->Node] = NULL;
     }
     ReleaseSRWLockExclusive(&g_FeedLock);
 }
@@ -203,7 +242,7 @@ EvtIoDeviceControl(
     case IOCTL_HID_WRITE_REPORT:
     case IOCTL_UMDF_HID_SET_OUTPUT_REPORT:
         // Only pads have an output report (rumble); the keyboard / mouse node has none.
-        status = context->Kind == NODE_KIND_PAD ? FeedPadOutput(Request) : STATUS_NOT_IMPLEMENTED;
+        status = context->Kind == NODE_KIND_PAD ? FeedPadOutput(context, Request) : STATUS_NOT_IMPLEMENTED;
         break;
     case IOCTL_UMDF_HID_GET_INPUT_REPORT:
         status = FeedGetInputReport(context, Request);

@@ -107,8 +107,8 @@ fn decode_roundtrip_all_devices() {
             lx: encode_pad_lx(i),
             ..lx
         }
-        .report();
-        let raw = u16::from_le_bytes([lx.payload()[3], lx.payload()[4]]);
+        .report(0);
+        let raw = u16::from_le_bytes([lx.payload()[0], lx.payload()[1]]);
         assert_eq!(decode_pad_lx(raw), Some(i % PAD_PERIOD), "pad {i}");
     }
 }
@@ -134,7 +134,7 @@ fn report_for_matches_the_device() {
         (ProbeDevice::Kbd, Target::Keyboard),
         (ProbeDevice::Rel, Target::MouseRel),
         (ProbeDevice::Abs, Target::MouseAbs),
-        (ProbeDevice::Pad, Target::Gamepad),
+        (ProbeDevice::Pad, Target::Pad(0)),
     ];
     for (device, target) in cases {
         assert_eq!(report_for(device, 5, &mut keyboard).target(), target);

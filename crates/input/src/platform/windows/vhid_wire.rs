@@ -7,31 +7,36 @@ use crate::hid::report::{Report, Target};
 pub const IOCTL_FEED: u32 = 0x0022_2400;
 pub const IOCTL_QUERY: u32 = 0x0022_2404;
 
-pub const WIRE_VERSION: u32 = 1;
+/// 2: pad targets and the pads-present byte.
+pub const WIRE_VERSION: u32 = 2;
 pub const FEED_SIZE: usize = 24;
 pub const QUERY_IN_SIZE: usize = 4;
-pub const QUERY_SIZE: usize = 16;
+pub const QUERY_SIZE: usize = 20;
 const FEED_PAYLOAD_AT: usize = 8;
+const QUERY_SIZES_AT: usize = 12;
+const QUERY_PADS_AT: usize = 16;
 
-/// Payload sizes this build expects, in `QUERY` order.
+/// Payload sizes this build expects, in `QUERY` order: keyboard, mouse rel, mouse abs, pad.
 const SIZES: [usize; 4] = [
     Target::Keyboard.payload_len(),
     Target::MouseRel.payload_len(),
     Target::MouseAbs.payload_len(),
-    Target::Gamepad.payload_len(),
+    Target::Pad(0).payload_len(),
 ];
 
-/// `QUERY` flags bit 0: a feeder owns the device.
+/// `QUERY` flags bit 0: a feeder owns the devices.
 const FLAG_FEEDER_HELD: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QueryReply {
     pub version: u32,
-    /// Reports dropped because the ring was full.
+    /// Reports dropped because a ring was full (all nodes).
     pub dropped: u32,
     pub feeder_held: bool,
-    /// Payload sizes the driver uses: keyboard, mouse relative, mouse absolute, gamepad.
+    /// Payload sizes the driver uses: keyboard, mouse relative, mouse absolute, pad.
     pub sizes: [u8; 4],
+    /// Bit N: pad slot N has a node.
+    pub pads_present: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -44,13 +49,13 @@ pub enum WireError {
     Sizes,
 }
 
-/// `FEED`: version, target report ID, payload length, reserved 0, payload (zero-padded to 16 B).
+/// `FEED`: version, target, payload length, reserved 0, payload (zero-padded to 16 B).
 // HOT PATH
 pub fn encode_feed(report: &Report) -> [u8; FEED_SIZE] {
     let payload = report.payload();
     let mut out = [0u8; FEED_SIZE];
     out[0..4].copy_from_slice(&WIRE_VERSION.to_le_bytes());
-    out[4] = report.target() as u8;
+    out[4] = report.target().wire_id();
     out[5] = u8::try_from(payload.len()).unwrap_or(0);
     out[FEED_PAYLOAD_AT..FEED_PAYLOAD_AT + payload.len()].copy_from_slice(payload);
     out
@@ -71,7 +76,13 @@ pub fn decode_query(bytes: &[u8]) -> Result<QueryReply, WireError> {
     if version != WIRE_VERSION {
         return Err(WireError::Version);
     }
-    if bytes[12..16]
+    let sizes = [
+        bytes[QUERY_SIZES_AT],
+        bytes[QUERY_SIZES_AT + 1],
+        bytes[QUERY_SIZES_AT + 2],
+        bytes[QUERY_SIZES_AT + 3],
+    ];
+    if sizes
         .iter()
         .zip(SIZES)
         .any(|(&got, want)| usize::from(got) != want)
@@ -82,7 +93,8 @@ pub fn decode_query(bytes: &[u8]) -> Result<QueryReply, WireError> {
         version,
         dropped: u32_at(4),
         feeder_held: u32_at(8) & FLAG_FEEDER_HELD != 0,
-        sizes: [bytes[12], bytes[13], bytes[14], bytes[15]],
+        sizes,
+        pads_present: bytes[QUERY_PADS_AT],
     })
 }
 

@@ -12,7 +12,10 @@ fn every_name_maps_to_a_control() {
 fn controls_match_the_layout() {
     assert_eq!(control("a").unwrap().buttons, 1);
     assert_eq!(control("B").unwrap().buttons, 2);
-    assert_eq!(control("b16").unwrap().buttons, 0x8000);
+    assert_eq!(control("x").unwrap().buttons, 1 << 3);
+    assert_eq!(control("start").unwrap().buttons, 1 << 11);
+    assert!(control("share").unwrap().share);
+    assert_eq!(control("b16"), None);
     assert_eq!(control("up").unwrap().dpad, Dpad::Up);
     assert_eq!(control("lt").unwrap().lt, u16::MAX);
     assert_eq!(control("rt").unwrap().rt, u16::MAX);

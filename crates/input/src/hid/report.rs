@@ -1,27 +1,35 @@
-//! One input report for one `vhid` collection: target report ID + payload (spec 0016).
+//! One input report for one `vhid` collection: target + payload (spec 0016).
 
-use super::gamepad::PadState;
+use super::xbox::{PAD_SLOTS, PadState};
 
-/// Largest payload of any collection (keyboard); `PAYLOAD_MAX` in `drivers/vhid/Driver.h`.
+/// Largest payload of any collection (keyboard, pad); `PAYLOAD_MAX` in `drivers/vhid/Driver.h`.
 pub const PAYLOAD_MAX: usize = 16;
 
-/// `vhid` collection, by its report ID (`drivers/vhid/Descriptor.c`).
-#[repr(u8)]
+/// Where a report goes: a collection of the keyboard / mouse node, or pad `slot`'s input report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target {
-    Keyboard = 1,
-    MouseRel = 2,
-    MouseAbs = 3,
-    Gamepad = 4,
+    Keyboard,
+    MouseRel,
+    MouseAbs,
+    Pad(u8),
 }
 
 impl Target {
+    /// Target byte of the `FEED` IOCTL: report IDs 1..=3, pads 0x10 + slot.
+    pub const fn wire_id(self) -> u8 {
+        match self {
+            Target::Keyboard => 1,
+            Target::MouseRel => 2,
+            Target::MouseAbs => 3,
+            Target::Pad(slot) => 0x10 + slot,
+        }
+    }
+
     pub const fn payload_len(self) -> usize {
         match self {
-            Target::Keyboard => 16,
+            Target::Keyboard | Target::Pad(_) => 16,
             Target::MouseRel => 7,
             Target::MouseAbs => 5,
-            Target::Gamepad => 15,
         }
     }
 }
@@ -48,12 +56,15 @@ impl Report {
     }
 }
 
-/// What the driver feeds when the feeder closes (release-all): no keys, no buttons, pad centred.
-/// Absolute mouse is left out so the cursor does not jump.
-pub fn neutral_reports() -> [Report; 3] {
-    [
-        Report::new(Target::Keyboard, [0; PAYLOAD_MAX]),
-        Report::new(Target::MouseRel, [0; PAYLOAD_MAX]),
-        PadState::NEUTRAL.report(),
-    ]
+/// What the driver feeds when the feeder closes (release-all): no keys, no buttons, every pad slot
+/// centred. Absolute mouse is left out so the cursor does not jump.
+pub fn neutral_reports() -> [Report; 2 + PAD_SLOTS as usize] {
+    let mut all = [Report::new(Target::Keyboard, [0; PAYLOAD_MAX]); 2 + PAD_SLOTS as usize];
+    all[1] = Report::new(Target::MouseRel, [0; PAYLOAD_MAX]);
+    let mut slot = 0;
+    while slot < PAD_SLOTS {
+        all[2 + slot as usize] = PadState::NEUTRAL.report(slot);
+        slot += 1;
+    }
+    all
 }
