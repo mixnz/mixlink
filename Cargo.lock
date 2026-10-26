@@ -2309,6 +2309,8 @@ dependencies = [
  "mixlink-core",
  "mixlink-proto",
  "rtrb",
+ "serde",
+ "serde_json",
  "socket2",
  "thiserror 2.0.21",
  "windows",
