@@ -120,6 +120,26 @@ pub fn input_pad_unknown(text: &str, controls: &str) -> String {
 
 pub const INPUT_PAD_PRIMED: &str = "Moved every trigger and stick once.";
 
+/// `input pad-add` / `pad-remove` (spec 0016). Slots are shown 1-based, like player numbers.
+pub fn pad_added(slot: u8) -> String {
+    format!("Virtual Xbox controller {} added.", slot + 1)
+}
+
+pub fn pad_exists(slot: u8) -> String {
+    format!("Virtual Xbox controller {} is already there.", slot + 1)
+}
+
+pub fn pad_removed(slot: u8) -> String {
+    format!("Virtual Xbox controller {} removed.", slot + 1)
+}
+
+pub fn pad_absent(slot: u8) -> String {
+    format!(
+        "There's no virtual Xbox controller {}. Nothing to remove.",
+        slot + 1
+    )
+}
+
 /// `input probe` result line (spec 0016).
 pub fn probe_summary(
     device: &str,

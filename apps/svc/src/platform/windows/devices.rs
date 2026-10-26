@@ -43,7 +43,7 @@ pub fn veto_app(kind: PNP_VETO_TYPE, name: &[u16]) -> Option<String> {
     (!app.is_empty()).then_some(app)
 }
 
-struct DevInfo(HDEVINFO);
+pub(crate) struct DevInfo(pub(crate) HDEVINFO);
 
 impl Drop for DevInfo {
     fn drop(&mut self) {
@@ -52,12 +52,12 @@ impl Drop for DevInfo {
     }
 }
 
-fn class_guid(spec: &DriverSpec) -> Result<GUID, SvcError> {
+pub(crate) fn class_guid(spec: &DriverSpec) -> Result<GUID, SvcError> {
     GUID::try_from(spec.class_guid.trim_matches(['{', '}']))
         .map_err(SvcError::win32("GUID::try_from"))
 }
 
-fn devinfo_data() -> SP_DEVINFO_DATA {
+pub(crate) fn devinfo_data() -> SP_DEVINFO_DATA {
     SP_DEVINFO_DATA {
         cbSize: u32::try_from(size_of::<SP_DEVINFO_DATA>()).unwrap_or(u32::MAX),
         ..SP_DEVINFO_DATA::default()
@@ -177,27 +177,38 @@ pub fn remove_devices(spec: &DriverSpec, id: &str) -> Result<RemoveOutcome, SvcE
         return Ok(RemoveOutcome::NoDevice);
     }
     for data in &nodes {
-        let mut veto = PNP_VetoTypeUnknown;
-        let mut name = [0u16; 260];
-        // SAFETY: valid devnode; `veto` and `name` are live locals; no UI (no CM_REMOVE_UI_OK).
-        let removed = unsafe {
-            CM_Query_And_Remove_SubTreeW(
-                data.DevInst,
-                Some(&mut veto),
-                Some(&mut name),
-                CM_REMOVE_NO_RESTART,
-            )
-        };
-        if removed == CR_REMOVE_VETOED {
-            return Ok(RemoveOutcome::Held {
-                app: veto_app(veto, &name),
-            });
+        if let held @ RemoveOutcome::Held { .. } = remove_node(&set, data)? {
+            return Ok(held);
         }
-        // Any other result (e.g. a node that is not present) still goes to DiUninstallDevice.
-        // SAFETY: valid set and element from find_devices.
-        unsafe { DiUninstallDevice(HWND::default(), set.0, data, 0, None) }
-            .map_err(SvcError::win32("DiUninstallDevice"))?;
     }
+    Ok(RemoveOutcome::Removed)
+}
+
+/// Removes one node of `set`: `Held` when a program vetoes it, else `Removed`.
+pub(crate) fn remove_node(
+    set: &DevInfo,
+    data: &SP_DEVINFO_DATA,
+) -> Result<RemoveOutcome, SvcError> {
+    let mut veto = PNP_VetoTypeUnknown;
+    let mut name = [0u16; 260];
+    // SAFETY: valid devnode; `veto` and `name` are live locals; no UI (no CM_REMOVE_UI_OK).
+    let removed = unsafe {
+        CM_Query_And_Remove_SubTreeW(
+            data.DevInst,
+            Some(&mut veto),
+            Some(&mut name),
+            CM_REMOVE_NO_RESTART,
+        )
+    };
+    if removed == CR_REMOVE_VETOED {
+        return Ok(RemoveOutcome::Held {
+            app: veto_app(veto, &name),
+        });
+    }
+    // Any other result (e.g. a node that is not present) still goes to DiUninstallDevice.
+    // SAFETY: valid set and element owned by the caller.
+    unsafe { DiUninstallDevice(HWND::default(), set.0, data, 0, None) }
+        .map_err(SvcError::win32("DiUninstallDevice"))?;
     Ok(RemoveOutcome::Removed)
 }
 

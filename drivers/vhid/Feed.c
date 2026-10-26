@@ -134,6 +134,24 @@ FeedReleaseAllLocked(
     return count;
 }
 
+// Pad input report 0x01 at rest: sticks 0x8000, triggers 0, hat 0 (centred), no buttons.
+static const UCHAR s_PadNeutral[PAYLOAD_PAD] = { 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80 };
+
+UCHAR
+NodeReportSize(
+    _In_ PDEVICE_CONTEXT Context,
+    _In_ UCHAR           ReportId
+    )
+{
+    switch (Context->Kind) {
+    case NODE_KIND_PAD:
+        return ReportId == PAD_REPORT_ID_INPUT ? PAYLOAD_PAD : 0;
+    case NODE_KIND_KBD_MOUSE:
+    default:
+        return FeedPayloadSize(ReportId);
+    }
+}
+
 VOID
 FeedInitCurrent(
     _In_ PDEVICE_CONTEXT Context
@@ -142,9 +160,32 @@ FeedInitCurrent(
     ULONG i;
 
     RtlZeroMemory(Context->Current, sizeof(Context->Current));
+    if (Context->Kind == NODE_KIND_PAD) {
+        RtlCopyMemory(Context->Current[PAD_REPORT_ID_INPUT], s_PadNeutral, sizeof(s_PadNeutral));
+        return;
+    }
     for (i = 0; i < FEED_NEUTRAL_COUNT; i++) {
         RtlCopyMemory(Context->Current[s_Neutral[i].Id], s_Neutral[i].Data, s_Neutral[i].Len);
     }
+}
+
+NTSTATUS
+FeedPadOutput(
+    _In_ WDFREQUEST Request
+    )
+{
+    NTSTATUS status;
+    PVOID    buffer;
+    size_t   length;
+
+    // Rumble (report 0x03) from xinputhid or a game: accepted so writers never fail; forwarding it
+    // to the client is a later step (spec 0016 → Scope).
+    status = WdfRequestRetrieveInputBuffer(Request, 1, &buffer, &length);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+    WdfRequestSetInformation(Request, length);
+    return STATUS_SUCCESS;
 }
 
 NTSTATUS
@@ -162,7 +203,7 @@ FeedGetInputReport(
     if (!NT_SUCCESS(status)) {
         return status;
     }
-    len = FeedPayloadSize(packet.reportId);
+    len = NodeReportSize(Context, packet.reportId);
     if (len == 0 || packet.reportBufferLen < (ULONG)len + 1) {
         return STATUS_INVALID_PARAMETER;
     }

@@ -78,13 +78,10 @@ triggers unreliably (Results), and XInput-only games never see them.
 - Inbox `xinputhid.inf` (Microsoft-signed) binds its `GIP_Hid` section to the HID collection hardware ID
   `HID\VID_045E&PID_0B13&IG_00` and adds `xinputhid` as upper filter: the pad becomes an XInput device and
   a Windows.Gaming.Input `Gamepad`. No kernel driver of ours (ADR-0004 holds).
-- A HID child takes its enumerator from its parent's instance path, so a pad node is created with an
-  explicit instance ID whose enumerator carries `VID_045E&PID_0B13&IG_00` (prior art: HIDMaestro, see
-  Open questions). Its hardware ID `Root\MixLinkXboxPad` selects the pad install section of `vhid.inf`;
-  if the probe shows WGI missing or doubling the pad, the pad section also writes `xinputhid` to the
-  node's `UpperFilters` (HIDMaestro's WGI admission).
-- **First plan task probes this** (instance naming, xinputhid binding, XInput slot, Steam). If xinputhid
-  will not bind, stop and ask: fallback is ViGEm (X360) for every pad, already an optional component.
+- hidclass derives the HID child's hardware ID from the node's hardware ID (`Root\X` → `HID\X`), so a
+  pad node's hardware ID is `Root\VID_045E&PID_0B13&IG_00`; it also selects the pad model of `vhid.inf`.
+  The instance ID `ROOT\VID_045E&PID_0B13&IG_00\000N` only makes each slot unique (Results: probe).
+  WGI admits the pad once without any `UpperFilters` on the node.
 - Driver role from the hardware ID; HID attributes VID `045E`, PID `0B13`; one top-level collection (no
   `&Col0x` suffix, or the hardware ID would not match). Descriptor = the Xbox Series Bluetooth descriptor
   (input report 0x01, guide in 0x02, rumble output 0x03), captured from a real controller in the plan.
@@ -141,11 +138,12 @@ polling (`input probe --device pad`). Release build, elevated.
 | Keyboard / mouse checks (driver with Get Input Report) | **Pass.** `input status`: sizes 16 / 7 / 5 / 15, feeder free. LL hook: 65 keyboard + 1997 mouse events from `all` + `chord`, 0 injected. `hold` + `taskkill`: F13 auto-repeat stopped at the kill (128 events in 30 s, not ~900). Second feeder: "in use by the MixLink service". UAC: cursor moved, Tab moved focus. Lock screen: cursor moved, Space showed the PIN box. `walk` in a spec 0006 game: walks and looks. |
 | `input probe`, 10 000 events, release, elevated | kbd p50 0.30 / **p99 0.69** / max 2.22 ms; mouse rel 0.22 / **2.38** / 55.4 ms; mouse abs 0.16 / **0.43** / 0.98 ms; 0 lost each. |
 | Generic pad in Steam | Steam reads only the **first axis INPUT item** of a generic HID pad: triggers in a second item never moved in Steam's test screen (Simulation Brake / Accelerator, Z / Rz, Rx / Ry all tried); one item for all six axes fixed that. Its setup wizard then needs ramped pulls (a one-report jump never binds) and assumes every axis rests at the centre, so a trigger resting at the minimum is split into two half-axis bindings (`lefttrigger:-a3`, `rightshoulder:+a3`), varying run to run. `SDL_GAMECONTROLLERCONFIG` is ignored by Steam. Verdict: generic pads dropped for virtual Xbox pads. |
+| Virtual Xbox pad probe (`pad-add --slot 0`) | With hardware ID `Root\MixLinkXboxPad` the child got `HID\MixLinkXboxPad` (generic `input.inf`): the child ID comes from the parent's **hardware** ID, not its instance ID. With `Root\VID_045E&PID_0B13&IG_00`: child `HID\VID_045E&PID_0B13&IG_00`, driver `xinputhid.inf`, UpperFilters `xinputhid`, name "Xbox Wireless Controller". XInput index 0 connected; WGI `Gamepad` count 1; DirectInput and WGI RawGameController list it (045E:0B13). Steam: "Xbox Series X Controller" (USB) with Details, **no "Begin Setup"**. Container ID not settable on the root node (access denied, logged). |
 
 ## Open questions
-- Instance naming that makes the HID child carry `&IG_00` from a root node (HIDMaestro uses
-  `ROOT\VID_045E&PID_028E&IG_00\…` and, for `0B13`, an underscore form against a PnP edge case): the
-  first plan task settles it.
+- (Answered by the probe: the node's hardware ID carries `&IG_00`, see Results.)
+- Container ID per slot is refused on a root node; check in the two-pad run that XInput uses slots 0
+  and 1 without it.
 - HIDMaestro (github.com/hifihedgehog/HIDMaestro) is read for ideas only; no code is copied.
 - Microsoft VID/PID on a virtual device: accepted by the user for compatibility (as ViGEm, Sunshine,
   Steam do); the user-facing anti-cheat note (`docs/compat/anti-cheat.md`) gains a line.

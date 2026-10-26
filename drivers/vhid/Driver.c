@@ -15,9 +15,15 @@ static NTSTATUS DefaultQueueCreate(_In_ WDFDEVICE Device, _Out_ WDFQUEUE* Queue)
 static NTSTATUS ManualQueueCreate(_In_ WDFDEVICE Device, _Out_ WDFQUEUE* Queue);
 static EVT_WDF_OBJECT_CONTEXT_CLEANUP HidContextCleanup;
 
-// TRUE when the node's first hardware ID is the control node's.
-static BOOLEAN
-IsControlNode(
+typedef enum _NODE_ROLE {
+    NODE_ROLE_KBD_MOUSE,
+    NODE_ROLE_PAD,
+    NODE_ROLE_CONTROL,
+} NODE_ROLE;
+
+// Role from the node's first hardware ID (vhid.inf models).
+static NODE_ROLE
+NodeRole(
     _In_ PWDFDEVICE_INIT DeviceInit
     )
 {
@@ -27,7 +33,13 @@ IsControlNode(
 
     status = WdfFdoInitQueryProperty(DeviceInit, DevicePropertyHardwareID, sizeof(ids) - sizeof(WCHAR),
                                      ids, &length);
-    return NT_SUCCESS(status) && _wcsicmp(ids, VHID_CONTROL_HARDWARE_ID) == 0;
+    if (!NT_SUCCESS(status)) {
+        return NODE_ROLE_KBD_MOUSE;
+    }
+    if (_wcsicmp(ids, VHID_CONTROL_HARDWARE_ID) == 0) {
+        return NODE_ROLE_CONTROL;
+    }
+    return _wcsicmp(ids, VHID_PAD_HARDWARE_ID) == 0 ? NODE_ROLE_PAD : NODE_ROLE_KBD_MOUSE;
 }
 
 NTSTATUS
@@ -52,9 +64,11 @@ EvtDeviceAdd(
     WDF_OBJECT_ATTRIBUTES deviceAttributes;
     WDFDEVICE             device;
     PDEVICE_CONTEXT       context;
+    NODE_ROLE             role;
     UNREFERENCED_PARAMETER(Driver);
 
-    if (IsControlNode(DeviceInit)) {
+    role = NodeRole(DeviceInit);
+    if (role == NODE_ROLE_CONTROL) {
         return ControlDeviceAdd(DeviceInit);
     }
 
@@ -70,12 +84,24 @@ EvtDeviceAdd(
 
     context = GetDeviceContext(device);
     RtlZeroMemory(context, sizeof(*context));
-    FeedInitCurrent(context);
     context->Device = device;
     context->HidDeviceAttributes.Size = sizeof(HID_DEVICE_ATTRIBUTES);
-    context->HidDeviceAttributes.VendorID = VHID_VID;
-    context->HidDeviceAttributes.ProductID = VHID_PID;
-    context->HidDeviceAttributes.VersionNumber = VHID_VERSION;
+    if (role == NODE_ROLE_PAD) {
+        context->Kind = NODE_KIND_PAD;
+        context->ReportDescriptor = G_PadReportDescriptor;
+        context->ReportDescriptorLength = G_PadReportDescriptorLength;
+        context->HidDeviceAttributes.VendorID = PAD_VID;
+        context->HidDeviceAttributes.ProductID = PAD_PID;
+        context->HidDeviceAttributes.VersionNumber = PAD_VERSION;
+    } else {
+        context->Kind = NODE_KIND_KBD_MOUSE;
+        context->ReportDescriptor = G_ReportDescriptor;
+        context->ReportDescriptorLength = G_ReportDescriptorLength;
+        context->HidDeviceAttributes.VendorID = VHID_VID;
+        context->HidDeviceAttributes.ProductID = VHID_PID;
+        context->HidDeviceAttributes.VersionNumber = VHID_VERSION;
+    }
+    FeedInitCurrent(context);
 
     context->HidDescriptor.bLength = sizeof(HID_DESCRIPTOR);
     context->HidDescriptor.bDescriptorType = 0x21;
@@ -83,7 +109,7 @@ EvtDeviceAdd(
     context->HidDescriptor.bCountry = 0x00;
     context->HidDescriptor.bNumDescriptors = 1;
     context->HidDescriptor.DescriptorList[0].bReportType = 0x22;
-    context->HidDescriptor.DescriptorList[0].wReportLength = G_ReportDescriptorLength;
+    context->HidDescriptor.DescriptorList[0].wReportLength = context->ReportDescriptorLength;
 
     status = DefaultQueueCreate(device, &context->DefaultQueue);
     if (!NT_SUCCESS(status)) {
@@ -94,9 +120,12 @@ EvtDeviceAdd(
         return status;
     }
 
-    AcquireSRWLockExclusive(&g_FeedLock);
-    g_Hid = context;
-    ReleaseSRWLockExclusive(&g_FeedLock);
+    // Pad nodes join the feed table by slot later (spec 0016); only the keyboard / mouse node is fed now.
+    if (context->Kind == NODE_KIND_KBD_MOUSE) {
+        AcquireSRWLockExclusive(&g_FeedLock);
+        g_Hid = context;
+        ReleaseSRWLockExclusive(&g_FeedLock);
+    }
     return STATUS_SUCCESS;
 }
 
@@ -166,10 +195,15 @@ EvtIoDeviceControl(
         status = RequestCopyFromBuffer(Request, &context->HidDeviceAttributes, sizeof(HID_DEVICE_ATTRIBUTES));
         break;
     case IOCTL_HID_GET_REPORT_DESCRIPTOR:
-        status = RequestCopyFromBuffer(Request, G_ReportDescriptor, G_ReportDescriptorLength);
+        status = RequestCopyFromBuffer(Request, context->ReportDescriptor, context->ReportDescriptorLength);
         break;
     case IOCTL_HID_READ_REPORT:
         status = FeedRead(context, Request, &complete);
+        break;
+    case IOCTL_HID_WRITE_REPORT:
+    case IOCTL_UMDF_HID_SET_OUTPUT_REPORT:
+        // Only pads have an output report (rumble); the keyboard / mouse node has none.
+        status = context->Kind == NODE_KIND_PAD ? FeedPadOutput(Request) : STATUS_NOT_IMPLEMENTED;
         break;
     case IOCTL_UMDF_HID_GET_INPUT_REPORT:
         status = FeedGetInputReport(context, Request);

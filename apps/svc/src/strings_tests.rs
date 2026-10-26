@@ -24,3 +24,9 @@ fn probe_summary_in_ms() {
         "keyboard: p50 0.20 ms, p99 0.80 ms, max 7.00 ms; sent 10, received 9, lost 1"
     );
 }
+
+#[test]
+fn pad_messages_are_one_based() {
+    assert!(pad_added(0).contains("controller 1"));
+    assert!(pad_absent(3).contains("controller 4"));
+}

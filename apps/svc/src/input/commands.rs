@@ -17,9 +17,10 @@ use super::probe::{ProbeDevice, assign_arrivals, period, report_for, summary};
 use super::script::{Script, play, steps};
 use super::status::format_status;
 use crate::args::InputCmd;
+use crate::drivers::flow::RemoveOutcome;
 use crate::error::SvcError;
 use crate::platform::windows::console::install_ctrl_handler;
-use crate::platform::windows::raw_input;
+use crate::platform::windows::{pad_nodes, raw_input};
 use crate::stop::StopSignal;
 use crate::strings;
 
@@ -36,6 +37,8 @@ const RAMP_STEP: Duration = Duration::from_millis(20);
 pub fn run(cmd: &InputCmd) -> Result<(), SvcError> {
     match cmd {
         InputCmd::Status => status(),
+        InputCmd::PadAdd { slot } => pad_add(*slot),
+        InputCmd::PadRemove { slot } => pad_remove(*slot),
         InputCmd::Pad { delay_s } => pad_interactive(*delay_s),
         InputCmd::Try { script, delay_s } => try_script(*script, *delay_s),
         InputCmd::Probe { device, count } => probe(*device, *count),
@@ -186,6 +189,26 @@ fn pad_interactive(delay_s: u32) -> Result<(), SvcError> {
                 );
             }
         }
+    }
+    Ok(())
+}
+
+/// Creates the virtual Xbox pad node of `slot` (spec 0016). Admin.
+fn pad_add(slot: u8) -> Result<(), SvcError> {
+    let message = if pad_nodes::create_pad_node(slot)? {
+        strings::pad_added(slot)
+    } else {
+        strings::pad_exists(slot)
+    };
+    eprintln!("{message}");
+    Ok(())
+}
+
+fn pad_remove(slot: u8) -> Result<(), SvcError> {
+    match pad_nodes::remove_pad_node(slot)? {
+        RemoveOutcome::Removed => eprintln!("{}", strings::pad_removed(slot)),
+        RemoveOutcome::NoDevice => eprintln!("{}", strings::pad_absent(slot)),
+        RemoveOutcome::Held { app } => return Err(SvcError::DeviceHeld(app)),
     }
     Ok(())
 }

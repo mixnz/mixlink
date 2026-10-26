@@ -36,6 +36,24 @@ typedef UCHAR HID_REPORT_DESCRIPTOR, *PHID_REPORT_DESCRIPTOR;
 #define VHID_DEVICE_STRING_INDEX    5
 
 #define VHID_CONTROL_HARDWARE_ID    L"Root\\MixLinkVHidCtl"
+// hidclass derives the HID child's hardware ID from this one: HID\VID_045E&PID_0B13&IG_00, which the
+// inbox xinputhid.inf binds (spec 0016).
+#define VHID_PAD_HARDWARE_ID        L"Root\\VID_045E&PID_0B13&IG_00"
+
+// Virtual Xbox pad node (spec 0016): Xbox Series controller over Bluetooth, so the inbox xinputhid
+// filter binds to its HID child (HID\VID_045E&PID_0B13&IG_00).
+#define PAD_VID                 0x045E
+#define PAD_PID                 0x0B13
+#define PAD_VERSION             0x0523
+#define PAD_REPORT_ID_INPUT     0x01
+#define PAD_REPORT_ID_RUMBLE    0x03
+#define PAYLOAD_PAD             16
+
+// Which node a device object is (from its first hardware ID).
+typedef enum _NODE_KIND {
+    NODE_KIND_KBD_MOUSE,
+    NODE_KIND_PAD,
+} NODE_KIND;
 
 typedef struct _RING_ENTRY {
     UCHAR Id;
@@ -53,6 +71,9 @@ typedef struct _REPORT_RING {
 
 typedef struct _DEVICE_CONTEXT {
     WDFDEVICE               Device;
+    NODE_KIND               Kind;
+    const UCHAR*            ReportDescriptor;
+    USHORT                  ReportDescriptorLength;
     WDFQUEUE                DefaultQueue;
     WDFQUEUE                ManualQueue;    // pending IOCTL_HID_READ_REPORT
     HID_DEVICE_ATTRIBUTES   HidDeviceAttributes;
@@ -70,9 +91,11 @@ DRIVER_INITIALIZE                   DriverEntry;
 EVT_WDF_DRIVER_DEVICE_ADD           EvtDeviceAdd;
 EVT_WDF_IO_QUEUE_IO_DEVICE_CONTROL  EvtIoDeviceControl;
 
-// Descriptor.c
+// Descriptor.c (keyboard / mouse node), PadDescriptor.c (pad node)
 extern const HID_REPORT_DESCRIPTOR G_ReportDescriptor[];
 extern const USHORT G_ReportDescriptorLength;
+extern const HID_REPORT_DESCRIPTOR G_PadReportDescriptor[];
+extern const USHORT G_PadReportDescriptorLength;
 
 // Driver.c: the HID node's context while it exists, and the lock over it, its ring, its manual
 // queue and FeedOwner (spec 0016). Both nodes run in one WUDFHost (same WUDF DeviceGroupId).
@@ -105,6 +128,10 @@ NTSTATUS FeedCompleteRead(
 NTSTATUS FeedRead(_In_ PDEVICE_CONTEXT Context, _In_ WDFREQUEST Request, _Out_ BOOLEAN* Complete);
 // Sets Current to the neutral reports (gamepad centred, triggers 0). Called once at device add.
 VOID FeedInitCurrent(_In_ PDEVICE_CONTEXT Context);
+// Payload size of ReportId on this node (0 = no such input report).
+UCHAR NodeReportSize(_In_ PDEVICE_CONTEXT Context, _In_ UCHAR ReportId);
+// Pad output report (rumble): accepted, not used yet.
+NTSTATUS FeedPadOutput(_In_ WDFREQUEST Request);
 // IOCTL_UMDF_HID_GET_INPUT_REPORT: [ID][Current[ID]].
 NTSTATUS FeedGetInputReport(_In_ PDEVICE_CONTEXT Context, _In_ WDFREQUEST Request);
 // Caller holds g_FeedLock: clears the ring and feeds the neutral reports. Returns how many entries

@@ -75,7 +75,18 @@ pub enum InputCmd {
         device: ProbeDevice,
         count: u32,
     },
+    /// Creates the virtual Xbox pad node of `slot` (`input::pad_ids`).
+    PadAdd {
+        slot: u8,
+    },
+    /// Removes the virtual Xbox pad node of `slot`.
+    PadRemove {
+        slot: u8,
+    },
 }
+
+/// Virtual Xbox pads: slots 0..PAD_SLOTS (split screen, spec 0016).
+pub const PAD_SLOTS: u8 = 4;
 
 /// Which `vhid` collection `input probe` measures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,6 +140,7 @@ pub const USAGE: &str = "usage: mixlink-svc [--console [--pipe <name>] | install
      mixlink-svc drivers [install [--from <dir>] | uninstall | status]\n       \
      mixlink-svc display [status | try --client <32 hex> --mode <W>x<H>@<Hz> --topology virtual-only|extend|keep]\n       \
      mixlink-svc input [status | pad [--delay <s>] | try --script <name> [--delay <s>]]\n       \
+     mixlink-svc input [pad-add --slot <0-3> | pad-remove --slot <0-3>]\n       \
      scripts: keys chord mouse abs pad all hold uac lock walk";
 
 /// Parses the arguments after the program name.
@@ -182,6 +194,12 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, Strin
         ["display", "reject-check"] => Ok(Mode::Display(DisplayCmd::RejectCheck)),
         ["input", "status"] => Ok(Mode::Input(InputCmd::Status)),
         ["input", "pad"] => Ok(Mode::Input(InputCmd::Pad { delay_s: 0 })),
+        ["input", "pad-add", "--slot", slot] => Ok(Mode::Input(InputCmd::PadAdd {
+            slot: parse_slot(slot)?,
+        })),
+        ["input", "pad-remove", "--slot", slot] => Ok(Mode::Input(InputCmd::PadRemove {
+            slot: parse_slot(slot)?,
+        })),
         ["input", "pad", "--delay", delay] => Ok(Mode::Input(InputCmd::Pad {
             delay_s: parse_delay(delay)?,
         })),
@@ -205,6 +223,13 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, Strin
         }
         _ => Err(format!("unknown arguments: {}", args.join(" "))),
     }
+}
+
+fn parse_slot(text: &str) -> Result<u8, String> {
+    text.parse::<u8>()
+        .ok()
+        .filter(|&s| s < PAD_SLOTS)
+        .ok_or_else(|| format!("--slot must be 0..={}, got {text}", PAD_SLOTS - 1))
 }
 
 fn parse_probe_device(text: &str) -> Result<ProbeDevice, String> {

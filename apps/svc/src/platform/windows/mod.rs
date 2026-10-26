@@ -15,6 +15,7 @@ pub mod drivers_host;
 pub mod drivers_reg;
 pub mod gpu_name;
 pub mod install;
+pub mod pad_nodes;
 pub mod pipe;
 pub mod raw_input;
 pub mod security;

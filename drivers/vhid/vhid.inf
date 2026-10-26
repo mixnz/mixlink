@@ -1,8 +1,11 @@
 ;
 ; vhid.inf (from vhidmini2 VhidminiUm.inx, Windows-driver-samples, MS-PL)
-; Two root nodes, one vhid.dll, one WUDFHost (same DeviceGroupId, spec 0016):
-; - Root\MixLinkVHid: UMDF 2 HID minidriver; mshidumdf.sys (inbox) sits above it.
+; Root nodes, one vhid.dll, one WUDFHost (same DeviceGroupId, spec 0016):
+; - Root\MixLinkVHid: UMDF 2 HID minidriver (keyboard / mouse); mshidumdf.sys (inbox) sits above it.
 ; - Root\MixLinkVHidCtl: plain UMDF function driver; the service feeds reports through its interface.
+; - Root\VID_045E&PID_0B13&IG_00: a virtual Xbox pad (one node per slot, created by the service), same
+;   install sections as the HID node; its HID child is HID\VID_045E&PID_0B13&IG_00, which the inbox
+;   xinputhid.inf binds.
 ; Needs build 22000+.
 ;
 
@@ -30,6 +33,7 @@ vhid.dll=1
 [Standard.NT$ARCH$.10.0...22000]
 %DeviceName%=VHid_Install, Root\MixLinkVHid
 %CtlDeviceName%=VHidCtl_Install, Root\MixLinkVHidCtl
+%PadDeviceName%=VHid_Install, Root\VID_045E&PID_0B13&IG_00
 
 ; =================== HID node ==================================
 
@@ -105,3 +109,4 @@ ManufacturerName="MixLink"
 DiskName="MixLink Virtual Input Installation Disk"
 DeviceName="MixLink Virtual Input"
 CtlDeviceName="MixLink Virtual Input Control"
+PadDeviceName="MixLink Virtual Xbox Controller"

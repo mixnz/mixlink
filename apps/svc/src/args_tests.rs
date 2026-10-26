@@ -316,3 +316,17 @@ fn input_pad_parses() {
     assert!(parse(&["input", "pad", "a"]).is_err());
     assert!(parse(&["input", "pad", "--delay", "601"]).is_err());
 }
+
+#[test]
+fn input_pad_add_remove_parse() {
+    assert_eq!(
+        parse(&["input", "pad-add", "--slot", "0"]).unwrap(),
+        Mode::Input(InputCmd::PadAdd { slot: 0 })
+    );
+    assert_eq!(
+        parse(&["input", "pad-remove", "--slot", "3"]).unwrap(),
+        Mode::Input(InputCmd::PadRemove { slot: 3 })
+    );
+    assert!(parse(&["input", "pad-add", "--slot", "4"]).is_err());
+    assert!(parse(&["input", "pad-add"]).is_err());
+}
