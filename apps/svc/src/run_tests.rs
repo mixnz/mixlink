@@ -5,6 +5,7 @@ use std::sync::{Arc, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use mixlink_core::config::DisplaySettings;
 use mixlink_core::svc_ipc::{MAX_LINE, SvcPipe, SvcPipeError, SvcState};
 
 use super::*;
@@ -24,10 +25,17 @@ struct Server {
 
 impl Server {
     fn start() -> Server {
+        Server::start_with(None)
+    }
+
+    fn start_with(display: Option<DisplaySettings>) -> Server {
         let pipe = unique_pipe();
         let stop = Arc::new(StopSignal::new());
         let (ready_tx, ready_rx) = mpsc::channel();
-        let opts = RunOptions { pipe: pipe.clone() };
+        let opts = RunOptions {
+            pipe: pipe.clone(),
+            display,
+        };
         let thread_stop = Arc::clone(&stop);
         let handle = thread::spawn(move || {
             run(&thread_stop, &opts, || {
@@ -120,6 +128,7 @@ fn second_server_same_name_is_pipe_taken() {
     let stop = Arc::new(StopSignal::new());
     let opts = RunOptions {
         pipe: server.pipe.clone(),
+        display: None,
     };
     let result = run(&stop, &opts, || {});
     assert!(matches!(result, Err(SvcError::PipeTaken)), "{result:?}");
@@ -169,4 +178,15 @@ fn fifth_client_busy_until_slot_frees() {
     drop(fifth);
     drop(clients);
     server.shutdown();
+}
+
+/// Without the driver (or without admin rights) the display thread retries or gives up; either
+/// way a stop is not held up by it.
+#[test]
+fn display_thread_stops_while_waiting() {
+    let server = Server::start_with(Some(DisplaySettings::default()));
+    thread::sleep(Duration::from_millis(200));
+    let started = Instant::now();
+    server.shutdown();
+    assert!(started.elapsed() < Duration::from_secs(1));
 }

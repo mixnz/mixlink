@@ -84,3 +84,161 @@ fn drivers_unknown() {
     assert!(parse(&["drivers", "install", "--from"]).is_err());
     assert!(parse(&["drivers", "status", "extra"]).is_err());
 }
+
+const CLIENT: &str = "0123456789abcdef0123456789abcdef";
+
+fn try_mode(width: u32, height: u32, refresh_mhz: u32) -> DisplayInfo {
+    DisplayInfo {
+        width,
+        height,
+        refresh_mhz,
+        hdr: false,
+        dpi: 96,
+    }
+}
+
+#[test]
+fn display_status() {
+    assert_eq!(
+        parse(&["display", "status"]).unwrap(),
+        Mode::Display(DisplayCmd::Status)
+    );
+}
+
+#[test]
+fn display_try_keep() {
+    let args = [
+        "display",
+        "try",
+        "--client",
+        CLIENT,
+        "--mode",
+        "2560x1440@120",
+        "--topology",
+        "keep",
+    ];
+    assert_eq!(
+        parse(&args).unwrap(),
+        Mode::Display(DisplayCmd::Try {
+            client: CLIENT.parse().unwrap(),
+            mode: try_mode(2560, 1440, 120_000),
+            topology: TryTopology::Keep,
+        })
+    );
+}
+
+#[test]
+fn display_try_fractional_refresh() {
+    let args = [
+        "display",
+        "try",
+        "--client",
+        CLIENT,
+        "--mode",
+        "1920x1080@59.94",
+        "--topology",
+        "keep",
+    ];
+    let Mode::Display(DisplayCmd::Try { mode, .. }) = parse(&args).unwrap() else {
+        panic!("not a try command");
+    };
+    assert_eq!(mode, try_mode(1920, 1080, 59_940));
+}
+
+#[test]
+fn display_try_bad_mode() {
+    for mode in [
+        "2560x1440",
+        "0x0@60",
+        "2560x1440@abc",
+        "2560x1440@0",
+        "x1440@60",
+        "2560x1440@60.1234",
+    ] {
+        let args = [
+            "display",
+            "try",
+            "--client",
+            CLIENT,
+            "--mode",
+            mode,
+            "--topology",
+            "keep",
+        ];
+        assert!(parse(&args).is_err(), "{mode} should not parse");
+    }
+}
+
+#[test]
+fn display_try_bad_client() {
+    let args = [
+        "display",
+        "try",
+        "--client",
+        &CLIENT[1..],
+        "--mode",
+        "1920x1080@60",
+        "--topology",
+        "keep",
+    ];
+    assert!(parse(&args).is_err());
+}
+
+#[test]
+fn display_reject_check() {
+    assert_eq!(
+        parse(&["display", "reject-check"]).unwrap(),
+        Mode::Display(DisplayCmd::RejectCheck)
+    );
+}
+
+#[test]
+fn display_probe() {
+    assert_eq!(
+        parse(&["display", "probe", "--out", "p.txt"]).unwrap(),
+        Mode::Display(DisplayCmd::Probe {
+            out: PathBuf::from("p.txt")
+        })
+    );
+}
+
+#[test]
+fn display_try_virtual_only_and_extend() {
+    for (text, topology) in [
+        ("virtual-only", Topology::VirtualOnly),
+        ("extend", Topology::Extend),
+    ] {
+        let args = [
+            "display",
+            "try",
+            "--client",
+            CLIENT,
+            "--mode",
+            "1920x1080@60",
+            "--topology",
+            text,
+        ];
+        let Mode::Display(DisplayCmd::Try { topology: got, .. }) = parse(&args).unwrap() else {
+            panic!("not a try command");
+        };
+        assert_eq!(got, TryTopology::Apply(topology));
+    }
+}
+
+#[test]
+fn display_agent() {
+    assert_eq!(
+        parse(&[
+            "display-agent",
+            "--in",
+            r"C:\a b\in.json",
+            "--out",
+            "out.json"
+        ])
+        .unwrap(),
+        Mode::DisplayAgent {
+            input: PathBuf::from(r"C:\a b\in.json"),
+            output: PathBuf::from("out.json"),
+        }
+    );
+}

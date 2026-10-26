@@ -7,13 +7,19 @@ license.workspace = true
 
 [dependencies]
 mixlink-core.workspace = true
+mixlink-proto.workspace = true
 log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 env_logger.workspace = true
 thiserror.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = [
   "Win32_Foundation",
+  "Win32_Devices_Display",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Gdi",
   "Win32_Devices_DeviceAndDriverInstallation",
   "Win32_Security",
   "Win32_Security_Authorization",
@@ -26,8 +32,10 @@ windows = { workspace = true, features = [
   "Win32_System_IO",
   "Win32_System_Pipes",
   "Win32_System_Registry",
+  "Win32_System_RemoteDesktop",
   "Win32_System_SystemInformation",
   "Win32_System_Services",
+  "Win32_System_StationsAndDesktops",
   "Win32_System_Threading",
 ] }
 

@@ -40,6 +40,7 @@ AddReg = MyDevice_HardwareDeviceSettings
 [MyDevice_HardwareDeviceSettings]
 HKR,, "UpperFilters",  %REG_MULTI_SZ%, "IndirectKmd"
 HKR, "WUDF", "DeviceGroupId", %REG_SZ%, "MixLinkVDisplayGroup"
+HKR,, "Security",, "D:P(A;;GA;;;SY)(A;;GA;;;BA)" ; SYSTEM and Administrators only (spec 0015)
 
 [MyDevice_Install.NT.Services]
 Include=WUDFRD.inf

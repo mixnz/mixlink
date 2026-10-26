@@ -14,6 +14,24 @@ pub const MAX_NAME_BYTES: usize = 63;
 const FPS_RANGE: std::ops::RangeInclusive<u32> = 1..=240;
 const BITRATE_KBPS_RANGE: std::ops::RangeInclusive<u32> = 1_000..=500_000;
 
+/// Screen layout used while a client is streaming (ADR-0006). Default: the virtual monitor only.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Topology {
+    /// The virtual monitor is the main and only display; physical monitors are off.
+    #[default]
+    VirtualOnly,
+    /// The virtual monitor is the main display; physical monitors stay on to its right.
+    Extend,
+}
+
+/// Host display settings (spec 0015).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DisplaySettings {
+    pub topology: Topology,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct NetConfig {
@@ -90,6 +108,7 @@ pub struct HostConfig {
     pub name: String,
     pub net: NetConfig,
     pub video: VideoConfig,
+    pub display: DisplaySettings,
 }
 
 impl Default for HostConfig {
@@ -99,6 +118,7 @@ impl Default for HostConfig {
             name: "MixLink Host".to_owned(),
             net: NetConfig::default(),
             video: VideoConfig::default(),
+            display: DisplaySettings::default(),
         }
     }
 }

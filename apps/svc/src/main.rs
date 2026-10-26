@@ -2,8 +2,10 @@
 //! for development; `install` / `uninstall` register it.
 
 mod args;
+mod display;
 mod drivers;
 mod error;
+mod host_config;
 mod log_setup;
 mod pipe;
 mod platform;
@@ -70,6 +72,13 @@ fn run_mode(mode: Mode) -> Result<(), SvcError> {
             Ok(())
         }
         Mode::Drivers(cmd) => drivers::run(&cmd),
+        Mode::Display(cmd) => {
+            log_setup::init_console_log();
+            display::commands::run(&cmd)
+        }
+        Mode::DisplayAgent { input, output } => {
+            platform::windows::display_agent::serve_one(&input, &output)
+        }
     }
 }
 
@@ -88,7 +97,18 @@ fn run_console(pipe: String) -> Result<(), SvcError> {
     log_setup::init_console_log();
     let stop = Arc::new(stop::StopSignal::new());
     platform::windows::console::install_ctrl_handler(Arc::clone(&stop))?;
-    run::run(&stop, &run::RunOptions { pipe }, || {
+    let opts = run::RunOptions {
+        pipe,
+        display: Some(host_display_settings()),
+    };
+    run::run(&stop, &opts, || {
         log::info!("running in console mode; press Ctrl+C to stop");
     })
+}
+
+/// `display` part of `%ProgramData%\MixLink\host.json` (defaults when missing or invalid).
+#[cfg(windows)]
+pub fn host_display_settings() -> mixlink_core::config::DisplaySettings {
+    let program_data = platform::windows::drivers_host::program_data();
+    host_config::load(&host_config::default_path(&program_data)).display
 }

@@ -16,5 +16,6 @@
 | 0012 | [0012-service-shell](0012-service-shell.md) | done |
 | 0013 | [0013-d3d11va-decode-present](0013-d3d11va-decode-present.md) | done |
 | 0014 | [0014-driver-install-tooling](0014-driver-install-tooling.md) | done |
+| 0015 | [0015-virtual-display](0015-virtual-display.md) | done |
 
 Rules: `../conventions/docs-writing.md`. Template: `_template.md`.

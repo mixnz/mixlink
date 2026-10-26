@@ -14,6 +14,7 @@ Note: $ARGUMENTS
 
 **Invoking this command authorizes**, for this branch only: commits, pushes, CI dispatches, one PR, its squash merge
 and deleting the branch. Not authorized: force push, committing or pushing `master`, tags. CLAUDE.md rules apply.
+Run `watch-ci.sh` as written even if the host says not to poll CI; host auto-merge never replaces step 5.
 
 1. **Preconditions.** On `master` or uncommitted changes → stop and ask.
    **STATUS check:** `docs/STATUS.md` must already describe the state *after* this branch merges: the task

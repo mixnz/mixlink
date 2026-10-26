@@ -22,116 +22,31 @@ Environment:
 #include "Levers.h"
 #include "SurfaceShare.h"
 #include "SwapChain12.h"
+#include "Control.h"
+#include "Monitors.h"
 
 using namespace std;
 using namespace Microsoft::IndirectDisp;
 using namespace Microsoft::WRL;
 
-#pragma region SampleMonitors
+#pragma region DefaultModes
 
-// MixLink: one virtual monitor (spec 0004).
-static constexpr DWORD IDD_SAMPLE_MONITOR_COUNT = 1; // If monitor count > ARRAYSIZE(s_SampleMonitors), we create edid-less monitors
-
-// Default modes reported for edid-less monitors. The first mode is set as preferred
-static const struct IndirectSampleMonitor::SampleMonitorMode s_SampleDefaultModes[] = 
+// Modes for a monitor without an EDID (never created by MixLink; IddCx still asks).
+static const MlMode s_DefaultModes[] =
 {
-    { 1920, 1080, 60 },
-    { 1600,  900, 60 },
-    { 1024,  768, 75 },
-};
-
-// FOR SAMPLE PURPOSES ONLY, Static info about monitors that will be reported to OS
-static const struct IndirectSampleMonitor s_SampleMonitors[] =
-{
-    // Modified EDID from Dell S2719DGF
-    {
-        {
-            0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x10,0xAC,0xE6,0xD0,0x55,0x5A,0x4A,0x30,0x24,0x1D,0x01,
-            0x04,0xA5,0x3C,0x22,0x78,0xFB,0x6C,0xE5,0xA5,0x55,0x50,0xA0,0x23,0x0B,0x50,0x54,0x00,0x02,0x00,
-            0xD1,0xC0,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x58,0xE3,0x00,
-            0xA0,0xA0,0xA0,0x29,0x50,0x30,0x20,0x35,0x00,0x55,0x50,0x21,0x00,0x00,0x1A,0x00,0x00,0x00,0xFF,
-            0x00,0x37,0x4A,0x51,0x58,0x42,0x59,0x32,0x0A,0x20,0x20,0x20,0x20,0x20,0x00,0x00,0x00,0xFC,0x00,
-            0x53,0x32,0x37,0x31,0x39,0x44,0x47,0x46,0x0A,0x20,0x20,0x20,0x20,0x00,0x00,0x00,0xFD,0x00,0x28,
-            0x9B,0xFA,0xFA,0x40,0x01,0x0A,0x20,0x20,0x20,0x20,0x20,0x20,0x00,0x2C
-        },
-        {
-            // MixLink (spec 0004): 2560x1440@120 is the preferred mode (index 0).
-            { 2560, 1440, 120 },
-            { 2560, 1440, 144 },
-            { 1920, 1080,  60 },
-        },
-        0
-    },
-    // Modified EDID from Lenovo Y27fA
-    {
-        {
-            0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x30,0xAE,0xBF,0x65,0x01,0x01,0x01,0x01,0x20,0x1A,0x01,
-            0x04,0xA5,0x3C,0x22,0x78,0x3B,0xEE,0xD1,0xA5,0x55,0x48,0x9B,0x26,0x12,0x50,0x54,0x00,0x08,0x00,
-            0xA9,0xC0,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x68,0xD8,0x00,
-            0x18,0xF1,0x70,0x2D,0x80,0x58,0x2C,0x45,0x00,0x53,0x50,0x21,0x00,0x00,0x1E,0x00,0x00,0x00,0x10,
-            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFD,0x00,
-            0x30,0x92,0xB4,0xB4,0x22,0x01,0x0A,0x20,0x20,0x20,0x20,0x20,0x20,0x00,0x00,0x00,0xFC,0x00,0x4C,
-            0x45,0x4E,0x20,0x59,0x32,0x37,0x66,0x41,0x0A,0x20,0x20,0x20,0x00,0x11
-        },
-        {
-            { 3840, 2160,  60 },
-            { 1600,  900,  60 },
-            { 1024,  768,  60 },
-        },
-        0
-    }
+    { 1920, 1080, 60000 },
+    { 1600,  900, 60000 },
+    { 1024,  768, 75000 },
 };
 
 #pragma endregion
 
-#pragma region helpers
-
-static inline void FillSignalInfo(DISPLAYCONFIG_VIDEO_SIGNAL_INFO& Mode, DWORD Width, DWORD Height, DWORD VSync, bool bMonitorMode)
-{
-    Mode.totalSize.cx = Mode.activeSize.cx = Width;
-    Mode.totalSize.cy = Mode.activeSize.cy = Height;
-
-    // See https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-displayconfig_video_signal_info
-    Mode.AdditionalSignalInfo.vSyncFreqDivider = bMonitorMode ? 0 : 1;
-    Mode.AdditionalSignalInfo.videoStandard = 255;
-
-    Mode.vSyncFreq.Numerator = VSync;
-    Mode.vSyncFreq.Denominator = 1;
-    Mode.hSyncFreq.Numerator = VSync * Height;
-    Mode.hSyncFreq.Denominator = 1;
-
-    Mode.scanLineOrdering = DISPLAYCONFIG_SCANLINE_ORDERING_PROGRESSIVE;
-
-    Mode.pixelRate = ((UINT64) VSync) * ((UINT64) Width) * ((UINT64) Height);
-}
-
-static IDDCX_MONITOR_MODE CreateIddCxMonitorMode(DWORD Width, DWORD Height, DWORD VSync, IDDCX_MONITOR_MODE_ORIGIN Origin = IDDCX_MONITOR_MODE_ORIGIN_DRIVER)
-{
-    IDDCX_MONITOR_MODE Mode = {};
-
-    Mode.Size = sizeof(Mode);
-    Mode.Origin = Origin;
-    FillSignalInfo(Mode.MonitorVideoSignalInfo, Width, Height, VSync, true);
-
-    return Mode;
-}
-
-static IDDCX_TARGET_MODE CreateIddCxTargetMode(DWORD Width, DWORD Height, DWORD VSync)
-{
-    IDDCX_TARGET_MODE Mode = {};
-
-    Mode.Size = sizeof(Mode);
-    FillSignalInfo(Mode.TargetVideoSignalInfo.targetVideoSignalInfo, Width, Height, VSync, false);
-
-    return Mode;
-}
-
-#pragma endregion
 
 extern "C" DRIVER_INITIALIZE DriverEntry;
 
 EVT_WDF_DRIVER_DEVICE_ADD IddSampleDeviceAdd;
 EVT_WDF_DEVICE_D0_ENTRY IddSampleDeviceD0Entry;
+EVT_WDF_FILE_CLEANUP IddSampleFileCleanup;
 
 EVT_IDD_CX_ADAPTER_INIT_FINISHED IddSampleAdapterInitFinished;
 EVT_IDD_CX_ADAPTER_COMMIT_MODES IddSampleAdapterCommitModes;
@@ -143,32 +58,6 @@ EVT_IDD_CX_MONITOR_QUERY_TARGET_MODES IddSampleMonitorQueryModes;
 EVT_IDD_CX_MONITOR_ASSIGN_SWAPCHAIN IddSampleMonitorAssignSwapChain;
 EVT_IDD_CX_MONITOR_UNASSIGN_SWAPCHAIN IddSampleMonitorUnassignSwapChain;
 
-struct IndirectDeviceContextWrapper
-{
-    IndirectDeviceContext* pContext;
-
-    void Cleanup()
-    {
-        delete pContext;
-        pContext = nullptr;
-    }
-};
-
-struct IndirectMonitorContextWrapper
-{
-    IndirectMonitorContext* pContext;
-
-    void Cleanup()
-    {
-        delete pContext;
-        pContext = nullptr;
-    }
-};
-
-// This macro creates the methods for accessing an IndirectDeviceContextWrapper as a context for a WDF object
-WDF_DECLARE_CONTEXT_TYPE(IndirectDeviceContextWrapper);
-
-WDF_DECLARE_CONTEXT_TYPE(IndirectMonitorContextWrapper);
 
 extern "C" BOOL WINAPI DllMain(
     _In_ HINSTANCE hInstance,
@@ -223,9 +112,13 @@ NTSTATUS IddSampleDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
     IDD_CX_CLIENT_CONFIG IddConfig;
     IDD_CX_CLIENT_CONFIG_INIT(&IddConfig);
 
-    // If the driver wishes to handle custom IoDeviceControl requests, it's necessary to use this callback since IddCx
-    // redirects IoDeviceControl requests to an internal queue. This sample does not need this.
-    // IddConfig.EvtIddCxDeviceIoControl = IddSampleIoDeviceControl;
+    // MixLink (spec 0015): a closed handle departs the monitors it added.
+    WDF_FILEOBJECT_CONFIG FileConfig;
+    WDF_FILEOBJECT_CONFIG_INIT(&FileConfig, WDF_NO_EVENT_CALLBACK, WDF_NO_EVENT_CALLBACK, IddSampleFileCleanup);
+    WdfDeviceInitSetFileObjectConfig(pDeviceInit, &FileConfig, WDF_NO_OBJECT_ATTRIBUTES);
+
+    // IddCx redirects IoDeviceControl requests to an internal queue; this callback is how they reach us.
+    IddConfig.EvtIddCxDeviceIoControl = IddSampleIoDeviceControl;
 
     IddConfig.EvtIddCxAdapterInitFinished = IddSampleAdapterInitFinished;
 
@@ -261,6 +154,13 @@ NTSTATUS IddSampleDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
         return Status;
     }
 
+    // MixLink (spec 0015): the service finds the control channel by this interface.
+    Status = WdfDeviceCreateDeviceInterface(Device, &MIXLINK_VDISPLAY_INTERFACE, nullptr);
+    if (!NT_SUCCESS(Status))
+    {
+        return Status;
+    }
+
     Status = IddCxDeviceInitialize(Device);
 
     // Create a new device context object and attach it to the WDF device object
@@ -268,6 +168,12 @@ NTSTATUS IddSampleDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
     pContext->pContext = new IndirectDeviceContext(Device);
 
     return Status;
+}
+
+_Use_decl_annotations_
+VOID IddSampleFileCleanup(WDFFILEOBJECT FileObject)
+{
+    MonitorRegistry::Get().RemoveOwnedBy(FileObject);
 }
 
 _Use_decl_annotations_
@@ -328,6 +234,38 @@ HRESULT Direct3DDevice::Init()
 
 #pragma region SwapChainProcessor
 
+namespace
+{
+    // MixLink (spec 0015): the frame share (SharedHeader / FrameShare) has one set of global names, so only one
+    // swapchain publishes at a time: the first one running. Others just release their frames. The capture
+    // work replaces this with a share per monitor.
+    std::atomic<const void*> s_FrameShareOwner{ nullptr };
+
+    class FrameShareClaim
+    {
+    public:
+        explicit FrameShareClaim(const void* Owner) : m_Owner(Owner)
+        {
+            const void* Expected = nullptr;
+            m_Owned = s_FrameShareOwner.compare_exchange_strong(Expected, Owner);
+        }
+        ~FrameShareClaim()
+        {
+            if (m_Owned)
+            {
+                s_FrameShareOwner.store(nullptr);
+            }
+        }
+        FrameShareClaim(const FrameShareClaim&) = delete;
+        FrameShareClaim& operator=(const FrameShareClaim&) = delete;
+        bool Owned() const { return m_Owned; }
+
+    private:
+        const void* m_Owner;
+        bool m_Owned = false;
+    };
+}
+
 SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Direct3DDevice> Device, HANDLE NewFrameEvent)
     : m_hSwapChain(hSwapChain), m_Device(Device), m_hAvailableBufferEvent(NewFrameEvent)
 {
@@ -379,8 +317,9 @@ void SwapChainProcessor::Run()
 void SwapChainProcessor::RunCore()
 {
     // MixLink lever L4 (spec 0005): D3D12 swapchain with our own copy queue. L2/L3 are D3D11-only.
+    FrameShareClaim Claim(this);
     HRESULT L4Hr = S_OK;
-    if ((m_Levers & S2_LEVER_L4_D3D12) != 0)
+    if (Claim.Owned() && (m_Levers & S2_LEVER_L4_D3D12) != 0)
     {
         LeverReport Levers12;
         Levers12.Requested = m_Levers;
@@ -469,7 +408,7 @@ void SwapChainProcessor::RunCore()
 
             // MixLink lever L3 (spec 0005): share the surface itself; the first failure drops L3 for this swapchain.
             HANDLE SurfaceHandle = nullptr;
-            if ((Levers.Active & S2_LEVER_L3_NO_COPY) != 0)
+            if (Claim.Owned() && (Levers.Active & S2_LEVER_L3_NO_COPY) != 0)
             {
                 HRESULT ShareHr = S_OK;
                 SurfaceHandle = Surfaces.HandleFor(Buffer.MetaData.pSurface, &ShareHr);
@@ -482,8 +421,11 @@ void SwapChainProcessor::RunCore()
             }
 
             // HOT PATH: one GPU copy into the shared ring (none with L3), then fence signal.
-            Share.Publish(m_Device->Device.Get(), m_Device->DeviceContext.Get(), m_Device->AdapterLuid, Buffer,
-                static_cast<UINT64>(AcquireQpc.QuadPart), SurfaceHandle);
+            if (Claim.Owned())
+            {
+                Share.Publish(m_Device->Device.Get(), m_Device->DeviceContext.Get(), m_Device->AdapterLuid, Buffer,
+                    static_cast<UINT64>(AcquireQpc.QuadPart), SurfaceHandle);
+            }
 
             // ==============================
             // TODO: Process the frame here
@@ -555,7 +497,7 @@ void IndirectDeviceContext::InitAdapter()
     AdapterCaps.Size = sizeof(AdapterCaps);
 
     // Declare basic feature support for the adapter (required)
-    AdapterCaps.MaxMonitorsSupported = IDD_SAMPLE_MONITOR_COUNT;
+    AdapterCaps.MaxMonitorsSupported = ML_MAX_MONITORS; // MixLink: spec 0015
     AdapterCaps.EndPointDiagnostics.Size = sizeof(AdapterCaps.EndPointDiagnostics);
     AdapterCaps.EndPointDiagnostics.GammaSupport = IDDCX_FEATURE_IMPLEMENTATION_NONE;
     AdapterCaps.EndPointDiagnostics.TransmissionType = IDDCX_TRANSMISSION_TYPE_WIRED_OTHER;
@@ -593,68 +535,6 @@ void IndirectDeviceContext::InitAdapter()
         // Store the device context object into the WDF object context
         auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(AdapterInitOut.AdapterObject);
         pContext->pContext = this;
-    }
-}
-
-void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
-{
-    // ==============================
-    // TODO: In a real driver, the EDID should be retrieved dynamically from a connected physical monitor. The EDIDs
-    // provided here are purely for demonstration.
-    // Monitor manufacturers are required to correctly fill in physical monitor attributes in order to allow the OS
-    // to optimize settings like viewing distance and scale factor. Manufacturers should also use a unique serial
-    // number every single device to ensure the OS can tell the monitors apart.
-    // ==============================
-
-    WDF_OBJECT_ATTRIBUTES Attr;
-    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&Attr, IndirectMonitorContextWrapper);
-
-    // In the sample driver, we report a monitor right away but a real driver would do this when a monitor connection event occurs
-    IDDCX_MONITOR_INFO MonitorInfo = {};
-    MonitorInfo.Size = sizeof(MonitorInfo);
-    MonitorInfo.MonitorType = DISPLAYCONFIG_OUTPUT_TECHNOLOGY_HDMI;
-    MonitorInfo.ConnectorIndex = ConnectorIndex;
-
-    MonitorInfo.MonitorDescription.Size = sizeof(MonitorInfo.MonitorDescription);
-    MonitorInfo.MonitorDescription.Type = IDDCX_MONITOR_DESCRIPTION_TYPE_EDID;
-    if (ConnectorIndex >= ARRAYSIZE(s_SampleMonitors))
-    {
-        MonitorInfo.MonitorDescription.DataSize = 0;
-        MonitorInfo.MonitorDescription.pData = nullptr;
-    }
-    else
-    {
-        MonitorInfo.MonitorDescription.DataSize = IndirectSampleMonitor::szEdidBlock;
-        MonitorInfo.MonitorDescription.pData = const_cast<BYTE*>(s_SampleMonitors[ConnectorIndex].pEdidBlock);
-    }
-
-    // ==============================
-    // TODO: The monitor's container ID should be distinct from "this" device's container ID if the monitor is not
-    // permanently attached to the display adapter device object. The container ID is typically made unique for each
-    // monitor and can be used to associate the monitor with other devices, like audio or input devices. In this
-    // sample we generate a random container ID GUID, but it's best practice to choose a stable container ID for a
-    // unique monitor or to use "this" device's container ID for a permanent/integrated monitor.
-    // ==============================
-
-    // Create a container ID
-    CoCreateGuid(&MonitorInfo.MonitorContainerId);
-
-    IDARG_IN_MONITORCREATE MonitorCreate = {};
-    MonitorCreate.ObjectAttributes = &Attr;
-    MonitorCreate.pMonitorInfo = &MonitorInfo;
-
-    // Create a monitor object with the specified monitor descriptor
-    IDARG_OUT_MONITORCREATE MonitorCreateOut;
-    NTSTATUS Status = IddCxMonitorCreate(m_Adapter, &MonitorCreate, &MonitorCreateOut);
-    if (NT_SUCCESS(Status))
-    {
-        // Create a new monitor context object and attach it to the Idd monitor object
-        auto* pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorCreateOut.MonitorObject);
-        pMonitorContextWrapper->pContext = new IndirectMonitorContext(MonitorCreateOut.MonitorObject);
-
-        // Tell the OS that the monitor has been plugged in
-        IDARG_OUT_MONITORARRIVAL ArrivalOut;
-        Status = IddCxMonitorArrival(MonitorCreateOut.MonitorObject, &ArrivalOut);
     }
 }
 
@@ -699,10 +579,8 @@ void IndirectMonitorContext::UnassignSwapChain()
 _Use_decl_annotations_
 NTSTATUS IddSampleAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG_IN_ADAPTER_INIT_FINISHED* pInArgs)
 {
-    // This is called when the OS has finished setting up the adapter for use by the IddCx driver. It's now possible
-    // to report attached monitors.
-
-    auto* pDeviceContextWrapper = WdfObjectGet_IndirectDeviceContextWrapper(AdapterObject);
+    // This is called when the OS has finished setting up the adapter for use by the IddCx driver.
+    // MixLink (spec 0015): no monitor yet; the service adds them over IOCTL from now on.
     if (NT_SUCCESS(pInArgs->AdapterInitStatus))
     {
         // MixLink: on iGPU + dGPU machines, render on the dGPU (ADR-0006).
@@ -714,11 +592,7 @@ NTSTATUS IddSampleAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG_I
             RenderArgs.PreferredRenderAdapter = RenderLuid;
             IddCxAdapterSetRenderAdapter(AdapterObject, &RenderArgs);
         }
-
-        for (DWORD i = 0; i < IDD_SAMPLE_MONITOR_COUNT; i++)
-        {
-            pDeviceContextWrapper->pContext->FinishInit(i);
-        }
+        MonitorRegistry::Get().SetAdapter(AdapterObject, RenderLuid);
     }
 
     return STATUS_SUCCESS;
@@ -730,67 +604,35 @@ NTSTATUS IddSampleAdapterCommitModes(IDDCX_ADAPTER AdapterObject, const IDARG_IN
     UNREFERENCED_PARAMETER(AdapterObject);
     UNREFERENCED_PARAMETER(pInArgs);
 
-    // For the sample, do nothing when modes are picked - the swap-chain is taken care of by IddCx
-
-    // ==============================
-    // TODO: In a real driver, this function would be used to reconfigure the device to commit the new modes. Loop
-    // through pInArgs->pPaths and look for IDDCX_PATH_FLAGS_ACTIVE. Any path not active is inactive (e.g. the monitor
-    // should be turned off).
-    // ==============================
-
+    // Nothing to reconfigure: the swap-chain is taken care of by IddCx.
     return STATUS_SUCCESS;
 }
 
 _Use_decl_annotations_
 NTSTATUS IddSampleParseMonitorDescription(const IDARG_IN_PARSEMONITORDESCRIPTION* pInArgs, IDARG_OUT_PARSEMONITORDESCRIPTION* pOutArgs)
 {
-    // ==============================
-    // TODO: In a real driver, this function would be called to generate monitor modes for an EDID by parsing it. In
-    // this sample driver, we hard-code the EDID, so this function can generate known modes.
-    // ==============================
+    // MixLink (spec 0015): modes come from the ADD_MONITOR request with this EDID, not from parsing it.
+    vector<MlMode> Modes;
+    UINT32 Preferred = 0;
+    if (!MonitorRegistry::Get().ModesForEdid(static_cast<const BYTE*>(pInArgs->MonitorDescription.pData),
+        pInArgs->MonitorDescription.DataSize, &Modes, &Preferred))
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
 
-    pOutArgs->MonitorModeBufferOutputCount = IndirectSampleMonitor::szModeList;
-
-    if (pInArgs->MonitorModeBufferInputCount < IndirectSampleMonitor::szModeList)
+    pOutArgs->MonitorModeBufferOutputCount = static_cast<UINT>(Modes.size());
+    if (pInArgs->MonitorModeBufferInputCount < Modes.size())
     {
         // Return success if there was no buffer, since the caller was only asking for a count of modes
         return (pInArgs->MonitorModeBufferInputCount > 0) ? STATUS_BUFFER_TOO_SMALL : STATUS_SUCCESS;
     }
-    else
+    for (size_t i = 0; i < Modes.size(); i++)
     {
-        // In the sample driver, we have reported some static information about connected monitors
-        // Check which of the reported monitors this call is for by comparing it to the pointer of
-        // our known EDID blocks.
-
-        if (pInArgs->MonitorDescription.DataSize != IndirectSampleMonitor::szEdidBlock)
-            return STATUS_INVALID_PARAMETER;
-
-        DWORD SampleMonitorIdx = 0;
-        for(; SampleMonitorIdx < ARRAYSIZE(s_SampleMonitors); SampleMonitorIdx++)
-        {
-            if (memcmp(pInArgs->MonitorDescription.pData, s_SampleMonitors[SampleMonitorIdx].pEdidBlock, IndirectSampleMonitor::szEdidBlock) == 0)
-            {
-                // Copy the known modes to the output buffer
-                for (DWORD ModeIndex = 0; ModeIndex < IndirectSampleMonitor::szModeList; ModeIndex++)
-                {
-                    pInArgs->pMonitorModes[ModeIndex] = CreateIddCxMonitorMode(
-                        s_SampleMonitors[SampleMonitorIdx].pModeList[ModeIndex].Width,
-                        s_SampleMonitors[SampleMonitorIdx].pModeList[ModeIndex].Height,
-                        s_SampleMonitors[SampleMonitorIdx].pModeList[ModeIndex].VSync,
-                        IDDCX_MONITOR_MODE_ORIGIN_MONITORDESCRIPTOR
-                    );
-                }
-
-                // Set the preferred mode as represented in the EDID
-                pOutArgs->PreferredMonitorModeIdx = s_SampleMonitors[SampleMonitorIdx].ulPreferredModeIdx;
-        
-                return STATUS_SUCCESS;
-            }
-        }
-
-        // This EDID block does not belong to the monitors we reported earlier
-        return STATUS_INVALID_PARAMETER;
+        pInArgs->pMonitorModes[i] = MonitorModeFrom(Modes[i]);
+        pInArgs->pMonitorModes[i].Origin = IDDCX_MONITOR_MODE_ORIGIN_MONITORDESCRIPTOR;
     }
+    pOutArgs->PreferredMonitorModeIdx = Preferred;
+    return STATUS_SUCCESS;
 }
 
 _Use_decl_annotations_
@@ -798,33 +640,20 @@ NTSTATUS IddSampleMonitorGetDefaultModes(IDDCX_MONITOR MonitorObject, const IDAR
 {
     UNREFERENCED_PARAMETER(MonitorObject);
 
-    // ==============================
-    // TODO: In a real driver, this function would be called to generate monitor modes for a monitor with no EDID.
-    // Drivers should report modes that are guaranteed to be supported by the transport protocol and by nearly all
-    // monitors (such 640x480, 800x600, or 1024x768). If the driver has access to monitor modes from a descriptor other
-    // than an EDID, those modes would also be reported here.
-    // ==============================
-
+    pOutArgs->DefaultMonitorModeBufferOutputCount = ARRAYSIZE(s_DefaultModes);
     if (pInArgs->DefaultMonitorModeBufferInputCount == 0)
     {
-        pOutArgs->DefaultMonitorModeBufferOutputCount = ARRAYSIZE(s_SampleDefaultModes); 
+        return STATUS_SUCCESS;
     }
-    else
+    if (pInArgs->DefaultMonitorModeBufferInputCount < ARRAYSIZE(s_DefaultModes))
     {
-        for (DWORD ModeIndex = 0; ModeIndex < ARRAYSIZE(s_SampleDefaultModes); ModeIndex++)
-        {
-            pInArgs->pDefaultMonitorModes[ModeIndex] = CreateIddCxMonitorMode(
-                s_SampleDefaultModes[ModeIndex].Width,
-                s_SampleDefaultModes[ModeIndex].Height,
-                s_SampleDefaultModes[ModeIndex].VSync,
-                IDDCX_MONITOR_MODE_ORIGIN_DRIVER
-            );
-        }
-
-        pOutArgs->DefaultMonitorModeBufferOutputCount = ARRAYSIZE(s_SampleDefaultModes); 
-        pOutArgs->PreferredMonitorModeIdx = 0;
+        return STATUS_BUFFER_TOO_SMALL;
     }
-
+    for (DWORD ModeIndex = 0; ModeIndex < ARRAYSIZE(s_DefaultModes); ModeIndex++)
+    {
+        pInArgs->pDefaultMonitorModes[ModeIndex] = MonitorModeFrom(s_DefaultModes[ModeIndex]);
+    }
+    pOutArgs->PreferredMonitorModeIdx = 0;
     return STATUS_SUCCESS;
 }
 
@@ -833,31 +662,23 @@ NTSTATUS IddSampleMonitorQueryModes(IDDCX_MONITOR MonitorObject, const IDARG_IN_
 {
     UNREFERENCED_PARAMETER(MonitorObject);
 
-    vector<IDDCX_TARGET_MODE> TargetModes;
-
-    // Create a set of modes supported for frame processing and scan-out. These are typically not based on the
-    // monitor's descriptor and instead are based on the static processing capability of the device. The OS will
-    // report the available set of modes for a given output as the intersection of monitor modes with target modes.
-
-    TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 120));
-    TargetModes.push_back(CreateIddCxTargetMode(3840, 2160, 60));
-    TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 144));
-    TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 90));
-    TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 60));
-    TargetModes.push_back(CreateIddCxTargetMode(1920, 1080, 144));
-    TargetModes.push_back(CreateIddCxTargetMode(1920, 1080, 90));
-    TargetModes.push_back(CreateIddCxTargetMode(1920, 1080, 60));
-    TargetModes.push_back(CreateIddCxTargetMode(1600,  900, 60));
-    TargetModes.push_back(CreateIddCxTargetMode(1024,  768, 75));
-    TargetModes.push_back(CreateIddCxTargetMode(1024,  768, 60));
-
-    pOutArgs->TargetModeBufferOutputCount = (UINT) TargetModes.size();
-
-    if (pInArgs->TargetModeBufferInputCount >= TargetModes.size())
+    // MixLink (spec 0015): the target modes are the monitor's own list; Windows offers their intersection.
+    vector<MlMode> Modes;
+    UINT32 Preferred = 0;
+    if (!MonitorRegistry::Get().ModesForEdid(static_cast<const BYTE*>(pInArgs->MonitorDescription.pData),
+        pInArgs->MonitorDescription.DataSize, &Modes, &Preferred))
     {
-        copy(TargetModes.begin(), TargetModes.end(), pInArgs->pTargetModes);
+        return STATUS_INVALID_PARAMETER;
     }
 
+    pOutArgs->TargetModeBufferOutputCount = static_cast<UINT>(Modes.size());
+    if (pInArgs->TargetModeBufferInputCount >= Modes.size())
+    {
+        for (size_t i = 0; i < Modes.size(); i++)
+        {
+            pInArgs->pTargetModes[i] = TargetModeFrom(Modes[i]);
+        }
+    }
     return STATUS_SUCCESS;
 }
 

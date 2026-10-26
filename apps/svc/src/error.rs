@@ -31,6 +31,22 @@ pub enum SvcError {
     Driver { step: &'static str, detail: String },
     #[error("the signing key still exists after deletion")]
     KeyNotDeleted,
+    #[error(
+        "The MixLink virtual display driver isn't installed. Install it with `mixlink-svc drivers install`."
+    )]
+    DisplayDriverMissing,
+    #[error("The MixLink virtual display is still starting. Try again in a few seconds.")]
+    DisplayNotReady,
+    #[error(transparent)]
+    Wire(#[from] crate::display::wire::WireError),
+    #[error("The new MixLink monitor didn't show up in Windows within 5 seconds.")]
+    MonitorTimeout,
+    #[error("The MixLink service is running. Stop it first with `sc stop MixLink`.")]
+    ServiceRunning,
+    #[error("display helper: {0}")]
+    DisplayAgent(String),
+    #[error("screen layout {step} failed: Windows error {code}")]
+    Topology { step: &'static str, code: i32 },
     /// Uninstall stopped: a program holds a device open (`Some` when Windows names it).
     #[error("{}", crate::strings::drivers_held(.0.as_deref()))]
     DeviceHeld(Option<String>),

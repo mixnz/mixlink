@@ -176,3 +176,37 @@ fn bad_json_is_parse_error() {
         Err(ConfigError::Parse(_))
     ));
 }
+
+#[test]
+fn topology_default_and_json_names() {
+    assert_eq!(Topology::default(), Topology::VirtualOnly);
+    assert_eq!(
+        serde_json::to_string(&Topology::VirtualOnly).unwrap(),
+        "\"virtualOnly\""
+    );
+    assert_eq!(
+        serde_json::from_str::<Topology>("\"extend\"").unwrap(),
+        Topology::Extend
+    );
+}
+
+#[test]
+fn display_topology_default_virtual_only() {
+    assert_eq!(
+        HostConfig::default().display.topology,
+        Topology::VirtualOnly
+    );
+}
+
+#[test]
+fn display_topology_extend_parses() {
+    let host = HostConfig::from_json(r#"{"display":{"topology":"extend"}}"#).unwrap();
+    assert_eq!(host.display.topology, Topology::Extend);
+}
+
+#[test]
+fn old_config_without_display_loads() {
+    let host = HostConfig::from_json(r#"{"version":1,"name":"Den PC"}"#).unwrap();
+    assert_eq!(host.display, DisplaySettings::default());
+    assert_eq!(host.name, "Den PC");
+}
