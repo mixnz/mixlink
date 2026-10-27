@@ -8,10 +8,13 @@ export type HostActionsProps = {
   busy: boolean;
   onPair: (id: string) => void;
   onForget: (id: string) => void;
+  /** A stream is starting; Connect waits. */
+  connecting: boolean;
+  onConnect: (id: string) => void;
 };
 
-/** Pair for an unpaired host, Forget (asked once, inline) for a paired one. Give it `key={host.id}`. */
-export function HostActions({ host, busy, onPair, onForget }: HostActionsProps) {
+/** Pair for an unpaired host; Connect and Forget (asked once, inline) for a paired one. Give it `key={host.id}`. */
+export function HostActions({ host, busy, onPair, onForget, connecting, onConnect }: HostActionsProps) {
   const [confirming, setConfirming] = useState(false);
 
   if (!host.compatible) return null;
@@ -30,14 +33,25 @@ export function HostActions({ host, busy, onPair, onForget }: HostActionsProps) 
   }
   if (!confirming) {
     return (
-      <button
-        type="button"
-        onClick={() => {
-          setConfirming(true);
-        }}
-      >
-        {t("pair.forget")}
-      </button>
+      <p>
+        <button
+          type="button"
+          disabled={connecting}
+          onClick={() => {
+            onConnect(host.id);
+          }}
+        >
+          {connecting ? t("connect.starting") : t("connect.button")}
+        </button>{" "}
+        <button
+          type="button"
+          onClick={() => {
+            setConfirming(true);
+          }}
+        >
+          {t("pair.forget")}
+        </button>
+      </p>
     );
   }
   return (

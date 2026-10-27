@@ -26,6 +26,7 @@ fn main() -> ExitCode {
         .invoke_handler(tauri::generate_handler![
             commands::start_stream,
             commands::last_stream_result,
+            commands::last_latency,
             commands::list_hosts,
             commands::pair_request,
             commands::pair_submit,

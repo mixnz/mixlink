@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { forgetHost, pairCancel, pairRequest, pairSubmit } from "./api/pairing.ts";
-import { isStreamResult, lastStreamResult, onStreamResult, startStream } from "./api/stream.ts";
+import {
+  isStreamResult,
+  lastStreamResult,
+  onStreamResult,
+  startStream,
+} from "./api/stream.ts";
 import { HostActions } from "./components/HostActions/index.ts";
 import { HostList } from "./components/HostList/index.ts";
+import { LatencyTable } from "./components/LatencyTable/index.ts";
 import { PairDialog } from "./components/PairDialog/index.ts";
-import { useHosts, usePairState } from "./hooks.ts";
+import { useHosts, useLastLatency, usePairState } from "./hooks.ts";
 import { t } from "./i18n/en.ts";
 import { streamResultText } from "./streamResultText.ts";
 
@@ -16,6 +22,7 @@ export function App() {
     setNotice(String(error));
   }, []);
   const hosts = useHosts(report);
+  const [latency, clearLatency] = useLastLatency(report, setSelected);
   const pairing = usePairState();
 
   useEffect(() => {
@@ -23,9 +30,7 @@ export function App() {
       .then((result) => {
         if (result) setNotice(streamResultText(result));
       })
-      .catch((error: unknown) => {
-        setNotice(String(error));
-      });
+      .catch(report);
     const unlisten = onStreamResult((result) => {
       setStarting(false);
       setNotice(streamResultText(result));
@@ -35,13 +40,14 @@ export function App() {
         stop();
       });
     };
-  }, []);
+  }, [report]);
 
-  function connect() {
+  function connect(id: string) {
     setStarting(true);
     setNotice(null);
+    clearLatency();
     // On success this window is closed by the launcher once the stream is ready.
-    startStream().catch((error: unknown) => {
+    startStream(id).catch((error: unknown) => {
       setStarting(false);
       setNotice(isStreamResult(error) ? streamResultText(error) : String(error));
     });
@@ -67,7 +73,18 @@ export function App() {
       <section>
         <h2>{t("devices.heading")}</h2>
         <HostList hosts={hosts} selected={selected} onSelect={setSelected} />
-        {host && <HostActions key={host.id} host={host} busy={busy} onPair={pair} onForget={forget} />}
+        {host && (
+          <HostActions
+            key={host.id}
+            host={host}
+            busy={busy}
+            onPair={pair}
+            onForget={forget}
+            connecting={starting}
+            onConnect={connect}
+          />
+        )}
+        {host && latency?.hostId === host.id && <LatencyTable latency={latency.latency} />}
         {pairing.kind !== "idle" && (
           <PairDialog
             state={pairing}
@@ -81,9 +98,6 @@ export function App() {
           />
         )}
       </section>
-      <button type="button" onClick={connect} disabled={starting}>
-        {t("connect.demo")}
-      </button>
     </main>
   );
 }

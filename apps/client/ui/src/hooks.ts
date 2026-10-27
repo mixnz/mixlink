@@ -1,7 +1,8 @@
 // Subscriptions to launcher events, so components only render state.
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { type HostRow, listHosts, onHostsChanged } from "./api/hosts.ts";
 import { onPairState, type PairState } from "./api/pairing.ts";
+import { type LastLatency, lastLatency } from "./api/stream.ts";
 
 /** Hosts on the LAN, kept current by `hosts-changed`; a failed first read goes to `onError`. */
 export function useHosts(onError: (error: unknown) => void): HostRow[] {
@@ -30,4 +31,24 @@ export function usePairState(): PairState {
     };
   }, []);
   return pairing;
+}
+
+/** The last stream's latency (spec 0020), read once; `onFound` gets its host id. `clear` hides it. */
+export function useLastLatency(
+  onError: (error: unknown) => void,
+  onFound: (hostId: string) => void,
+): [LastLatency | null, () => void] {
+  const [latency, setLatency] = useState<LastLatency | null>(null);
+  useEffect(() => {
+    lastLatency()
+      .then((last) => {
+        setLatency(last);
+        if (last) onFound(last.hostId);
+      })
+      .catch(onError);
+  }, [onError, onFound]);
+  const clear = useCallback(() => {
+    setLatency(null);
+  }, []);
+  return [latency, clear];
 }
