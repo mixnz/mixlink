@@ -132,19 +132,24 @@ Main PC, Win11, `cargo run -p mixlink-net --example dnssd_probe` (2026-10-26):
 | Deregister (goodbye) | host gone from the list at once (< 0.1 s) |
 | Registering process killed (no deregister call) | gone in 0.3 s: the system responder sends the goodbye itself |
 | Host alive 14 s, mDNS only | stays listed: per-tick resolves keep it younger than the 5 s expiry |
-| Register as LocalSystem in Session 0 | open: needs an elevated shell (checked with the service in the svc task) |
+| Register as LocalSystem in Session 0 | pass: the installed service logs `mDNS service registered` |
 
-Acceptance criteria, as of the branch (automated = unit / loopback tests):
+Acceptance criteria (2026-10-27). Host = main PC (Wi-Fi, Private, `192.168.50.188`), service installed from
+`target\debug`; client = second PC on the same Wi-Fi, release `dist\mixlink-client.exe`.
 
-| Criterion | State |
+| Criterion | Result |
 |---|---|
-| `identity.json` made once, id kept | automated (`identity_tests.rs`); real file needs an elevated run |
-| Host listed within 3 s on two PCs | open: two-PC run |
-| mDNS blocked → broadcast still finds it | automated over loopback (`discovery_loopback.rs`); two-PC run open |
-| Broadcast blocked → mDNS still finds it | main PC, mDNS only (`dnssd_probe`); two-PC run open |
-| Service stop → gone within 5 s | goodbye < 0.1 s on main PC; expiry automated; two-PC run open |
-| Second adapter shows once with the LAN address | automated (`list_tests.rs`); two-PC run open |
-| Other `ver` dimmed with "Needs update" | automated (`hosts_tests.rs`); UI check open |
-| `install` / `uninstall` firewall rule, twice each | open: elevated run |
-| Public network hint in the tray | open: elevated run (category check itself automated) |
+| `identity.json` made once, id kept | pass: made on first start; same id after `install` again and service restart |
+| Host listed within 3 s on two PCs | pass |
+| mDNS blocked → broadcast still finds it | pass (host-side outbound UDP 5353 blocked); stop → gone in ~3 s by expiry |
+| Broadcast blocked → mDNS still finds it | pass (rule `MixLink` disabled); stop → gone at once (goodbye) |
+| Service stop → gone within 5 s | pass: mDNS goodbye at once; broadcast only ~3 s |
+| Second adapter shows once with the LAN address | automated (`list_tests.rs`); host had one adapter, open on a multi-adapter host |
+| Other `ver` dimmed with "Needs update" | automated (`hosts_tests.rs`); UI check open (needs a host on another version) |
+| `install` / `uninstall` firewall rule, twice each | pass: one rule (UDP 47800,47801, Domain,Private, service exe); `uninstall` twice ok, rule gone |
+| Public network hint in the tray | pass: shows / clears ~3 s after the profile changes |
 | Malformed probes get no reply, no panic | automated (fuzz + `responder_ignores_garbage`) |
+
+- Same PC: launcher (`npm run dev:client`) lists the local host and follows service stop / start.
+- Blocking inbound UDP 5353 on the client did not stop mDNS (the goodbye still arrived); block on the host's
+  outbound side instead when testing the broadcast path alone.

@@ -42,11 +42,11 @@ Details live in each spec; one line per item here.
   index = slot, Steam with no setup. `input pad | pad-add | pad-remove | probe`. p99: kbd 0.69, abs 0.43, pad 0.47 ms.
 - T5 LAN discovery (0017): service advertises over mDNS (Windows DNS-SD API) + answers broadcast probes on
   47800; host id in `identity.json`; `install` adds firewall rule `MixLink` (Private + Domain); tray hints on a
-  Public network; launcher lists hosts (5 s expiry). mDNS goodbye < 0.1 s on the main PC.
+  Public network; launcher lists hosts (5 s expiry). Two-PC run passes (mDNS only, broadcast only, stop → gone).
 
 ## In progress
-- T5 open rows (spec 0017 → Results): two-PC run of the acceptance list; elevated runs (`install` / `uninstall`
-  firewall rule twice, `--console` + `dnssd_probe browse`, Session 0 mDNS registration, Public network hint).
+- T5 open rows (spec 0017 → Results): host with several adapters; "Needs update" row with a host on another
+  version. Main PC: MixLink service and firewall rule removed, `identity.json` kept.
 - T21 open rows (spec 0015): frame grab of login / lock screen on the headless monitor (T7 harness), power cut
   during a session, iGPU + dGPU host.
 - Main PC: drivers installed from `target\drivers` (T22 build, no pad added), MixLink service removed.
