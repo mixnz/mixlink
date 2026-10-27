@@ -3,7 +3,7 @@
 use std::fmt;
 
 use mixlink_core::hex;
-use mixlink_core::ids::SessionId;
+use mixlink_core::ids::{DeviceId, SessionId};
 use mixlink_proto::control::PublicKey;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -58,6 +58,13 @@ fn private_from_hex<'de, D: Deserializer<'de>>(deserializer: D) -> Result<[u8; 3
     let mut key = [0u8; 32];
     hex::decode_into(&text, &mut key).map_err(serde::de::Error::custom)?;
     Ok(key)
+}
+
+/// This device as a pairing client: its id and static key pair.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClientIdentity {
+    pub id: DeviceId,
+    pub keys: StaticKeyPair,
 }
 
 /// Largest multiple of 1 000 000 that fits a `u32`: draws at or above it are redrawn, so every

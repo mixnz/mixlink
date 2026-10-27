@@ -34,6 +34,10 @@ pub enum NetError {
     Keys(String),
     #[error("the host refused: {0:?}")]
     Rejected(RejectReason),
+    #[error("session handshake failed: {0}")]
+    Noise(String),
+    #[error("no session keys yet")]
+    NoSession,
     #[error("unexpected reply from the host")]
     UnexpectedReply,
 }
