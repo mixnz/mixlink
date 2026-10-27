@@ -10,6 +10,15 @@ profile="${1:-debug}"
 RELEASE_FEATURES="mixlink-client/custom-protocol,mixlink-host/custom-protocol"
 shift || true
 
+# Copies one file into dist/; a file in use (running service or tray) is an error, not OK.
+copy_out() {
+  if cp "$1" "$2" 2>/dev/null; then
+    ok "$3"
+  else
+    err "$3 not copied: file in use? Stop the MixLink service / tray, then copy it from $1"
+  fi
+}
+
 if [[ ! -f Cargo.toml ]]; then
   echo "No Cargo.toml yet — create the workspace first (spec 0001)."
   exit 1
@@ -36,8 +45,7 @@ if [[ "$profile" == "release" ]]; then
     for ext in ".exe" ""; do
       src="target/release/$bin$ext"
       if [[ -f "$src" ]]; then
-        cp "$src" dist/
-        ok "dist/$bin$ext"
+        copy_out "$src" dist/ "dist/$bin$ext"
         break
       fi
     done
@@ -45,8 +53,7 @@ if [[ "$profile" == "release" ]]; then
   # FFmpeg DLLs for mixlink-stream's decoder (spec 0013); the .exe tools are not shipped.
   ffmpeg_env || exit 1
   for dll in "$(cygpath -u "$FFMPEG_DIR")"/bin/*.dll; do
-    cp "$dll" dist/
-    ok "dist/$(basename "$dll")"
+    copy_out "$dll" dist/ "dist/$(basename "$dll")"
   done
   # Unsigned driver packages; `mixlink-svc drivers install` signs them per machine (spec 0014).
   powershell -NoProfile -ExecutionPolicy Bypass -File drivers/build.ps1 -Driver all || exit 1
@@ -54,8 +61,12 @@ if [[ "$profile" == "release" ]]; then
     rm -rf "dist/drivers/$name"
     mkdir -p "dist/drivers/$name"
     for f in "target/drivers/$name/pkg/"*; do
-      cp "$f" "dist/drivers/$name/"
-      ok "dist/drivers/$name/$(basename "$f")"
+      copy_out "$f" "dist/drivers/$name/" "dist/drivers/$name/$(basename "$f")"
     done
   done
+fi
+
+if (( ERRORS > 0 )); then
+  echo "BUILD FAILED: $ERRORS file(s) not copied to dist/"
+  exit 1
 fi

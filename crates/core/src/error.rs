@@ -9,6 +9,19 @@ pub enum IdParseError {
     NotHex { index: usize },
 }
 
+/// Bad hex text for a key or byte string.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum HexError {
+    #[error("expected {expected} hex digits, got {len}")]
+    Length { expected: usize, len: usize },
+    #[error("odd number of hex digits ({len})")]
+    OddLength { len: usize },
+    #[error("{len} bytes, at most {max} allowed")]
+    TooLong { max: usize, len: usize },
+    #[error("non-hex character at byte {index}")]
+    NotHex { index: usize },
+}
+
 /// Config text that cannot be used.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {

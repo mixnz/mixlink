@@ -8,13 +8,17 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
+use crate::ids::DeviceId;
 use crate::ipc::{IpcError, decode_line, encode_line};
 
 /// Bumped on any breaking change to the messages below.
-pub const PIPE_VERSION: u32 = 1;
+pub const PIPE_VERSION: u32 = 2;
 
 /// The service's pipe; tests and `--console --pipe` use other names.
 pub const PIPE_NAME: &str = r"\\.\pipe\mixlink-svc";
+
+/// The Windows service that owns `PIPE_NAME`; the tray checks the pipe server is this service (spec 0018).
+pub const SERVICE_NAME: &str = "MixLink";
 
 /// Longest accepted line in bytes, `\n` included. The service drops a client that sends more.
 pub const MAX_LINE: usize = 64 * 1024;
@@ -36,8 +40,16 @@ const BUSY_RETRY: Duration = Duration::from_millis(10);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum TrayToSvc {
-    Hello { pipe_version: u32 },
+    Hello {
+        pipe_version: u32,
+    },
     GetStatus,
+    /// Closes the open pairing prompt (spec 0018).
+    CancelPairing,
+    ListPaired,
+    RemovePaired {
+        device: DeviceId,
+    },
 }
 
 /// Sent by the service, one reply per request.
@@ -56,9 +68,34 @@ pub enum SvcToTray {
         /// Absent (older service) = `false`.
         #[serde(default)]
         network_public: bool,
+        /// A client is pairing: show this PIN (spec 0018).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pairing: Option<PairingPrompt>,
     },
+    /// Reply to `ListPaired`.
+    Paired { devices: Vec<PairedInfo> },
+    /// Reply to `CancelPairing` and `RemovePaired`.
+    Done,
     /// The request was refused; the service closes the connection after it.
     Error { message: String },
+}
+
+/// The PIN prompt while a client pairs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairingPrompt {
+    pub device_name: String,
+    /// Six digits.
+    pub pin: String,
+    pub expires_s: u32,
+}
+
+/// A paired client, without its key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairedInfo {
+    pub device: DeviceId,
+    pub name: String,
+    /// Unix seconds.
+    pub paired_at: u64,
 }
 
 /// What the service is doing; streaming and pairing states come with those features.
@@ -69,11 +106,12 @@ pub enum SvcState {
 }
 
 /// The fields of a `SvcToTray::Status`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusReport {
     pub state: SvcState,
     pub uptime_s: u64,
     pub network_public: bool,
+    pub pairing: Option<PairingPrompt>,
 }
 
 impl StatusReport {
@@ -84,12 +122,17 @@ impl StatusReport {
                 state,
                 uptime_s,
                 network_public,
+                pairing,
             } => Some(StatusReport {
                 state,
                 uptime_s,
                 network_public,
+                pairing,
             }),
-            SvcToTray::Hello { .. } | SvcToTray::Error { .. } => None,
+            SvcToTray::Hello { .. }
+            | SvcToTray::Error { .. }
+            | SvcToTray::Paired { .. }
+            | SvcToTray::Done => None,
         }
     }
 }
@@ -152,6 +195,9 @@ pub enum SvcPipeError {
     },
     #[error("unexpected reply from the service")]
     Unexpected,
+    /// The pipe's server is not the MixLink service (spec 0018); nothing was sent to it.
+    #[error("the service pipe is served by another program")]
+    Untrusted,
 }
 
 /// Blocking client end of the service pipe (used by the tray and tests).
@@ -165,7 +211,19 @@ pub struct SvcPipe {
 impl SvcPipe {
     /// Opens the pipe and exchanges `Hello`; returns the service's version.
     pub fn connect(name: &str) -> Result<(SvcPipe, String), SvcPipeError> {
+        SvcPipe::connect_checked(name, |_| true)
+    }
+
+    /// Like `connect`, but `verify` checks the pipe's server before anything is sent; false gives
+    /// `Untrusted`. The tray passes its service-PID check (spec 0018).
+    pub fn connect_checked(
+        name: &str,
+        verify: impl FnOnce(&File) -> bool,
+    ) -> Result<(SvcPipe, String), SvcPipeError> {
         let file = open_pipe(name)?;
+        if !verify(&file) {
+            return Err(SvcPipeError::Untrusted);
+        }
         let writer = file.try_clone().map_err(SvcPipeError::Io)?;
         let mut pipe = SvcPipe {
             reader: BufReader::new(file),
@@ -188,8 +246,16 @@ impl SvcPipe {
                 theirs: pipe_version,
                 svc_version,
             }),
-            SvcToTray::Status { .. } | SvcToTray::Error { .. } => Err(SvcPipeError::Unexpected),
+            SvcToTray::Status { .. }
+            | SvcToTray::Error { .. }
+            | SvcToTray::Paired { .. }
+            | SvcToTray::Done => Err(SvcPipeError::Unexpected),
         }
+    }
+
+    /// The open pipe, for checks on its server process.
+    pub fn file(&self) -> &File {
+        self.reader.get_ref()
     }
 
     /// Sends one message and waits for its reply.
@@ -215,6 +281,28 @@ impl SvcPipe {
     pub fn status(&mut self) -> Result<StatusReport, SvcPipeError> {
         StatusReport::from_status(self.request(&TrayToSvc::GetStatus)?)
             .ok_or(SvcPipeError::Unexpected)
+    }
+
+    pub fn cancel_pairing(&mut self) -> Result<(), SvcPipeError> {
+        self.expect_done(&TrayToSvc::CancelPairing)
+    }
+
+    pub fn list_paired(&mut self) -> Result<Vec<PairedInfo>, SvcPipeError> {
+        match self.request(&TrayToSvc::ListPaired)? {
+            SvcToTray::Paired { devices } => Ok(devices),
+            _ => Err(SvcPipeError::Unexpected),
+        }
+    }
+
+    pub fn remove_paired(&mut self, device: DeviceId) -> Result<(), SvcPipeError> {
+        self.expect_done(&TrayToSvc::RemovePaired { device })
+    }
+
+    fn expect_done(&mut self, msg: &TrayToSvc) -> Result<(), SvcPipeError> {
+        match self.request(msg)? {
+            SvcToTray::Done => Ok(()),
+            _ => Err(SvcPipeError::Unexpected),
+        }
     }
 }
 

@@ -33,6 +33,7 @@ export function HostList({ hosts, selected, onSelect }: HostListProps) {
             <span className={styles.name}>{host.name}</span>
             <span className={styles.address}>{host.address}</span>
             {!host.compatible && <span className={styles.label}>{t("devices.needsUpdate")}</span>}
+            {host.compatible && host.paired && <span className={styles.label}>{t("devices.paired")}</span>}
           </button>
         </li>
       ))}

@@ -1,4 +1,4 @@
-//! Hot-path check: `Fragments::next_into` and `Reassembler::push` never allocate.
+//! Hot-path check: `Fragments::next_into`, `Reassembler::push`, `Sealer::seal` and `Opener::open` never allocate.
 //! Test-only counting allocator (spec 0010); it delegates every call to `System`.
 
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -6,6 +6,7 @@ use std::cell::Cell;
 
 use mixlink_core::ids::FrameId;
 use mixlink_proto::channel::Channel;
+use mixlink_proto::crypto::{KEY_LEN, Role, SessionKeys, TAG_LEN};
 use mixlink_proto::header::{Flags, MAX_DATAGRAM, PacketHeader};
 use mixlink_proto::packetizer::Packetizer;
 use mixlink_proto::reassembler::{Push, Reassembler, ReassemblerConfig};
@@ -78,5 +79,39 @@ fn push_and_next_into_do_not_allocate() {
     });
 
     assert_eq!(completed, 2);
+    assert_eq!(n, 0);
+}
+
+#[test]
+fn seal_and_open_do_not_allocate() {
+    let keys = SessionKeys {
+        c2h: [3; KEY_LEN],
+        h2c: [4; KEY_LEN],
+    };
+    let mut sealer = keys.sealer(Role::Client, Channel::Video);
+    let mut opener = keys.opener(Role::Host, Channel::Video);
+    let frame = vec![0x5Au8; 64 * 1024];
+    let mut packetizer = Packetizer::new(Channel::Video);
+    let mut buf = [0u8; MAX_DATAGRAM + TAG_LEN];
+    let mut opened = 0;
+
+    let n = allocations_during(|| {
+        let Ok(mut fragments) = packetizer.packetize(FrameId::new(1), Flags::empty(), &frame)
+        else {
+            return;
+        };
+        while let Some(len) = buf
+            .first_chunk_mut::<MAX_DATAGRAM>()
+            .and_then(|datagram| fragments.next_into(datagram))
+        {
+            if let Ok(total) = sealer.seal(&mut buf, len)
+                && opener.open(&mut buf[..total]).is_ok()
+            {
+                opened += 1;
+            }
+        }
+    });
+
+    assert_eq!(opened, 55);
     assert_eq!(n, 0);
 }

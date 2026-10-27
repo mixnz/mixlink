@@ -32,3 +32,12 @@ in another.
 
 `serve` prints its own counters when the client says bye. No pacing yet: each video frame
 leaves as one burst, as in spec 0011.
+
+## Pairing and secure session (spec 0018)
+Against a host running the MixLink service (session port 47801). The host id (32 hex) is in
+`%ProgramData%\MixLink\identity.json` on the host. Client files default to the launcher's folder
+(`%LOCALAPPDATA%\MixLink`); `--store DIR` uses another one.
+1. `net-probe pair <host-ip>:47801 <host id>`: the host tray shows a PIN; type it here.
+2. `net-probe connect <host-ip>:47801 <host id> [--seconds 10]`: Noise KK session, one sealed ping per
+   second, then `Bye`. Prints the session id and RTT p50 / p99. A host that removed this client answers
+   `NotPaired`; the host is then forgotten here too.

@@ -3,7 +3,8 @@
 use std::io;
 use std::net::SocketAddrV4;
 
-use mixlink_proto::error::{ControlError, PacketizeError};
+use mixlink_proto::control::RejectReason;
+use mixlink_proto::error::{ControlError, CryptoError, PacketizeError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum NetError {
@@ -27,6 +28,18 @@ pub enum NetError {
     Control(#[from] ControlError),
     #[error(transparent)]
     Packetize(#[from] PacketizeError),
+    #[error(transparent)]
+    Crypto(#[from] CryptoError),
+    #[error("key or random source failed: {0}")]
+    Keys(String),
+    #[error("the host refused: {0:?}")]
+    Rejected(RejectReason),
+    #[error("session handshake failed: {0}")]
+    Noise(String),
+    #[error("cannot save or load client files: {0}")]
+    Store(String),
+    #[error("no session keys yet")]
+    NoSession,
     #[error("unexpected reply from the host")]
     UnexpectedReply,
 }

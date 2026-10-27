@@ -204,3 +204,115 @@ fn welcome_mode_is_validated() {
         Err(ControlError::Refresh { mhz: 0 })
     ));
 }
+
+fn device() -> DeviceId {
+    DEVICE.parse().unwrap()
+}
+
+fn pair_messages() -> Vec<ControlMessage> {
+    let key = PublicKey([9; 32]);
+    vec![
+        ControlMessage::PairRequest {
+            proto: 1,
+            device: device(),
+            host: device(),
+            name: "Phòng khách".to_owned(),
+            key,
+        },
+        ControlMessage::PairPrompt { expires_s: 120 },
+        ControlMessage::PairStart {
+            device: device(),
+            spake: Blob(vec![1; SPAKE_LEN]),
+        },
+        ControlMessage::PairReply {
+            spake: Blob(vec![2; SPAKE_LEN]),
+            key,
+            mac: Blob(vec![3; MAC_LEN]),
+        },
+        ControlMessage::PairConfirm {
+            device: device(),
+            mac: Blob(vec![4; MAC_LEN]),
+        },
+        ControlMessage::PairDone,
+        ControlMessage::SessionInit {
+            proto: 1,
+            device: device(),
+            host: device(),
+            noise: Blob(vec![5; 300]),
+        },
+        ControlMessage::SessionAccept {
+            noise: Blob(vec![6; 200]),
+        },
+        ControlMessage::Ping { n: 7 },
+        ControlMessage::Pong { n: 7 },
+        ControlMessage::Reject {
+            reason: RejectReason::BadPin,
+        },
+        ControlMessage::Reject {
+            reason: RejectReason::PairingClosed,
+        },
+    ]
+}
+
+#[test]
+fn pair_messages_round_trip() {
+    for msg in pair_messages() {
+        let bytes = encode(&msg).unwrap();
+        assert_eq!(decode(&bytes).unwrap(), msg);
+    }
+}
+
+#[test]
+fn bad_mac_len_rejected() {
+    let msg = ControlMessage::PairConfirm {
+        device: device(),
+        mac: Blob(vec![4; MAC_LEN - 1]),
+    };
+    assert!(matches!(
+        encode(&msg),
+        Err(ControlError::BlobLen { field: "mac", .. })
+    ));
+}
+
+#[test]
+fn bad_spake_len_rejected() {
+    let msg = ControlMessage::PairStart {
+        device: device(),
+        spake: Blob(vec![1; SPAKE_LEN + 1]),
+    };
+    assert!(matches!(
+        encode(&msg),
+        Err(ControlError::BlobLen { field: "spake", .. })
+    ));
+}
+
+#[test]
+fn noise_too_long_rejected() {
+    let msg = ControlMessage::SessionAccept {
+        noise: Blob(vec![1; MAX_NOISE + 1]),
+    };
+    assert!(matches!(
+        encode(&msg),
+        Err(ControlError::BlobLen { field: "noise", .. })
+    ));
+}
+
+#[test]
+fn public_key_is_64_hex() {
+    let json = serde_json::to_string(&PublicKey([0xab; 32])).unwrap();
+    assert_eq!(json, format!("\"{}\"", "ab".repeat(32)));
+    let short = format!("\"{}\"", "ab".repeat(31));
+    assert!(serde_json::from_str::<PublicKey>(&short).is_err());
+}
+
+#[test]
+fn blob_over_parse_limit_rejected() {
+    let json = format!(
+        r#"{{"type":"SessionAccept","noise":"{}"}}"#,
+        "00".repeat(crate::blob::MAX_BLOB + 1)
+    );
+    assert!(matches!(
+        decode(json.as_bytes()),
+        Err(ControlError::Parse(_))
+    ));
+}

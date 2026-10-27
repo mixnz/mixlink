@@ -3,6 +3,7 @@
 pub mod clock;
 pub mod config;
 pub mod error;
+pub mod hex;
 pub mod ids;
 pub mod ipc;
 pub mod mmcss;

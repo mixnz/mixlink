@@ -7,7 +7,7 @@
 **Hot path:** `clock::now` and `StageStamps::mark`/`mark_at` are called per frame: allocation-free.
 
 ## Layout
-- `ids.rs`, `clock.rs`, `stage.rs`, `config.rs`, `ipc.rs`, `svc_ipc.rs`, `error.rs`, `mmcss.rs` (each + `<name>_tests.rs`)
+- `ids.rs`, `hex.rs`, `clock.rs`, `stage.rs`, `config.rs`, `ipc.rs`, `svc_ipc.rs`, `error.rs`, `mmcss.rs` (each + `<name>_tests.rs`)
 - `platform/windows/{qpc,mmcss,device_io}.rs`, `platform/fallback.rs` (`Instant`, no MMCSS; non-Windows): the only platform code.
 
 ## Public API
@@ -18,15 +18,16 @@
   `get`, `span`).
 - `config`: `CONFIG_VERSION`, `MAX_NAME_BYTES` (63, shared with `proto::control`), `HostConfig`,
   `ClientConfig` (`from_json`, `to_json_pretty`, `validate`), `NetConfig`, `VideoConfig`.
-- `error`: `IdParseError`, `ConfigError`.
+- `hex`: `encode` (lowercase), `decode_into`, `decode_vec` (both cases accepted), `digit`.
+- `error`: `IdParseError`, `HexError`, `ConfigError`.
 - `mmcss`: `MmcssTask` (`ProAudio` critical, `Games` high), `Mmcss::enter(task) -> Option<Mmcss>` (reverts on drop,
   same thread; `None` + warning when refused).
 - `ipc`: launcher <-> stream JSON-lines contract — `IPC_VERSION`, `StreamToLauncher`, `LauncherToStream`,
   `CloseReason`, `IpcError`, `encode_line`, `decode_line`.
-- `svc_ipc`: tray <-> service pipe contract (spec 0012) — `PIPE_VERSION`, `PIPE_NAME`, `MAX_LINE`, `TrayToSvc`,
-  `SvcToTray` (`Status` has `network_public`, default `false`), `SvcState`, `StatusReport` (`from_status`;
-  `SvcPipe::status` returns it), `read_line_limited` / `LineRead`, blocking client `SvcPipe` (`connect`, `request`,
-  `status`), `open_pipe` (read + write-data access only, see spec 0012), `SvcPipeError` (`NotRunning` =
+- `svc_ipc`: tray <-> service pipe contract (spec 0012, 0018) — `PIPE_VERSION` (2), `PIPE_NAME`, `SERVICE_NAME`, `MAX_LINE`, `TrayToSvc`,
+  `SvcToTray` (`Status` has `network_public`, `pairing`; `Paired`, `Done`), `PairingPrompt`, `PairedInfo`,
+  `SvcState`, `StatusReport` (`from_status`), `read_line_limited` / `LineRead`, blocking client `SvcPipe` (`connect`, `connect_checked` (server check before `Hello`),
+  `request`, `status`, `cancel_pairing`, `list_paired`, `remove_paired`, `file`), `open_pipe` (read + write-data access only, see spec 0012), `SvcPipeError` (`Untrusted`, `NotRunning` =
   pipe missing or busy).
 - `device_io` (Windows): `open_interface(&GUID) -> Result<Option<OwnedHandle>>` (first present interface,
   read + write; `None` = absent), `ioctl(&handle, code, input, output) -> Result<usize>`. Used for `vdisplay`, `vhid`.

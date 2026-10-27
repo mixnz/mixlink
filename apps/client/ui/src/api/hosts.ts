@@ -9,6 +9,8 @@ export type HostRow = {
   address: string;
   port: number;
   compatible: boolean;
+  /** Paired before: connects without a PIN (spec 0018). */
+  paired: boolean;
 };
 
 export function listHosts(): Promise<HostRow[]> {

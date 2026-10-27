@@ -6,7 +6,7 @@ Bash scripts (Git Bash on Windows). Each script <= 150 lines; shared helpers in 
 |---|---|
 | `gate.sh` | Quality gate: all checks + UI + drivers + `cargo fmt/clippy/test`. `--fast` skips UI/drivers/clippy/test; `--ui` = UI only; `--checks`, `--cargo lint|test` are the CI jobs (cargo modes run UI first). |
 | `check-ui.sh` | npm workspace: `npm ci` when the lockfile changed, then lint, typecheck, test, build (`ui/dist` for Tauri). |
-| `build.sh` | `debug` (default) or `release` build; release runs `check-ui`, embeds the UI (`custom-protocol`), copies host, client, stream, svc exes and FFmpeg DLLs to `dist/`, builds the drivers into `dist/drivers/<name>/` (unsigned). |
+| `build.sh` | `debug` (default) or `release` build; release runs `check-ui`, embeds the UI (`custom-protocol`), copies host, client, stream, svc exes and FFmpeg DLLs to `dist/`, builds the drivers into `dist/drivers/<name>/` (unsigned). A file in use in `dist/` (running service or tray) fails the build. |
 | `check-drivers.sh` | Builds both UMDF drivers (`drivers/build.ps1`) and runs `infverif /w`; no WDK toolset = WARN and skip (`MIXLINK_REQUIRE_WDK=1` = error, CI `drivers` job). |
 | `ask-ci.sh` | Gate, push branch, dispatch `ci.yml` (CI runs only on dispatch and `v*` tags). `--jobs`, `--watch`. |
 | `watch-ci.sh` | Watch the run for HEAD; `--once` = report and exit (2 = running). |

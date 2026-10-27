@@ -3,6 +3,7 @@
 use std::fs::File;
 use std::io::{BufReader, Write};
 use std::os::windows::io::OwnedHandle;
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -10,7 +11,7 @@ use mixlink_core::ipc::encode_line;
 use mixlink_core::svc_ipc::{LineRead, MAX_LINE, read_line_limited};
 
 use crate::net_check::{PUBLIC_CHECK_TTL, PublicCheck};
-use crate::pipe::session::{Reply, Session, too_long_reply};
+use crate::pipe::session::{PairingPort, Reply, Session, too_long_reply};
 use crate::platform::windows::network_category::any_public_network;
 use crate::platform::windows::pipe::{create_instance, wait_client};
 use crate::platform::windows::security::PipeSecurity;
@@ -27,6 +28,7 @@ pub fn listen(
     security: &PipeSecurity,
     stop: &StopSignal,
     started: Instant,
+    pairing: &Arc<dyn PairingPort + Send + Sync>,
 ) {
     let mut next = Some(first);
     while !stop.is_stopped() {
@@ -52,9 +54,10 @@ pub fn listen(
         if stop.is_stopped() {
             break;
         }
+        let pairing = Arc::clone(pairing);
         let spawned = thread::Builder::new()
             .name("svc-pipe-conn".into())
-            .spawn(move || serve(File::from(instance), started));
+            .spawn(move || serve(File::from(instance), started, pairing.as_ref()));
         if let Err(error) = spawned {
             log::error!("spawning pipe connection thread: {error}");
         }
@@ -70,7 +73,7 @@ fn probe_public() -> bool {
 }
 
 /// Answers one client until it disconnects or sends something unexpected.
-fn serve(file: File, started: Instant) {
+fn serve(file: File, started: Instant, pairing: &dyn PairingPort) {
     let mut reader = BufReader::new(&file);
     let mut writer = &file;
     let mut session = Session::new();
@@ -78,9 +81,12 @@ fn serve(file: File, started: Instant) {
     let mut line = Vec::new();
     loop {
         let reply = match read_line_limited(&mut reader, &mut line, MAX_LINE) {
-            Ok(LineRead::Line) => session.handle_line(&line, started.elapsed(), || {
-                public.get(Instant::now(), probe_public)
-            }),
+            Ok(LineRead::Line) => session.handle_line(
+                &line,
+                started.elapsed(),
+                || public.get(Instant::now(), probe_public),
+                pairing,
+            ),
             Ok(LineRead::TooLong) => too_long_reply(),
             Ok(LineRead::Eof) => return,
             Err(error) => {

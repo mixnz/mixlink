@@ -8,7 +8,8 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
-use crate::error::IdParseError;
+use crate::error::{HexError, IdParseError};
+use crate::hex;
 
 /// One streaming session. The value is chosen by the caller (random once pairing lands).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -110,22 +111,13 @@ impl FromStr for DeviceId {
             return Err(IdParseError::Length { len: text.len() });
         }
         let mut bytes = [0u8; 16];
-        for (i, out) in bytes.iter_mut().enumerate() {
-            let hi = hex_digit(text, 2 * i)?;
-            let lo = hex_digit(text, 2 * i + 1)?;
-            *out = (hi << 4) | lo;
-        }
+        hex::decode_into(s, &mut bytes).map_err(|error| match error {
+            HexError::NotHex { index } => IdParseError::NotHex { index },
+            HexError::Length { len, .. }
+            | HexError::OddLength { len }
+            | HexError::TooLong { len, .. } => IdParseError::Length { len },
+        })?;
         Ok(Self(bytes))
-    }
-}
-
-fn hex_digit(text: &[u8], index: usize) -> Result<u8, IdParseError> {
-    let c = text.get(index).copied().unwrap_or(0);
-    match c {
-        b'0'..=b'9' => Ok(c - b'0'),
-        b'a'..=b'f' => Ok(c - b'a' + 10),
-        b'A'..=b'F' => Ok(c - b'A' + 10),
-        _ => Err(IdParseError::NotHex { index }),
     }
 }
 

@@ -118,7 +118,17 @@ fn receive(
         }
         ControlMessage::Reject { reason } => Some(Ok(HandshakeReply::Reject(reason))),
         ControlMessage::Bye { .. } => Some(Err(NetError::UnexpectedReply)),
-        ControlMessage::Hello { .. } => None,
+        ControlMessage::Hello { .. }
+        | ControlMessage::PairRequest { .. }
+        | ControlMessage::PairPrompt { .. }
+        | ControlMessage::PairStart { .. }
+        | ControlMessage::PairReply { .. }
+        | ControlMessage::PairConfirm { .. }
+        | ControlMessage::PairDone
+        | ControlMessage::SessionInit { .. }
+        | ControlMessage::SessionAccept { .. }
+        | ControlMessage::Ping { .. }
+        | ControlMessage::Pong { .. } => None,
     }
 }
 

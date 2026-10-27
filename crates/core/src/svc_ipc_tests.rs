@@ -5,7 +5,15 @@ use crate::ipc::{IpcError, decode_line, encode_line};
 
 #[test]
 fn every_message_round_trips() {
-    for msg in [TrayToSvc::Hello { pipe_version: 1 }, TrayToSvc::GetStatus] {
+    for msg in [
+        TrayToSvc::Hello { pipe_version: 1 },
+        TrayToSvc::GetStatus,
+        TrayToSvc::CancelPairing,
+        TrayToSvc::ListPaired,
+        TrayToSvc::RemovePaired {
+            device: DeviceId::from_bytes([3; 16]),
+        },
+    ] {
         let line = encode_line(&msg).unwrap();
         assert_eq!(decode_line::<TrayToSvc>(&line).unwrap(), msg);
     }
@@ -18,10 +26,29 @@ fn every_message_round_trips() {
             state: SvcState::Idle,
             uptime_s: 42,
             network_public: true,
+            pairing: None,
         },
         SvcToTray::Error {
             message: "bad".to_owned(),
         },
+        SvcToTray::Status {
+            state: SvcState::Idle,
+            uptime_s: 1,
+            network_public: false,
+            pairing: Some(PairingPrompt {
+                device_name: "Laptop".to_owned(),
+                pin: "012345".to_owned(),
+                expires_s: 90,
+            }),
+        },
+        SvcToTray::Paired {
+            devices: vec![PairedInfo {
+                device: DeviceId::from_bytes([4; 16]),
+                name: "Laptop".to_owned(),
+                paired_at: 1_700_000_000,
+            }],
+        },
+        SvcToTray::Done,
     ] {
         let line = encode_line(&msg).unwrap();
         assert_eq!(decode_line::<SvcToTray>(&line).unwrap(), msg);
@@ -34,6 +61,7 @@ fn status_encodes_exactly() {
         state: SvcState::Idle,
         uptime_s: 3,
         network_public: false,
+        pairing: None,
     };
     assert_eq!(
         encode_line(&msg).unwrap(),
@@ -121,6 +149,7 @@ fn status_without_network_public_decodes_false() {
             state: SvcState::Idle,
             uptime_s: 7,
             network_public: false,
+            pairing: None,
         }
     );
 }
@@ -131,6 +160,7 @@ fn status_report_from_message() {
         state: SvcState::Idle,
         uptime_s: 9,
         network_public: true,
+        pairing: None,
     };
     assert_eq!(
         StatusReport::from_status(msg),
@@ -138,6 +168,7 @@ fn status_report_from_message() {
             state: SvcState::Idle,
             uptime_s: 9,
             network_public: true,
+            pairing: None,
         })
     );
 }

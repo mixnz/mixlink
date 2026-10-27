@@ -6,7 +6,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use mixlink_core::config::DisplaySettings;
-use mixlink_core::svc_ipc::{MAX_LINE, SvcPipe, SvcPipeError, SvcState};
+use mixlink_core::svc_ipc::{MAX_LINE, PIPE_VERSION, SvcPipe, SvcPipeError, SvcState};
 
 use super::*;
 
@@ -37,6 +37,7 @@ impl Server {
             display,
             input: false,
             discovery: None,
+            session: None,
         };
         let thread_stop = Arc::clone(&stop);
         let handle = thread::spawn(move || {
@@ -118,10 +119,14 @@ fn bad_json_and_status_before_hello_close() {
 fn version_mismatch_reported() {
     let server = Server::start();
     let mut file = raw_client(&server.pipe);
-    file.write_all(b"{\"type\":\"Hello\",\"pipe_version\":2}\n")
-        .unwrap();
+    let hello = format!(
+        "{{\"type\":\"Hello\",\"pipe_version\":{}}}\n",
+        PIPE_VERSION + 1
+    );
+    file.write_all(hello.as_bytes()).unwrap();
     let reply = read_reply_then_eof(&file);
-    assert!(reply.contains("\"Hello\"") && reply.contains("\"pipe_version\":1"));
+    let current = format!("\"pipe_version\":{PIPE_VERSION}");
+    assert!(reply.contains("\"Hello\"") && reply.contains(&current));
     server.shutdown();
 }
 
@@ -134,6 +139,7 @@ fn second_server_same_name_is_pipe_taken() {
         display: None,
         input: false,
         discovery: None,
+        session: None,
     };
     let result = run(&stop, &opts, || {});
     assert!(matches!(result, Err(SvcError::PipeTaken)), "{result:?}");
@@ -194,4 +200,15 @@ fn display_thread_stops_while_waiting() {
     let started = Instant::now();
     server.shutdown();
     assert!(started.elapsed() < Duration::from_secs(1));
+}
+
+#[test]
+fn untrusted_server_is_refused_before_hello() {
+    let server = Server::start();
+    let refused = SvcPipe::connect_checked(&server.pipe, |_| false);
+    assert!(matches!(refused, Err(SvcPipeError::Untrusted)));
+    let (mut pipe, _) = SvcPipe::connect_checked(&server.pipe, |_| true).unwrap();
+    assert_eq!(pipe.status().unwrap().state, SvcState::Idle);
+    drop(pipe);
+    server.shutdown();
 }

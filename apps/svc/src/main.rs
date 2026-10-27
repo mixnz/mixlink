@@ -11,12 +11,16 @@ mod identity;
 #[cfg(windows)]
 mod input;
 mod input_args;
+mod json_file;
 mod log_setup;
 mod net_check;
 mod pipe;
 mod platform;
 #[cfg(windows)]
 mod run;
+mod secrets;
+#[cfg(windows)]
+mod session_listen;
 mod stop;
 mod strings;
 
@@ -129,11 +133,14 @@ pub fn host_run_options(pipe: String) -> run::RunOptions {
         &identity::default_path(&program_data),
         platform::windows::random::random_device_id,
     );
-    let discovery = match id {
-        Ok(id) => Some(discovery::settings(&config, id)),
+    let (discovery, session) = match id {
+        Ok(id) => (
+            Some(discovery::settings(&config, id)),
+            session_settings(&program_data, &config, id),
+        ),
         Err(error) => {
-            log::error!("host id unavailable, LAN discovery off: {error}");
-            None
+            log::error!("host id unavailable, LAN discovery and pairing off: {error}");
+            (None, None)
         }
     };
     run::RunOptions {
@@ -141,5 +148,35 @@ pub fn host_run_options(pipe: String) -> run::RunOptions {
         display: Some(config.display),
         input: true,
         discovery,
+        session,
+    }
+}
+
+/// Secures the `secrets` folder, then loads or makes the host key. Any failure → no pairing (logged):
+/// keys are never written to a folder other users could read.
+#[cfg(windows)]
+fn session_settings(
+    program_data: &std::path::Path,
+    config: &mixlink_core::config::HostConfig,
+    host: mixlink_core::ids::DeviceId,
+) -> Option<session_listen::SessionSettings> {
+    let dir = secrets::dir(program_data);
+    let key = platform::windows::dir_security::secure_dir(&dir).and_then(|()| {
+        secrets::load_or_create_key(&dir, || {
+            mixlink_net::keys::StaticKeyPair::generate()
+                .map_err(|error| SvcError::Session(error.to_string()))
+        })
+    });
+    match key {
+        Ok(keys) => Some(session_listen::SessionSettings {
+            net: config.net.clone(),
+            host,
+            keys,
+            secrets: dir,
+        }),
+        Err(error) => {
+            log::error!("host key unavailable, pairing off: {error}");
+            None
+        }
     }
 }

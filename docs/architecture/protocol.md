@@ -12,14 +12,31 @@ Spec 0017; code `crates/net/src/discovery/`.
   once; the client re-resolves known instances every 1.5 s so live hosts stay fresh.
 - Host id: `%ProgramData%\MixLink\identity.json`, random on first service start.
 
-## Pairing
-- First connection: host shows a 6-digit PIN, client enters it.
-- Key agreement: X25519 + PIN-authenticated confirm (SPAKE2 or HMAC), store peer public key.
-- Later sessions: mutual auth with stored keys, no PIN.
+## Pairing (spec 0018; `crates/net/src/pairing/`)
+- Plaintext control messages on the session port. `PairRequest {proto, device, host, name, key}` opens a
+  prompt on the host (random 6-digit PIN, 120 s, one device at a time, else `Reject(Busy)`); reply `PairPrompt`.
+- `PairStart {device, spake}` (SPAKE2 Ed25519, ids = client id, host id, password = PIN) → `PairReply {spake,
+  key, mac}` → `PairConfirm {device, mac}` → `PairDone`. Transcript = SHA-256 of `mixlink-pair-v1`, both ids,
+  both static keys, both SPAKE messages; MACs = HMAC-SHA256 with HKDF keys `confirm h` / `confirm c`.
+- 3 `PairStart` attempts per prompt (a repeated message is not an attempt), then `Reject(PairingClosed)`.
+  Wrong confirm → `Reject(BadPin)`. Keys: host `%ProgramData%\MixLink\secrets\` (SYSTEM + Admins), client
+  `%LOCALAPPDATA%\MixLink\`.
+- Cancel in the tray sends `Reject(PairingClosed)` (3 copies) to the waiting client, which checks every 100 ms
+  while the user types the PIN; a lost notice shows up as the reply to the next `PairStart`. The host keeps
+  the waiting client's peer while the prompt is open (idle peers go after 60 s, prompts last 120 s).
 
-## Session transport
+## Session transport (spec 0018; `crates/net/src/session/`, `crates/proto/src/crypto.rs`)
 - One UDP socket per side (default port 47801), all channels multiplexed.
-- Payload encryption: AES-128-GCM (AES-NI), nonce = session id + packet seq.
+- Handshake: Noise `KK_25519_AESGCM_SHA256`, prologue `mixlink-v1` ‖ client id ‖ host id.
+  `SessionInit {proto, device, host, noise}` carries `Hello` in message 1; `SessionAccept {noise}` carries
+  `Welcome` or `Reject` in message 2. Unknown device → plaintext `Reject(NotPaired)`.
+- Keys: HKDF-SHA256 of the Noise split, infos `mixlink-v1 c2h` / `h2c`, first 16 bytes (AES-128).
+- The host commits a session on the client's first sealed `Ping`; `Pong` answers; 10 s without a valid
+  datagram ends it; sealed `Bye` ends it at once. A new session from the same device replaces the old one.
+- Sealed datagram: header (AAD) ‖ AES-128-GCM payload ‖ 16 B tag. Nonce = `channel, 0, 0, 0` ‖ roc (u32 LE)
+  ‖ seq (u32 LE); roc counts seq wraps. Receivers keep a 1024-datagram replay window per channel.
+- Control: before a session plaintext only; after it sealed, plus plaintext `SessionInit` / pairing (a
+  restarted client). Other channels are always sealed.
 
 ## Packet header v1 (frozen: [ADR-0008](../decisions/0008-packet-header-v1.md))
 - 16 bytes little-endian: `version`, `channel`, `flags`, `seq`, `frame_id`, `frag_index`, `frag_count`.

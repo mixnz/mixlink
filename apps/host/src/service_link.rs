@@ -8,6 +8,7 @@ use mixlink_core::svc_ipc::{PIPE_NAME, SvcPipe, SvcPipeError};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::pairing::{PromptState, same_prompt, should_show, trusted};
 use crate::strings;
 use crate::tray;
 
@@ -27,11 +28,15 @@ pub enum LinkState {
         svc_version: String,
         uptime_s: u64,
         network_public: bool,
+        /// A client is pairing: show this PIN (spec 0018).
+        pairing: Option<PromptState>,
     },
     NotRunning,
     VersionMismatch {
         svc_version: String,
     },
+    /// The pipe is served by another program, not the MixLink service: nothing is shown from it.
+    Untrusted,
 }
 
 /// Decides when a new state is worth an event: uptime ticking alone is not.
@@ -47,14 +52,16 @@ impl LinkTracker {
                 Some(LinkState::Connected {
                     svc_version: a,
                     network_public: pa,
+                    pairing: qa,
                     ..
                 }),
                 LinkState::Connected {
                     svc_version: b,
                     network_public: pb,
+                    pairing: qb,
                     ..
                 },
-            ) => a != b || pa != pb,
+            ) => a != b || pa != pb || !same_prompt(qa.as_ref(), qb.as_ref()),
             (Some(last), _) => *last != next,
             (None, _) => true,
         };
@@ -68,6 +75,7 @@ pub fn state_from_error(error: &SvcPipeError) -> LinkState {
         SvcPipeError::VersionMismatch { svc_version, .. } => LinkState::VersionMismatch {
             svc_version: svc_version.clone(),
         },
+        SvcPipeError::Untrusted => LinkState::Untrusted,
         SvcPipeError::NotRunning
         | SvcPipeError::Io(_)
         | SvcPipeError::Ipc(_)
@@ -109,14 +117,24 @@ pub fn spawn_link(app: AppHandle) -> std::io::Result<()> {
 fn link_loop(app: &AppHandle) {
     let mut tracker = LinkTracker::default();
     loop {
-        match SvcPipe::connect(PIPE_NAME) {
+        // The server is checked before anything is sent: a fake one may never answer `Hello`.
+        match SvcPipe::connect_checked(PIPE_NAME, trusted) {
             Ok((mut pipe, svc_version)) => {
-                publish(app, &mut tracker, connected(&svc_version, 0, false));
+                let mut shown: Option<PromptState> = None;
                 loop {
                     match pipe.status() {
                         Ok(report) => {
-                            let state =
-                                connected(&svc_version, report.uptime_s, report.network_public);
+                            let prompt = report.pairing.map(PromptState::from);
+                            if should_show(shown.as_ref(), prompt.as_ref()) {
+                                tray::show_main_window(app);
+                            }
+                            shown.clone_from(&prompt);
+                            let state = LinkState::Connected {
+                                svc_version: svc_version.clone(),
+                                uptime_s: report.uptime_s,
+                                network_public: report.network_public,
+                                pairing: prompt,
+                            };
                             publish(app, &mut tracker, state);
                         }
                         Err(error) => {
@@ -128,20 +146,16 @@ fn link_loop(app: &AppHandle) {
                     thread::sleep(POLL);
                 }
             }
+            Err(SvcPipeError::Untrusted) => {
+                log::warn!("service pipe is not served by the MixLink service");
+                publish(app, &mut tracker, LinkState::Untrusted);
+            }
             Err(error) => {
                 log::debug!("service link: {error}");
                 publish(app, &mut tracker, state_from_error(&error));
             }
         }
         thread::sleep(RETRY);
-    }
-}
-
-fn connected(svc_version: &str, uptime_s: u64, network_public: bool) -> LinkState {
-    LinkState::Connected {
-        svc_version: svc_version.to_owned(),
-        uptime_s,
-        network_public,
     }
 }
 
@@ -161,6 +175,7 @@ fn tooltip(state: &LinkState) -> &'static str {
         LinkState::Connected { .. } => strings::TRAY_TOOLTIP_READY,
         LinkState::NotRunning => strings::TRAY_TOOLTIP_NOT_RUNNING,
         LinkState::VersionMismatch { .. } => strings::TRAY_TOOLTIP_MISMATCH,
+        LinkState::Untrusted => strings::TRAY_TOOLTIP_UNTRUSTED,
     }
 }
 
