@@ -116,7 +116,7 @@ NTSTATUS MonitorRegistry::Add(const MlAddMonitorIn& In, WDFFILEOBJECT Owner, UIN
         return Status;
     }
     auto* pWrapper = WdfObjectGet_IndirectMonitorContextWrapper(CreateOut.MonitorObject);
-    pWrapper->pContext = new IndirectMonitorContext(CreateOut.MonitorObject);
+    pWrapper->pContext = new IndirectMonitorContext(CreateOut.MonitorObject, New.Connector);
     {
         lock_guard<mutex> Guard(m_Lock);
         for (auto& R : m_Records)

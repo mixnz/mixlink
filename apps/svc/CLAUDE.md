@@ -4,8 +4,8 @@
 
 **Purpose:** Host Windows service (ADR-0005, spec 0012), LocalSystem, Session 0: tray pipe, drivers (0014), virtual
 display (0015), virtual input (0016), LAN discovery (0017), pairing + secure sessions on the session port (0018).
-**Depends on:** mixlink-core (`svc_ipc`, `config`, `device_io`), mixlink-proto, mixlink-input, mixlink-net.
-**Hot path:** none yet (the session thread is control plane).
+**Depends on:** mixlink-core, -proto, -input, -net, -capture, -codec (FFmpeg DLLs next to the exe).
+**Hot path:** `capture try`'s `cap-frames` thread (spec 0019); the session thread is control plane.
 
 ## Layout
 - `main.rs` (mode dispatch, exit codes, `host_run_options`), `args.rs`, `stop.rs`, `error.rs` (`SvcError`),
@@ -21,13 +21,12 @@ display (0015), virtual input (0016), LAN discovery (0017), pairing + secure ses
   `remove`, `remove_all`), `pad_ids.rs`, `padmap.rs`, `script.rs`, `probe*.rs`, `status.rs`, `commands.rs`.
 - Discovery (0017): `identity.rs`, `discovery.rs`, `net_check.rs`. Pairing (0018): `secrets.rs` (`secrets` folder:
   `host_key.json`, `paired.json`), `session_listen.rs` (thread `svc-session`, `PairingShared` for the pipe).
-- `platform/windows/` (all `unsafe`): `service.rs`, `install.rs` (`is_running`), `pipe.rs`, `security.rs`,
-  `console.rs` (Ctrl+C); drivers: `cert.rs` + `cert_der.rs`, `sign.rs`, `trust_store.rs`, `catalog.rs`,
-  `driver_store.rs`, `devices.rs` (root nodes, veto), `drivers_reg.rs`, `dir_security.rs`, `drivers_host.rs`
-  (`WindowsDriverHost`, `is_elevated`); display: `vdisplay.rs`, `ccd.rs` + `display_config.rs`,
-  `display_agent.rs` + `console_process.rs` (helper as SYSTEM in the console session), `gpu_name.rs`;
-  input: `pad_nodes.rs` (`WindowsPadHost`), `xinput.rs`, `raw_input.rs`; discovery: `random.rs`, `com.rs`
-  (`ComGuard`), `firewall.rs`, `network_category.rs`. `strings.rs` (user text), `input_args.rs`; `tests/console_mode.rs`.
+- Capture (0019): `capture_args.rs`, `capture/flow.rs` (`EncodeSink`, `run_loop`, fakes in tests), `report.rs`
+  (`Samples`, `Stats`), `writer.rs` (thread `cap-writer`, rtrb buffers), `sink.rs` (`NvencSink`), `mod.rs` (`run`).
+- `platform/windows/` (all `unsafe`, one file per Win32 area): service / `install.rs` (`is_running`) / pipe / security
+  / `console.rs` (Ctrl+C); driver signing, store, `devices.rs`, `drivers_host.rs` (`is_elevated`); `vdisplay.rs`, CCD,
+  `display_agent.rs` (helper as SYSTEM in the console session); pads, XInput, Raw Input; firewall, network
+  category, `com.rs`; `priority.rs` (capture levers). `strings.rs` (user text), `input_args.rs`.
 
 ## Modes (process contract)
 - No args: started by the service manager. `--console [--pipe <name>]`: same work in this session.
@@ -41,10 +40,11 @@ display (0015), virtual input (0016), LAN discovery (0017), pairing + secure ses
   service stopped). Hidden: `display probe | reject-check`, `display-agent --in <f> --out <f>` (the helper).
 - Input (admin; "in use" while the service runs): `input status`, `try --script <name> [--delay <s>]`, `pad
   [--slot n] [--delay <s>]` (type `a`, `rt 500`), `pad-add | pad-remove --slot n`, hidden `probe`.
-- Logs: service `%ProgramData%\MixLink\logs\svc.log`, console stderr (`RUST_LOG`). Exit codes: 0 ok, 1 error,
-  2 usage, 3 a program holds a MixLink device open (`drivers install | uninstall`).
+- `capture try --client <hex> --mode WxH@Hz --out <f.h264|.hevc> [--topology] [--codec] [--seconds] [--bitrate]`
+  (admin, service stopped): monitor on, NVENC record, monitor off, latency report; hidden `--levers mmcss,gpu,class|none`.
+- Logs: `%ProgramData%\MixLink\logs\svc.log`, console stderr (`RUST_LOG`). Exit: 0 ok, 1 error, 2 usage, 3 device held.
 
 ## Notes
 - Pipe input comes from any user and we run as SYSTEM: parse strictly, close on surprises, never log bodies above
   `debug`; the pipe never carries keys. `secrets\` is secured before the key is written, else no pairing (logged).
-  Service and `--console` hold `vdisplay` + `vhid` for life. Manual checks: specs 0014-0018 Results.
+  Service and `--console` hold `vdisplay` + `vhid` for life. Manual checks: specs 0014-0019 Results.

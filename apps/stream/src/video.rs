@@ -190,6 +190,7 @@ fn present(presenter: &mut Presenter, frame: &DecodedFrame) -> Result<(), String
         array_index: frame.array_index(),
         width: frame.width(),
         height: frame.height(),
+        matrix: frame.matrix(),
     };
     presenter.present_nv12(&view).map_err(|e| e.to_string())
 }

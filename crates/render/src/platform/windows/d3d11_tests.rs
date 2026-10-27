@@ -1,6 +1,7 @@
 use std::num::NonZeroIsize;
 use std::sync::Arc;
 
+use mixlink_core::video::ColorMatrix;
 use raw_window_handle::{
     HandleError, HasWindowHandle, RawWindowHandle, WebWindowHandle, Win32WindowHandle, WindowHandle,
 };
@@ -108,6 +109,7 @@ fn white_frame_test(presenter: &mut Presenter, size: (u32, u32)) {
         array_index: 0,
         width: 64,
         height: 64,
+        matrix: ColorMatrix::Bt709,
     };
     presenter.resize(size.0, size.1).unwrap();
     presenter.present_nv12(&frame).unwrap();

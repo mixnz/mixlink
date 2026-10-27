@@ -6,6 +6,7 @@ use std::cell::Cell;
 use std::num::NonZeroIsize;
 use std::sync::Arc;
 
+use mixlink_core::video::ColorMatrix;
 use mixlink_render::{Presenter, VideoFrame};
 use raw_window_handle::{
     HandleError, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle,
@@ -150,6 +151,7 @@ fn present_nv12_does_not_allocate_when_warm() {
         array_index: 0,
         width: 64,
         height: 64,
+        matrix: ColorMatrix::Bt709,
     };
     presenter.present_nv12(&frame).unwrap();
     presenter.present_nv12(&frame).unwrap();

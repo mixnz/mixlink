@@ -4,6 +4,8 @@ use std::ffi::{CStr, c_char};
 
 use ffmpeg_sys_next as ff;
 
+use mixlink_core::video::ColorMatrix;
+
 use crate::{CodecError, VideoCodec};
 
 /// Maps a negative FFmpeg return code to `CodecError::Ffmpeg`; passes others through.
@@ -32,6 +34,16 @@ pub(crate) fn codec_id(codec: VideoCodec) -> ff::AVCodecID {
     match codec {
         VideoCodec::H264 => ff::AVCodecID::AV_CODEC_ID_H264,
         VideoCodec::Hevc => ff::AVCodecID::AV_CODEC_ID_HEVC,
+    }
+}
+
+/// Matrix of a decoded frame: BT.601 when tagged so (our NVENC streams), else BT.709 (also untagged).
+pub(crate) fn matrix_of(space: ff::AVColorSpace) -> ColorMatrix {
+    use ff::AVColorSpace::{AVCOL_SPC_BT470BG, AVCOL_SPC_SMPTE170M};
+    if space == AVCOL_SPC_SMPTE170M || space == AVCOL_SPC_BT470BG {
+        ColorMatrix::Bt601
+    } else {
+        ColorMatrix::Bt709
     }
 }
 

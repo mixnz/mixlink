@@ -21,7 +21,6 @@ Environment:
 #include "FrameShare.h"
 #include "Levers.h"
 #include "SurfaceShare.h"
-#include "SwapChain12.h"
 #include "Control.h"
 #include "Monitors.h"
 
@@ -234,40 +233,10 @@ HRESULT Direct3DDevice::Init()
 
 #pragma region SwapChainProcessor
 
-namespace
-{
-    // MixLink (spec 0015): the frame share (SharedHeader / FrameShare) has one set of global names, so only one
-    // swapchain publishes at a time: the first one running. Others just release their frames. The capture
-    // work replaces this with a share per monitor.
-    std::atomic<const void*> s_FrameShareOwner{ nullptr };
-
-    class FrameShareClaim
-    {
-    public:
-        explicit FrameShareClaim(const void* Owner) : m_Owner(Owner)
-        {
-            const void* Expected = nullptr;
-            m_Owned = s_FrameShareOwner.compare_exchange_strong(Expected, Owner);
-        }
-        ~FrameShareClaim()
-        {
-            if (m_Owned)
-            {
-                s_FrameShareOwner.store(nullptr);
-            }
-        }
-        FrameShareClaim(const FrameShareClaim&) = delete;
-        FrameShareClaim& operator=(const FrameShareClaim&) = delete;
-        bool Owned() const { return m_Owned; }
-
-    private:
-        const void* m_Owner;
-        bool m_Owned = false;
-    };
-}
-
-SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Direct3DDevice> Device, HANDLE NewFrameEvent)
-    : m_hSwapChain(hSwapChain), m_Device(Device), m_hAvailableBufferEvent(NewFrameEvent)
+SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Direct3DDevice> Device, HANDLE NewFrameEvent,
+    UINT32 Connector, const atomic<UINT32>* RefreshMhz)
+    : m_hSwapChain(hSwapChain), m_Device(Device), m_hAvailableBufferEvent(NewFrameEvent), m_Connector(Connector),
+      m_RefreshMhz(RefreshMhz)
 {
     m_hTerminateEvent.Attach(CreateEvent(nullptr, FALSE, FALSE, nullptr));
 
@@ -297,9 +266,8 @@ void SwapChainProcessor::Run()
 {
     // For improved performance, make use of the Multimedia Class Scheduler Service, which will intelligently
     // prioritize this thread for improved throughput in high CPU-load scenarios.
-    // MixLink: levers are read once per swapchain (spec 0005); L1 picks the MMCSS task.
-    m_Levers = ReadLeverMask();
-    HANDLE AvTaskHandle = EnterFrameThreadPriority(m_Levers, &m_L1Hr);
+    // MixLink (spec 0019): MMCSS "Pro Audio" at critical priority (spec 0005 lever L1).
+    HANDLE AvTaskHandle = EnterFrameThreadPriority();
 
     RunCore();
 
@@ -316,24 +284,6 @@ void SwapChainProcessor::Run()
 
 void SwapChainProcessor::RunCore()
 {
-    // MixLink lever L4 (spec 0005): D3D12 swapchain with our own copy queue. L2/L3 are D3D11-only.
-    FrameShareClaim Claim(this);
-    HRESULT L4Hr = S_OK;
-    if (Claim.Owned() && (m_Levers & S2_LEVER_L4_D3D12) != 0)
-    {
-        LeverReport Levers12;
-        Levers12.Requested = m_Levers;
-        ApplyCpuLever(Levers12, m_L1Hr);
-        Levers12.Hr[1] = (m_Levers & S2_LEVER_L2_GPU) != 0 ? E_NOTIMPL : S_OK;
-        Levers12.Hr[2] = (m_Levers & S2_LEVER_L3_NO_COPY) != 0 ? E_NOTIMPL : S_OK;
-        L4Hr = RunCore12(m_hSwapChain, m_Device->Adapter.Get(), m_Device->AdapterLuid, m_hAvailableBufferEvent,
-            m_hTerminateEvent.Get(), Levers12);
-        if (SUCCEEDED(L4Hr))
-        {
-            return;
-        }
-    }
-
     // Get the DXGI device interface
     ComPtr<IDXGIDevice> DxgiDevice;
     HRESULT hr = m_Device->Device.As(&DxgiDevice);
@@ -351,21 +301,19 @@ void SwapChainProcessor::RunCore()
         return;
     }
 
-    // MixLink: frames go to another process through FrameShare (spec 0004).
-    FrameShare Share;
-    LeverReport Levers;
-    Levers.Requested = m_Levers;
-    ApplyCpuLever(Levers, m_L1Hr);
-    ApplyGpuLever(Levers, DxgiDevice.Get());
-    Levers.Active |= Levers.Requested & S2_LEVER_L3_NO_COPY; // until the first share attempt fails
-    Levers.Hr[3] = L4Hr; // L4 requested but could not start: D3D11 runs instead
-    Share.SetLevers(Levers);
+    // MixLink: frames go to the capture reader through this monitor's FrameShare (specs 0004, 0019).
+    FrameShare Share(m_Connector);
     SurfaceShare Surfaces;
+    bool bShareSurfaces = true; // until the first share attempt fails; then the ring copy
 
     // Acquire and release buffers in a loop
     for (;;)
     {
         ComPtr<IDXGIResource> AcquiredBuffer;
+
+        // MixLink (spec 0019): the reader may still be encoding the last shared surface, which stays valid
+        // only until the next acquire.
+        Share.WaitForRelease(m_hTerminateEvent.Get());
 
         // Ask for the next buffer from the producer
         IDARG_OUT_RELEASEANDACQUIREBUFFER Buffer = {};
@@ -406,26 +354,22 @@ void SwapChainProcessor::RunCore()
             // We have new frame to process, the surface has a reference on it that the driver has to release
             AcquiredBuffer.Attach(Buffer.MetaData.pSurface);
 
-            // MixLink lever L3 (spec 0005): share the surface itself; the first failure drops L3 for this swapchain.
+            // MixLink (spec 0005 lever L3): share the surface itself; the first failure drops it for this swapchain.
             HANDLE SurfaceHandle = nullptr;
-            if (Claim.Owned() && (Levers.Active & S2_LEVER_L3_NO_COPY) != 0)
+            if (bShareSurfaces)
             {
                 HRESULT ShareHr = S_OK;
                 SurfaceHandle = Surfaces.HandleFor(Buffer.MetaData.pSurface, &ShareHr);
                 if (SurfaceHandle == nullptr)
                 {
-                    Levers.Active &= ~S2_LEVER_L3_NO_COPY;
-                    Levers.Hr[2] = ShareHr;
-                    Share.SetLevers(Levers);
+                    bShareSurfaces = false;
+                    Share.NoteRingFallback();
                 }
             }
 
-            // HOT PATH: one GPU copy into the shared ring (none with L3), then fence signal.
-            if (Claim.Owned())
-            {
-                Share.Publish(m_Device->Device.Get(), m_Device->DeviceContext.Get(), m_Device->AdapterLuid, Buffer,
-                    static_cast<UINT64>(AcquireQpc.QuadPart), SurfaceHandle);
-            }
+            // HOT PATH: a one-texel touch (a full GPU copy into the ring without a shared surface), fence signal.
+            Share.Publish(m_Device->Device.Get(), m_Device->DeviceContext.Get(), m_Device->AdapterLuid,
+                m_RefreshMhz->load(), Buffer, static_cast<UINT64>(AcquireQpc.QuadPart), SurfaceHandle);
 
             // ==============================
             // TODO: Process the frame here
@@ -538,8 +482,8 @@ void IndirectDeviceContext::InitAdapter()
     }
 }
 
-IndirectMonitorContext::IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor) :
-    m_Monitor(Monitor)
+IndirectMonitorContext::IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor, UINT32 Connector) :
+    m_Monitor(Monitor), m_Connector(Connector)
 {
 }
 
@@ -562,7 +506,7 @@ void IndirectMonitorContext::AssignSwapChain(IDDCX_SWAPCHAIN SwapChain, LUID Ren
     else
     {
         // Create a new swap-chain processing thread
-        m_ProcessingThread.reset(new SwapChainProcessor(SwapChain, Device, NewFrameEvent));
+        m_ProcessingThread.reset(new SwapChainProcessor(SwapChain, Device, NewFrameEvent, m_Connector, &m_RefreshMhz));
     }
 }
 
@@ -602,9 +546,23 @@ _Use_decl_annotations_
 NTSTATUS IddSampleAdapterCommitModes(IDDCX_ADAPTER AdapterObject, const IDARG_IN_COMMITMODES* pInArgs)
 {
     UNREFERENCED_PARAMETER(AdapterObject);
-    UNREFERENCED_PARAMETER(pInArgs);
 
     // Nothing to reconfigure: the swap-chain is taken care of by IddCx.
+    // MixLink (spec 0019): remember each monitor's refresh; it caps how long a frame is held for the reader.
+    for (UINT i = 0; i < pInArgs->PathCount; i++)
+    {
+        const IDDCX_PATH& Path = pInArgs->pPaths[i];
+        auto* pWrapper = WdfObjectGet_IndirectMonitorContextWrapper(Path.MonitorObject);
+        if (pWrapper == nullptr || pWrapper->pContext == nullptr)
+        {
+            continue;
+        }
+
+        const DISPLAYCONFIG_RATIONAL& Freq = Path.TargetVideoSignalInfo.vSyncFreq;
+        bool bActive = (Path.Flags & IDDCX_PATH_FLAGS_ACTIVE) != 0 && Freq.Denominator != 0;
+        UINT64 RefreshMhz = bActive ? static_cast<UINT64>(Freq.Numerator) * 1000 / Freq.Denominator : 0;
+        pWrapper->pContext->SetRefreshMhz(static_cast<UINT32>(RefreshMhz));
+    }
     return STATUS_SUCCESS;
 }
 

@@ -10,6 +10,9 @@ mixlink-core.workspace = true
 mixlink-proto.workspace = true
 mixlink-net.workspace = true
 mixlink-input.workspace = true
+mixlink-capture.workspace = true
+mixlink-codec.workspace = true
+rtrb.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -20,6 +23,7 @@ thiserror.workspace = true
 windows = { workspace = true, features = [
   "Win32_Foundation",
   "Win32_Devices_Display",
+  "Win32_Graphics_Direct3D11",
   "Win32_Graphics_Dxgi",
   "Win32_Graphics_Gdi",
   "Win32_Devices_DeviceAndDriverInstallation",

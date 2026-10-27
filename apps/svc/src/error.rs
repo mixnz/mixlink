@@ -66,6 +66,10 @@ pub enum SvcError {
     InputNotPaired,
     #[error("Virtual Xbox controller {} didn't start within 5 seconds.", .0 + 1)]
     PadTimeout(u8),
+    #[error(transparent)]
+    Capture(#[from] mixlink_capture::CaptureError),
+    #[error(transparent)]
+    Codec(#[from] mixlink_codec::CodecError),
     #[cfg(windows)]
     #[error(
         "MixLink virtual input driver doesn't match this program ({0}). Reinstall the drivers."

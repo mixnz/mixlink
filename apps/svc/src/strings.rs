@@ -167,6 +167,52 @@ pub fn probe_summary(
     )
 }
 
+/// `capture try`: recording started (spec 0019).
+pub fn capture_started(cmd: &crate::capture_args::CaptureTry) -> String {
+    let codec = match cmd.codec {
+        mixlink_codec::VideoCodec::H264 => "H.264",
+        mixlink_codec::VideoCodec::Hevc => "HEVC",
+    };
+    format!(
+        "Recording the MixLink monitor ({}x{} at {} Hz, {codec}) to {} for {} s. \
+         Frames only come when the picture changes, so keep something moving on it. Ctrl+C stops early.",
+        cmd.mode.width,
+        cmd.mode.height,
+        crate::display::status::refresh_text(cmd.mode.refresh_mhz),
+        cmd.out.display(),
+        cmd.seconds
+    )
+}
+
+/// `capture try`: the numbers at the end (spec 0019).
+pub fn capture_report(stats: &crate::capture::report::Stats, out: &std::path::Path) -> String {
+    let ms = |ns: u64| ns as f64 / 1_000_000.0;
+    let kib = |bytes: u64| bytes / 1024;
+    let (cap, enc, au) = (&stats.capture, &stats.encode, &stats.au_bytes);
+    format!(
+        "Saved {}. Frames {}, keyframes {}, size changes {}.\n\
+         Capture (driver to encoder): p50 {:.2} ms, p99 {:.2} ms, max {:.2} ms\n\
+         Encode: p50 {:.2} ms, p99 {:.2} ms, max {:.2} ms\n\
+         Frame size: p50 {} KiB, max {} KiB\n\
+         Driver waits that ran out: {}, ring copies: {}, frames not saved (a keyframe follows each): {}",
+        out.display(),
+        stats.frames,
+        stats.idrs,
+        stats.reopens.saturating_sub(1),
+        ms(cap.percentile(50.0)),
+        ms(cap.percentile(99.0)),
+        ms(cap.max()),
+        ms(enc.percentile(50.0)),
+        ms(enc.percentile(99.0)),
+        ms(enc.max()),
+        kib(au.percentile(50.0)),
+        kib(au.max()),
+        stats.hold_timeouts,
+        stats.ring_fallbacks,
+        stats.dropped_aus
+    )
+}
+
 #[cfg(test)]
 #[path = "strings_tests.rs"]
 mod tests;

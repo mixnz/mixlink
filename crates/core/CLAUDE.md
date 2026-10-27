@@ -7,7 +7,7 @@
 **Hot path:** `clock::now` and `StageStamps::mark`/`mark_at` are called per frame: allocation-free.
 
 ## Layout
-- `ids.rs`, `hex.rs`, `clock.rs`, `stage.rs`, `config.rs`, `ipc.rs`, `svc_ipc.rs`, `error.rs`, `mmcss.rs` (each + `<name>_tests.rs`)
+- `ids.rs`, `hex.rs`, `clock.rs`, `stage.rs`, `config.rs`, `ipc.rs`, `svc_ipc.rs`, `error.rs`, `mmcss.rs` (each + `<name>_tests.rs`), `video.rs`
 - `platform/windows/{qpc,mmcss,device_io}.rs`, `platform/fallback.rs` (`Instant`, no MMCSS; non-Windows): the only platform code.
 
 ## Public API
@@ -29,6 +29,7 @@
   `SvcState`, `StatusReport` (`from_status`), `read_line_limited` / `LineRead`, blocking client `SvcPipe` (`connect`, `connect_checked` (server check before `Hello`),
   `request`, `status`, `cancel_pairing`, `list_paired`, `remove_paired`, `file`), `open_pipe` (read + write-data access only, see spec 0012), `SvcPipeError` (`Untrusted`, `NotRunning` =
   pipe missing or busy).
+- `video`: `ColorMatrix` (`Bt601`, `Bt709` = default), shared by codec (decoder tag) and render (shader matrix).
 - `device_io` (Windows): `open_interface(&GUID) -> Result<Option<OwnedHandle>>` (first present interface,
   read + write; `None` = absent), `ioctl(&handle, code, input, output) -> Result<usize>`. Used for `vdisplay`, `vhid`.
 

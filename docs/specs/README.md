@@ -20,5 +20,6 @@
 | 0016 | [0016-virtual-hid](0016-virtual-hid.md) | done |
 | 0017 | [0017-lan-discovery](0017-lan-discovery.md) | done |
 | 0018 | [0018-pairing-secure-session](0018-pairing-secure-session.md) | done |
+| 0019 | [0019-capture-encode](0019-capture-encode.md) | done |
 
 Rules: `../conventions/docs-writing.md`. Template: `_template.md`.

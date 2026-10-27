@@ -1,7 +1,9 @@
-//! NV12 → BGRA draw pass: BT.709 limited range, bilinear, aspect fit (spec 0013).
+//! NV12 → BGRA draw pass: limited range, BT.601 or BT.709 per frame, bilinear, aspect fit
+//! (specs 0013, 0019).
 //! Shaders are compiled once at start with `D3DCompile` (ships with Windows): no shader tools
 //! in the build.
 
+use mixlink_core::video::ColorMatrix;
 use windows::Win32::Graphics::Direct3D::Fxc::{D3DCOMPILE_OPTIMIZATION_LEVEL3, D3DCompile};
 use windows::Win32::Graphics::Direct3D::{D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, ID3DBlob};
 use windows::Win32::Graphics::Direct3D11::{
@@ -20,6 +22,14 @@ use crate::{RenderError, VideoFrame};
 const SHADER: &str = include_str!("nv12.hlsl");
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
+/// Shader `coef` (R from Cr, G from Cb, G from Cr, B from Cb) of each matrix.
+fn coefficients(matrix: ColorMatrix) -> [f32; 4] {
+    match matrix {
+        ColorMatrix::Bt601 => [1.402, 0.344_136, 0.714_136, 1.772],
+        ColorMatrix::Bt709 => [1.5748, 0.1873, 0.4681, 1.8556],
+    }
+}
+
 fn win32(context: &'static str) -> impl FnOnce(windows::core::Error) -> RenderError {
     move |source| RenderError::Win32 { context, source }
 }
@@ -35,7 +45,7 @@ pub(crate) struct Nv12Pass {
     ps: ID3D11PixelShader,
     sampler: ID3D11SamplerState,
     crop: ID3D11Buffer,
-    crop_value: [f32; 4],
+    crop_value: [f32; 8],
     views: ViewCache,
 }
 
@@ -54,7 +64,7 @@ impl Nv12Pass {
             ..Default::default()
         };
         let crop_desc = D3D11_BUFFER_DESC {
-            ByteWidth: 16,
+            ByteWidth: 32,
             Usage: D3D11_USAGE_DEFAULT,
             BindFlags: D3D11_BIND_CONSTANT_BUFFER.0 as u32,
             ..Default::default()
@@ -80,7 +90,7 @@ impl Nv12Pass {
             ps: filled(ps, "CreatePixelShader")?,
             sampler: filled(sampler, "CreateSamplerState")?,
             crop: filled(crop, "CreateBuffer (crop)")?,
-            crop_value: [0.0; 4],
+            crop_value: [0.0; 8],
             views: ViewCache::new(device.clone()),
         })
     }
@@ -97,9 +107,10 @@ impl Nv12Pass {
         let views = self.views.get(frame)?;
         let (luma, chroma, uv_max) = (views.luma.clone(), views.chroma.clone(), views.uv_max);
         let rect = fit((frame.width, frame.height), dst);
-        let crop_value = [uv_max[0], uv_max[1], 0.0, 0.0];
+        let [rv, gu, gv, bu] = coefficients(frame.matrix);
+        let crop_value = [uv_max[0], uv_max[1], 0.0, 0.0, rv, gu, gv, bu];
         // SAFETY: every bound object is alive for the whole block; the constant buffer holds
-        // 16 bytes, exactly `crop_value`.
+        // 32 bytes, exactly `crop_value`.
         unsafe {
             context.OMSetRenderTargets(Some(&[Some(rtv.clone())]), None);
             context.ClearRenderTargetView(rtv, &BLACK);
@@ -123,6 +134,7 @@ impl Nv12Pass {
             context.VSSetShader(&self.vs, None);
             context.VSSetConstantBuffers(0, Some(&[Some(self.crop.clone())]));
             context.PSSetShader(&self.ps, None);
+            context.PSSetConstantBuffers(0, Some(&[Some(self.crop.clone())]));
             context.PSSetShaderResources(0, Some(&[Some(luma), Some(chroma)]));
             context.PSSetSamplers(0, Some(&[Some(self.sampler.clone())]));
             context.Draw(3, 0);

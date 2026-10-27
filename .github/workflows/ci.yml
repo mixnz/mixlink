@@ -102,8 +102,15 @@ jobs:
         with:
           path: drivers/packages
           key: wdk-${{ hashFiles('drivers/*/packages.config') }}
+      # mixlink-svc links mixlink-codec (spec 0019): FFmpeg to build it and its DLLs on PATH for the tests.
+      - uses: actions/cache@v4
+        with:
+          path: C:\ffmpeg
+          key: ffmpeg-${{ env.FFMPEG_URL }}
+      - name: FFmpeg
+        run: bash scripts/ci-ffmpeg.sh
       - uses: Swatinem/rust-cache@v2
       - name: Driver build + infverif
         run: MIXLINK_REQUIRE_WDK=1 bash scripts/check-drivers.sh
       - name: svc tests with driver packages
-        run: cargo test -p mixlink-svc
+        run: source scripts/lib.sh && ffmpeg_env && cargo test -p mixlink-svc

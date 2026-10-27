@@ -2561,7 +2561,10 @@ dependencies = [
 name = "mixlink-capture"
 version = "0.1.0"
 dependencies = [
+ "log",
  "mixlink-core",
+ "thiserror 2.0.21",
+ "windows",
 ]
 
 [[package]]
@@ -2712,10 +2715,13 @@ version = "0.1.0"
 dependencies = [
  "env_logger",
  "log",
+ "mixlink-capture",
+ "mixlink-codec",
  "mixlink-core",
  "mixlink-input",
  "mixlink-net",
  "mixlink-proto",
+ "rtrb",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
