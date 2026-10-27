@@ -11,8 +11,10 @@ spec 0019). DXGI Desktop Duplication fallback: later (own roadmap row).
 - `header.rs` (+ tests): `FrameHeader` / `FrameSlot` = `drivers/vdisplay/SharedHeader.h` (size / offset asserts),
   names per connector. `reader.rs` (+ tests): `HeaderView`, `ReaderState::poll` → `Poll`. `surface_cache.rs`
   (+ tests). `source.rs`: `Frame`, `FrameSource`, `CaptureEvent`. `error.rs`.
+- `cursor_header.rs` (+ tests, spec 0020): cursor share v1 = `drivers/vdisplay/CursorShare.h`, pure seqlock `read_snapshot`.
 - `platform/windows/`: `section.rs` (mapped header, atomics, events), `device.rs` (device on the header's LUID,
-  `DriverProcess` duplicates handles out of WUDFHost), `idd_source.rs` (`IddSource`, `CapturedFrame`).
+  `DriverProcess` duplicates handles out of WUDFHost), `idd_source.rs` (`IddSource`, `CapturedFrame`),
+  `cursor_source.rs` (`CursorSource`).
 - `tests/open.rs`: missing / out-of-range connector.
 
 ## Public API
@@ -21,6 +23,8 @@ spec 0019). DXGI Desktop Duplication fallback: later (own roadmap row).
 - `IddSource::open(connector)`, `device() -> Option<ID3D11Device>` (after the first `Reopened`; encode on it),
   `hold_timeouts()`, `ring_fallbacks()`. `CapturedFrame::texture()`; dropping it releases the surface.
 - `CaptureError`: `NoFrameShare { connector }`, `WrongVersion { found }`, `NoSwapchain`, `Win32 { context, source }`.
+- `CursorSource::open(connector)`, `next(timeout) -> Option<CursorUpdate { pos, shape }>` (hotspot position; shape only
+  when its id changed; first call does not wait), `resend_shape()`. `cursor_header::{CursorPos, ShapeInfo, ShapeType, Snapshot}`.
 - `header::*`, `reader::*`, `surface_cache::SurfaceCache` (pure, used by the Windows reader).
 
 ## Notes
