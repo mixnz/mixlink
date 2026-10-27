@@ -2,7 +2,7 @@
 
 > Replace content each update; keep ≤ 80 lines. History lives in git, not here.
 
-**Updated:** 2026-10-26
+**Updated:** 2026-10-27
 **Phase:** 1 — LAN MVP
 
 ## Done
@@ -40,8 +40,13 @@ Details live in each spec; one line per item here.
   everything released; NKRO keyboard, relative + absolute mouse reach UAC and the lock screen. Pads are virtual
   Xbox Series pads (ADR-0009): software devices `SWD\MixLinkPad\000N` per slot, inbox `xinputhid`, XInput
   index = slot, Steam with no setup. `input pad | pad-add | pad-remove | probe`. p99: kbd 0.69, abs 0.43, pad 0.47 ms.
+- T5 LAN discovery (0017): service advertises over mDNS (Windows DNS-SD API) + answers broadcast probes on
+  47800; host id in `identity.json`; `install` adds firewall rule `MixLink` (Private + Domain); tray hints on a
+  Public network; launcher lists hosts (5 s expiry). Two-PC run passes (mDNS only, broadcast only, stop → gone).
 
 ## In progress
+- T5 open rows (spec 0017 → Results): host with several adapters; "Needs update" row with a host on another
+  version. Main PC: MixLink service and firewall rule removed, `identity.json` kept.
 - T21 open rows (spec 0015): frame grab of login / lock screen on the headless monitor (T7 harness), power cut
   during a session, iGPU + dGPU host.
 - Main PC: drivers installed from `target\drivers` (T22 build, no pad added), MixLink service removed.
@@ -52,8 +57,9 @@ Details live in each spec; one line per item here.
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
 - 60 Hz clients: `Present` blocks the video thread at vblank, AUs wait 2–6 ms before decode (spec 0013 →
   Latency impact). Use the frame-latency waitable object in T9 or phase 3.
-- Roadmap phase 1: T5 (discovery in the service), T7 unblocked. Needs a roadmap row: physical monitor
-  plugged in while headless is main (login prompt stays on the virtual monitor).
+- Roadmap phase 1: T6 (pairing) and T7 unblocked. Needs a roadmap row: physical monitor plugged in while
+  headless is main (login prompt stays on the virtual monitor). Maybe a row: add a host by IP (other subnet).
+- T6 adds the key pair to `identity.json` (protect the file then) and the client device id.
 - Spec 0014 open row: tampered package with the remove-first install. (Steam open on a pad: `drivers
   uninstall` passes, pads unplug, spec 0016.)
 - T12 creates a pad per client gamepad; rumble (report 0x03) is kept per pad, not yet sent to the client.

@@ -9,6 +9,12 @@ pub const INSTALLED: &str = "MixLink service installed and running.";
 pub const UPDATED: &str = "MixLink service updated and restarted.";
 pub const REMOVED: &str = "MixLink service removed.";
 pub const NOT_INSTALLED: &str = "MixLink service isn't installed. Nothing to remove.";
+pub const FIREWALL_ADDED: &str =
+    "Firewall rule added, so MixLink clients on a private network can find this PC.";
+pub const FIREWALL_REMOVED: &str = "Firewall rule removed.";
+/// Shown in Windows Defender Firewall next to the rule.
+pub const FIREWALL_RULE_DESCRIPTION: &str =
+    "Lets MixLink clients on your network find this PC and stream from it.";
 pub const NOT_BY_SCM: &str = "This program runs as a Windows service. Set it up with \
      `mixlink-svc install`, or run it here with `mixlink-svc --console`.";
 

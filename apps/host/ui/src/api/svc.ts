@@ -4,7 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 /** Mirrors `LinkState` in apps/host/src/service_link.rs (serde tag `kind`, camelCase fields). */
 export type LinkState =
-  | { kind: "connected"; svcVersion: string; uptimeS: number }
+  | { kind: "connected"; svcVersion: string; uptimeS: number; networkPublic: boolean }
   | { kind: "notRunning" }
   | { kind: "versionMismatch"; svcVersion: string };
 

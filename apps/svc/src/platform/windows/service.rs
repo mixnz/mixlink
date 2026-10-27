@@ -20,7 +20,7 @@ use mixlink_core::svc_ipc::PIPE_NAME;
 
 use crate::error::SvcError;
 use crate::log_setup::init_file_log;
-use crate::run::{RunOptions, run};
+use crate::run::run;
 use crate::stop::StopSignal;
 use crate::strings;
 
@@ -66,11 +66,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
         set_state(SERVICE_STOPPED, EXIT_FAILED);
         return;
     }
-    let opts = RunOptions {
-        pipe: PIPE_NAME.to_owned(),
-        display: Some(crate::host_display_settings()),
-        input: true,
-    };
+    let opts = crate::host_run_options(PIPE_NAME.to_owned());
     let result = catch_unwind(AssertUnwindSafe(|| {
         run(&stop, &opts, || set_state(SERVICE_RUNNING, 0))
     }));

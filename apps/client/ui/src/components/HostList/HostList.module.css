@@ -1,0 +1,36 @@
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.row[aria-pressed="true"] {
+  outline: 2px solid currentColor;
+}
+
+.dimmed {
+  opacity: 0.5;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.address,
+.hint {
+  opacity: 0.7;
+}
+
+.label {
+  margin-left: auto;
+  font-size: 0.85em;
+}

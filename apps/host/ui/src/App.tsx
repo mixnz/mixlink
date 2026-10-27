@@ -24,6 +24,7 @@ export function App() {
   return (
     <main>
       <h1>{error ?? svcStatusText(state)}</h1>
+      {state.kind === "connected" && state.networkPublic && <p role="status">{t("svc.publicNetwork")}</p>}
       <section>
         <p>{t("pin.placeholder")}</p>
       </section>

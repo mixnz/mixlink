@@ -27,7 +27,7 @@ its spec; a failed spike switches to the fallback its ADR names before dependent
 | T20 | Driver install tooling: per-machine cert, sign catalog, install/uninstall `vdisplay` + `vhid`, WDK build in gate/CI | drivers, svc | T14, T19 | [0014](../specs/0014-driver-install-tooling.md) | done |
 | T21 | Virtual display: add/remove monitor in client mode, stable EDID per client, render adapter, topology save/restore, monitor before login | drivers, svc | T15, T20 | [0015](../specs/0015-virtual-display.md) | done |
 | T22 | Virtual HID driver: keyboard, mouse (relative + absolute), virtual Xbox pads; IOCTL report feed | drivers, input | T16, T20 | [0016](../specs/0016-virtual-hid.md) | done |
-| T5 | LAN discovery (mDNS + broadcast fallback) in the service, host list in the launcher | net, svc, client | T4, T19 | — | todo |
+| T5 | LAN discovery (mDNS + broadcast fallback) in the service, host list in the launcher | net, svc, client | T4, T19 | [0017](../specs/0017-lan-discovery.md) | done |
 | T6 | Pairing: PIN on host tray, entry on client, X25519 + AES-128-GCM session | net, proto, svc, host, client | T5 | — | todo |
 | T7 | Capture from the IddCx shared texture (DDA fallback) → NVENC encode via FFmpeg, GPU zero-copy | capture, codec | T2, T21, T23 | — | todo |
 | T8 | D3D11VA decode via FFmpeg → present in the stream window | codec, render | T1, T2 | [0013](../specs/0013-d3d11va-decode-present.md) | done |

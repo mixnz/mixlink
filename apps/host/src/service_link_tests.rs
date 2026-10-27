@@ -8,6 +8,7 @@ fn connected(version: &str, uptime_s: u64) -> LinkState {
     LinkState::Connected {
         svc_version: version.to_owned(),
         uptime_s,
+        network_public: false,
     }
 }
 
@@ -93,6 +94,18 @@ fn link_state_serializes_with_kind() {
     );
     assert_eq!(
         serde_json::to_string(&connected("0.1.0", 7)).unwrap(),
-        r#"{"kind":"connected","svcVersion":"0.1.0","uptimeS":7}"#
+        r#"{"kind":"connected","svcVersion":"0.1.0","uptimeS":7,"networkPublic":false}"#
     );
+}
+
+#[test]
+fn tracker_emits_on_network_public_change() {
+    let mut tracker = LinkTracker::default();
+    tracker.update(connected("0.1.0", 1));
+    let public = LinkState::Connected {
+        svc_version: "0.1.0".to_owned(),
+        uptime_s: 2,
+        network_public: true,
+    };
+    assert_eq!(tracker.update(public.clone()), Some(public));
 }

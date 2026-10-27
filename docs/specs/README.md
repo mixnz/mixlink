@@ -18,5 +18,6 @@
 | 0014 | [0014-driver-install-tooling](0014-driver-install-tooling.md) | done |
 | 0015 | [0015-virtual-display](0015-virtual-display.md) | done |
 | 0016 | [0016-virtual-hid](0016-virtual-hid.md) | done |
+| 0017 | [0017-lan-discovery](0017-lan-discovery.md) | done |
 
 Rules: `../conventions/docs-writing.md`. Template: `_template.md`.

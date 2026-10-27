@@ -23,8 +23,14 @@ impl Session {
         Session::default()
     }
 
-    /// Handles one received line (with or without its `\n`).
-    pub fn handle_line(&mut self, line: &[u8], uptime: Duration) -> Reply {
+    /// Handles one received line (with or without its `\n`). `network_public` runs only for
+    /// `GetStatus`.
+    pub fn handle_line(
+        &mut self,
+        line: &[u8],
+        uptime: Duration,
+        network_public: impl FnOnce() -> bool,
+    ) -> Reply {
         let Ok(text) = std::str::from_utf8(line) else {
             return refuse("line is not UTF-8");
         };
@@ -52,6 +58,7 @@ impl Session {
                 msg: SvcToTray::Status {
                     state: SvcState::Idle,
                     uptime_s: uptime.as_secs(),
+                    network_public: network_public(),
                 },
                 close: false,
             },

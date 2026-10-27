@@ -4,6 +4,8 @@ export const en = {
   "app.title": "MixLink",
   "devices.heading": "Devices",
   "devices.empty": "No hosts found yet",
+  "devices.emptyHint": "Check that this PC is on the same network as the host and that MixLink is running there.",
+  "devices.needsUpdate": "Needs update",
   "connect.demo": "Connect (demo)",
   "result.closedByUser": "Stream closed.",
   "result.stopped": "Stream stopped.",

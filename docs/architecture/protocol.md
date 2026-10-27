@@ -1,9 +1,16 @@
 # Protocol (draft)
 
 ## Discovery (LAN)
-- mDNS / DNS-SD service `_mixlink._udp.local`, TXT: `id`, `name`, `ver`, `caps`.
-- Fallback: UDP broadcast probe on port 47800, host replies with the same fields.
-- Client lists hosts; stale entries expire after 5 s without announce.
+Spec 0017; code `crates/net/src/discovery/`.
+- mDNS / DNS-SD service `_mixlink._udp.local` through the Windows DNS-SD API (system responder, no socket
+  of ours on 5353). TXT: `id` (host `DeviceId`, 32 hex), `name`, `ver` (`WIRE_VERSION`), `caps` (comma
+  list, `v1`; unknown values ignored); SRV port = session port.
+- Broadcast fallback on UDP `discovery_port` (47800): probe `MXLD` + `1` (5 B) to every interface's
+  directed broadcast address every 1.5 s; reply = same 5 B + JSON `{id, name, ver, caps, port}`
+  (≤ 1200 B), unicast, at most one per source IP per 250 ms. Anything else gets no reply.
+- Client merges both by `id`; an entry no source has seen for 5 s is removed. mDNS goodbyes remove at
+  once; the client re-resolves known instances every 1.5 s so live hosts stay fresh.
+- Host id: `%ProgramData%\MixLink\identity.json`, random on first service start.
 
 ## Pairing
 - First connection: host shows a 6-digit PIN, client enters it.

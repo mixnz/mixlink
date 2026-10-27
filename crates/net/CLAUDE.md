@@ -3,15 +3,21 @@
 > Module card. Keep <= 50 lines. Update when the public API changes.
 
 **Purpose:** UDP socket setup, send pacer, bitrate/congestion controller, LAN discovery (mDNS + broadcast), pairing handshake. Later: ICE/STUN/TURN.
-**Depends on:** mixlink-proto, mixlink-core; `socket2`, `rtrb`, `log`, `thiserror`; `windows` (WinSock, MMCSS).
-**Hot path:** send/recv loops and lanes; discovery and pairing are control plane (tokio ok).
+**Depends on:** mixlink-proto, mixlink-core; `socket2`, `rtrb`, `log`, `thiserror`, `serde(_json)`; `windows`
+(WinSock, IpHelper, DNS-SD).
+**Hot path:** send/recv loops and lanes; discovery and pairing are control plane (plain threads).
 
 ## Layout
 - `socket.rs` (open + configure), `lane.rs` (SPSC slot lanes), `transport.rs` (start / stop, lanes),
   `send_loop.rs`, `recv_loop.rs`, `stats.rs`, `resend.rs`, `handshake.rs`, `error.rs`
-  (each logic file + `<name>_tests.rs`); `platform/windows/socket.rs` (only `unsafe`); MMCSS via `core::mmcss`.
-- `tests/no_alloc.rs` (counting allocator), `tests/latency.rs` (loopback p50 / p99, release assert).
-- Planned: `pacer.rs`, `bitrate.rs` (phase 3), `discovery/` (T5), `pairing.rs` (T6).
+  (each logic file + `<name>_tests.rs`); MMCSS via `core::mmcss`.
+- `discovery/` (spec 0017): pure `advert.rs`, `wire.rs`, `list.rs`, `limiter.rs`, `local_net.rs`; threads
+  `advertiser.rs` (`svc-discovery`), `browser.rs` (`discovery-browse`).
+- `platform/windows/` (only `unsafe`): `socket.rs`, `adapters.rs` (IPv4 interfaces), `dns_sd.rs` (register),
+  `dns_sd_browse.rs` (browse + resolve); `platform/fallback.rs` for other targets.
+- `tests/no_alloc.rs`, `tests/latency.rs` (loopback p50 / p99), `tests/discovery_loopback.rs`;
+  `examples/dnssd_probe.rs` (`register <name> [s]` / `browse`, manual mDNS checks).
+- Planned: `pacer.rs`, `bitrate.rs` (phase 3), `pairing.rs`.
 
 ## Public API
 - `transport`: `Transport` (`start`, `local_addr`, `stats`, `shutdown`), `TransportConfig` (`host`,
@@ -23,6 +29,10 @@
 - `resend`: `ResendTimer` (`new`, `poll`), `ResendAction`, `HELLO_RESEND` (250 ms), `HELLO_GIVE_UP` (10 s).
 - `handshake`: `connect`, `connect_with`, `HandshakeReply`.
 - `error`: `NetError`.
+- `discovery`: `Advert` (`txt`, `from_txt`, `caps_list`), `SERVICE_TYPE`, `CAPS_V1`; `Advertiser` (`start`,
+  `local_port`, `stop`) + `AdvertiserConfig`; `Browser` (`start`, `snapshot`, `stop`) + `BrowserConfig`,
+  `ProbeTargets`, `OnChange`, `DiscoveryEvent`; `HostList`, `HostEntry`, `Source`, `EXPIRY` (5 s);
+  `LocalNet`; `wire` (`PROBE`, `encode_reply`, `decode_reply`); `DiscoveryError`.
 
 ## Notes
 - Each lane has one owner thread on each end (`Send`, not `Clone`). An `RxDatagram` is valid until
@@ -34,3 +44,5 @@
   carries its sender: filtering by session peer is the caller's job.
 - `SIO_UDP_CONNRESET` is off: without it a closed peer port breaks the next `recv_from` on Windows.
 - Slots have 16 B spare for the GCM tag (T6). `tx.passed` counts commits, not send successes.
+- Discovery: `Advertiser::start` fails only when neither mDNS nor the responder starts. DNS-SD callback
+  contexts that Windows may still use after a cancel are leaked on purpose (small, per browse).

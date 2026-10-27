@@ -24,7 +24,8 @@
 - `ipc`: launcher <-> stream JSON-lines contract — `IPC_VERSION`, `StreamToLauncher`, `LauncherToStream`,
   `CloseReason`, `IpcError`, `encode_line`, `decode_line`.
 - `svc_ipc`: tray <-> service pipe contract (spec 0012) — `PIPE_VERSION`, `PIPE_NAME`, `MAX_LINE`, `TrayToSvc`,
-  `SvcToTray`, `SvcState`, `read_line_limited` / `LineRead`, blocking client `SvcPipe` (`connect`, `request`,
+  `SvcToTray` (`Status` has `network_public`, default `false`), `SvcState`, `StatusReport` (`from_status`;
+  `SvcPipe::status` returns it), `read_line_limited` / `LineRead`, blocking client `SvcPipe` (`connect`, `request`,
   `status`), `open_pipe` (read + write-data access only, see spec 0012), `SvcPipeError` (`NotRunning` =
   pipe missing or busy).
 - `device_io` (Windows): `open_interface(&GUID) -> Result<Option<OwnedHandle>>` (first present interface,
