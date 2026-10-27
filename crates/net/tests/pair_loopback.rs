@@ -144,6 +144,7 @@ fn hello(ctx: &PairContext) -> ControlMessage {
             dpi: 96,
         }],
         stream_display: 0,
+        codecs: vec![mixlink_proto::control::CodecId::H264],
     }
 }
 

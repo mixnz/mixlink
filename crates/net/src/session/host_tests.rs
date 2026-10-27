@@ -57,6 +57,7 @@ fn hello(device: DeviceId) -> ControlMessage {
         name: "Laptop".to_owned(),
         displays: vec![mode()],
         stream_display: 0,
+        codecs: vec![mixlink_proto::control::CodecId::H264],
     }
 }
 
@@ -68,6 +69,7 @@ fn welcome(_: &ControlMessage, session: SessionId) -> ControlMessage {
     ControlMessage::Welcome {
         session,
         mode: mode(),
+        codec: mixlink_proto::control::CodecId::H264,
     }
 }
 

@@ -54,7 +54,7 @@ pub fn finish(
     let mut state = start.state;
     let payload = noise::read(&mut state, &noise_msg.0)?;
     match control::decode(&payload)? {
-        ControlMessage::Welcome { session, mode } => Ok((
+        ControlMessage::Welcome { session, mode, .. } => Ok((
             noise::derive(state.dangerously_get_raw_split()),
             session,
             mode,

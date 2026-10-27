@@ -5,7 +5,7 @@ use std::net::SocketAddrV4;
 use std::time::Duration;
 
 use mixlink_core::ids::{DeviceId, SessionId};
-use mixlink_proto::control::{ControlMessage, RejectReason};
+use mixlink_proto::control::{CodecId, ControlMessage, RejectReason};
 use mixlink_proto::crypto::Role;
 
 use crate::control_link::ControlLink;
@@ -351,6 +351,7 @@ fn welcome(hello: &ControlMessage, session: SessionId) -> ControlMessage {
             Some(mode) => ControlMessage::Welcome {
                 session,
                 mode: *mode,
+                codec: CodecId::H264,
             },
             None => ControlMessage::Reject {
                 reason: RejectReason::BadDisplay,

@@ -101,6 +101,7 @@ impl Server {
                     let Ok(welcome) = control::encode(&ControlMessage::Welcome {
                         session: SessionId::new(1),
                         mode,
+                        codec: mixlink_proto::control::CodecId::H264,
                     }) else {
                         continue;
                     };

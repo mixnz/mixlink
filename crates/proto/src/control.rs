@@ -44,11 +44,16 @@ pub enum ControlMessage {
         name: String,
         displays: Vec<DisplayInfo>,
         stream_display: u8,
+        /// Decoders the client has (spec 0020); missing = H.264 only.
+        #[serde(default = "default_codecs")]
+        codecs: Vec<CodecId>,
     },
-    /// Host -> client: the mode actually streamed.
+    /// Host -> client: the mode and codec actually streamed.
     Welcome {
         session: SessionId,
         mode: DisplayInfo,
+        #[serde(default)]
+        codec: CodecId,
     },
     Reject {
         reason: RejectReason,
@@ -124,6 +129,21 @@ pub enum ByeReason {
     UserClosed,
     Shutdown,
     Timeout,
+    /// The host could not keep streaming (no monitor, no encoder, capture lost).
+    HostError,
+}
+
+/// Video codec on the wire (spec 0020).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CodecId {
+    #[default]
+    H264,
+    Hevc,
+}
+
+fn default_codecs() -> Vec<CodecId> {
+    vec![CodecId::H264]
 }
 
 impl ControlMessage {

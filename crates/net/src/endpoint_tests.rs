@@ -115,6 +115,7 @@ fn hello(me: &ClientIdentity) -> ControlMessage {
             dpi: 96,
         }],
         stream_display: 0,
+        codecs: vec![mixlink_proto::control::CodecId::H264],
     }
 }
 

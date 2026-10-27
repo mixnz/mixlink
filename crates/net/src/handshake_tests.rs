@@ -35,6 +35,7 @@ fn hello() -> ControlMessage {
         name: "test".into(),
         displays: vec![mode()],
         stream_display: 0,
+        codecs: vec![mixlink_proto::control::CodecId::H264],
     }
 }
 
@@ -42,6 +43,7 @@ fn welcome() -> Vec<u8> {
     control::encode(&ControlMessage::Welcome {
         session: SessionId::new(5),
         mode: mode(),
+        codec: mixlink_proto::control::CodecId::H264,
     })
     .unwrap()
 }

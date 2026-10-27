@@ -6,9 +6,11 @@ pub mod control;
 pub mod crypto;
 pub mod cursor;
 pub mod error;
+pub mod feedback;
 pub mod header;
 pub mod packetizer;
 pub mod reassembler;
+pub mod video;
 
 mod replay;
 mod slot;

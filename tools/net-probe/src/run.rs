@@ -72,6 +72,7 @@ pub fn run(opts: RunOptions) -> Result<(), Box<dyn Error>> {
         name: "net-probe".into(),
         displays: vec![mode],
         stream_display: 0,
+        codecs: vec![mixlink_proto::control::CodecId::H264],
     };
     let started = Instant::now();
     let cancel = AtomicBool::new(false);

@@ -113,7 +113,7 @@ fn receive(
         return None;
     };
     match control::decode(message.data).ok()? {
-        ControlMessage::Welcome { session, mode } => {
+        ControlMessage::Welcome { session, mode, .. } => {
             Some(Ok(HandshakeReply::Welcome { session, mode }))
         }
         ControlMessage::Reject { reason } => Some(Ok(HandshakeReply::Reject(reason))),

@@ -47,19 +47,20 @@ Spec 0017; code `crates/net/src/discovery/`.
 | Id | Channel | Dir | Messages | Reassembler (slots, max message) |
 |---|---|---|---|---|
 | 1 | control | both | JSON, fragmented | 2, 64 KiB |
-| 2 | video | host→client | encoded frames, fragmented | 4, 4 MiB |
+| 2 | video | host→client | `FrameMeta` (16 B) + access unit, fragmented | 4, 4 MiB |
 | 3 | audio | host→client | one packet per Opus frame | 2, 1200 B |
 | 4 | cursor | host→client | position (1 packet), shape (fragmented) | 2, 264 KiB |
 | 5 | input | client→host | one packet (body: T10) | 2, 1200 B |
-| 6 | feedback | client→host | one packet (body: T13) | 2, 1200 B |
+| 6 | feedback | client→host | one packet: keyframe or cursor shape request | 2, 1200 B |
 
 - Reassembly: a frame not newer than the newest completed or evicted one (or, with all slots busy,
   older than every pending one) is late and dropped; a newer frame completing first gives up older
   pending ones.
 
 ## Control handshake (`crates/proto/src/control.rs`)
-- Client sends `Hello` (proto version, device id, name, 1–8 displays, `stream_display` index);
-  host answers `Welcome` (session id, streamed mode) or `Reject` (version, busy, not paired, bad display).
+- Client sends `Hello` (proto version, device id, name, 1–8 displays, `stream_display` index,
+  `codecs` it decodes: `h264` / `hevc`, missing = `h264`);
+  host answers `Welcome` (session id, streamed mode, codec) or `Reject` (version, busy, not paired, bad display).
 - Display refresh is in millihertz (59.94 Hz = 59 940). Unknown JSON fields are ignored.
 - Lost packets: the client resends `Hello` every 250 ms until a reply arrives, giving up after 10 s
   (`crates/net/src/resend.rs`, `handshake.rs`). A general ack +
@@ -67,4 +68,11 @@ Spec 0017; code `crates/net/src/discovery/`.
 
 ## Cursor (`crates/proto/src/cursor.rs`)
 - Byte 0 kind: 1 position (`x`, `y`, `visible`, `shape_id`, 14 B), 2 shape (18 B header + pixels).
-- Shapes are sent on change; a position naming an unknown `shape_id` means the shape was lost (T9).
+- Shapes are sent on change; a position naming an unknown `shape_id` means the shape was lost: the client
+  asks with a `CursorShapeRequest` and draws nothing until the shape arrives (spec 0020).
+
+## Video and feedback (`crates/proto/src/video.rs`, `feedback.rs`; spec 0020)
+- Video message: `FrameMeta` 16 B LE (`version` 1, `flags` bit0 keyframe, 2 reserved, `capture_us`, `encode_us`,
+  `send_us`), then the Annex-B access unit. Host stage times let the client report latency without clock sync.
+- Feedback, one packet, byte 0 kind + u32 LE: 1 `KeyframeRequest { last_good }`, 2 `CursorShapeRequest
+  { shape_id }`. Unknown kinds are dropped. Video, cursor and feedback are sealed with the session keys.
