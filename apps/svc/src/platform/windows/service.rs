@@ -24,7 +24,7 @@ use crate::run::run;
 use crate::stop::StopSignal;
 use crate::strings;
 
-pub const SERVICE_NAME: &str = "MixLink";
+pub use mixlink_core::svc_ipc::SERVICE_NAME;
 
 const STOP_WAIT_HINT_MS: u32 = 5000;
 /// Service-specific exit code reported when `run` fails or panics (recovery then restarts us).

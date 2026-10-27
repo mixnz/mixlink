@@ -9,6 +9,7 @@ fn connected(version: &str, uptime_s: u64) -> LinkState {
         svc_version: version.to_owned(),
         uptime_s,
         network_public: false,
+        pairing: None,
     }
 }
 
@@ -94,7 +95,7 @@ fn link_state_serializes_with_kind() {
     );
     assert_eq!(
         serde_json::to_string(&connected("0.1.0", 7)).unwrap(),
-        r#"{"kind":"connected","svcVersion":"0.1.0","uptimeS":7,"networkPublic":false}"#
+        r#"{"kind":"connected","svcVersion":"0.1.0","uptimeS":7,"networkPublic":false,"pairing":null}"#
     );
 }
 
@@ -106,6 +107,48 @@ fn tracker_emits_on_network_public_change() {
         svc_version: "0.1.0".to_owned(),
         uptime_s: 2,
         network_public: true,
+        pairing: None,
     };
     assert_eq!(tracker.update(public.clone()), Some(public));
+}
+
+fn pairing(pin: &str, expires_s: u32) -> LinkState {
+    LinkState::Connected {
+        svc_version: "0.1.0".to_owned(),
+        uptime_s: 1,
+        network_public: false,
+        pairing: Some(PromptState {
+            device_name: "Laptop".to_owned(),
+            pin: pin.to_owned(),
+            expires_s,
+        }),
+    }
+}
+
+#[test]
+fn prompt_change_emits() {
+    let mut tracker = LinkTracker::default();
+    tracker.update(connected("0.1.0", 1));
+    assert!(tracker.update(pairing("123456", 120)).is_some());
+    assert!(
+        tracker.update(pairing("123456", 119)).is_none(),
+        "countdown alone"
+    );
+    assert!(tracker.update(pairing("654321", 120)).is_some());
+    assert!(
+        tracker.update(connected("0.1.0", 3)).is_some(),
+        "prompt closed"
+    );
+}
+
+#[test]
+fn untrusted_state_serializes() {
+    assert_eq!(
+        serde_json::to_string(&LinkState::Untrusted).unwrap(),
+        r#"{"kind":"untrusted"}"#
+    );
+    assert_eq!(
+        tooltip(&LinkState::Untrusted),
+        strings::TRAY_TOOLTIP_UNTRUSTED
+    );
 }

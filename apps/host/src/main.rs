@@ -1,7 +1,9 @@
-//! Host tray app: control UI for the `mixlink-svc` service (ADR-0005); status now, PIN and devices later.
+//! Host tray app: control UI for the `mixlink-svc` service (ADR-0005): status, pairing PIN, paired devices.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod pairing;
+mod platform;
 mod service_link;
 mod strings;
 mod tray;
@@ -16,7 +18,12 @@ fn main() -> ExitCode {
     env_logger::init();
     let result = tauri::Builder::default()
         .manage(SvcStatus::default())
-        .invoke_handler(tauri::generate_handler![commands::get_svc_status])
+        .invoke_handler(tauri::generate_handler![
+            commands::get_svc_status,
+            commands::cancel_pairing,
+            commands::list_paired,
+            commands::remove_paired
+        ])
         .setup(|app| {
             tray::build_tray(app)?;
             service_link::spawn_link(app.handle().clone())?;

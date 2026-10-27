@@ -17,6 +17,9 @@ pub const PIPE_VERSION: u32 = 2;
 /// The service's pipe; tests and `--console --pipe` use other names.
 pub const PIPE_NAME: &str = r"\\.\pipe\mixlink-svc";
 
+/// The Windows service that owns `PIPE_NAME`; the tray checks the pipe server is this service (spec 0018).
+pub const SERVICE_NAME: &str = "MixLink";
+
 /// Longest accepted line in bytes, `\n` included. The service drops a client that sends more.
 pub const MAX_LINE: usize = 64 * 1024;
 
@@ -233,6 +236,11 @@ impl SvcPipe {
             | SvcToTray::Paired { .. }
             | SvcToTray::Done => Err(SvcPipeError::Unexpected),
         }
+    }
+
+    /// The open pipe, for checks on its server process.
+    pub fn file(&self) -> &File {
+        self.reader.get_ref()
     }
 
     /// Sends one message and waits for its reply.

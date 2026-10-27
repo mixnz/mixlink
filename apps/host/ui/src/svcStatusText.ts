@@ -9,5 +9,7 @@ export function svcStatusText(state: LinkState): string {
       return t("svc.notRunning");
     case "versionMismatch":
       return t("svc.versionMismatch", { version: state.svcVersion });
+    case "untrusted":
+      return t("svc.untrusted");
   }
 }

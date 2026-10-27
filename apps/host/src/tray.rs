@@ -54,7 +54,7 @@ pub fn is_main_window(label: &str) -> bool {
     label == MAIN_WINDOW
 }
 
-fn show_main_window(app: &AppHandle) {
+pub fn show_main_window(app: &AppHandle) {
     let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
         log::warn!("host window missing");
         return;

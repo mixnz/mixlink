@@ -18,7 +18,16 @@ tauri = { workspace = true, features = ["tray-icon"] }
 serde.workspace = true
 serde_json.workspace = true
 log.workspace = true
+thiserror.workspace = true
 env_logger.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Pipes",
+  "Win32_System_Services",
+] }
 
 [build-dependencies]
 tauri-build.workspace = true
