@@ -4,7 +4,7 @@
 **Date:** 2026-10-27
 **Roadmap:** T7
 **Plan:** [0019-capture-encode](../plans/0019-capture-encode.md) (local only, written by writing-plans skill)
-**Crates touched:** `drivers/vdisplay`, `crates/capture`, `crates/codec`, `apps/svc`
+**Crates touched:** `drivers/vdisplay`, `crates/capture`, `crates/codec`, `crates/core`, `crates/render`, `apps/stream`, `apps/svc`
 
 ## Goal
 The host service turns what Windows draws on a MixLink virtual monitor into an H.264 / HEVC bitstream with
@@ -87,11 +87,14 @@ DWM → IddCx swapchain → vdisplay RunCore: acquire → GPU touch + fence sign
   data[1] = 0). One `send_frame` → one `receive_packet`: when it returns NVENC has read the input, so the
   frame can be released.
 - Settings: `preset p1`, `tune ull`, `rc cbr`, `zerolatency 1`, `delay 0`, `bf 0`, `g` infinite (IDR only on
-  request or first frame), VBV = 1 frame, BT.709 limited (matches spec 0013's decoder), 4:2:0. NVENC does the
-  BGRA → NV12 conversion.
-- Risk: FFmpeg's NVENC may refuse a texture that is not from its own frames pool. The first plan task proves it;
-  fallback = one GPU `CopyResource` into a 2-texture pool on the same device (≈ 50 µs at 1440p, measured).
-- `NoHardwareEncoder(codec)` new `CodecError` value; `has_hardware_encoder(&ID3D11Device, codec)`.
+  request or first frame), VBV = 1 frame, limited range, 4:2:0. NVENC does the BGRA → NV12 conversion, always
+  with the BT.601 matrix (measured: YUV 102/128/190 for RGB 200/50/100 with BT.709 asked), so the stream is
+  tagged BT.601 (`SMPTE170M`; primaries and transfer BT.709).
+- Client colour: the decoder reads the tag (`DecodedFrame::matrix`, `core::video::ColorMatrix`, untagged =
+  BT.709) and the NV12 pass takes the matrix per frame from a constant buffer. BT.709 test streams keep working;
+  no host conversion pass.
+- FFmpeg's NVENC takes a texture that is not from its own frames pool (tested): no fallback copy.
+- `NoHardwareEncoder(codec)`, `FrameSize`, `AuTooLarge` new `CodecError` values; `has_hardware_encoder`.
 
 ### `mixlink-svc`
 - `capture try --client <32 hex> --mode WxH@Hz [--topology …] [--codec h264|hevc] [--seconds 10]
@@ -126,5 +129,5 @@ DWM → IddCx swapchain → vdisplay RunCore: acquire → GPU touch + fence sign
 
 ## Open questions
 - (Answered) DDA fallback is its own row T24 (Needs T7); T9 needs only T7 for video.
-- Is BGRA → NVENC conversion BT.709 limited on every driver, or do we set the colour metadata explicitly?
-  (Plan checks the FFmpeg options; spec 0013's decoder assumes BT.709.)
+- (Answered) NVENC converts BGRA with BT.601 whatever the colour fields say: host tags BT.601, client picks
+  the matrix per frame (Design → encoder).

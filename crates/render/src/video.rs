@@ -1,5 +1,6 @@
 //! A decoded video frame on the GPU, as the presenter takes it (render never depends on codec).
 
+use mixlink_core::video::ColorMatrix;
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 
 /// NV12 picture: slice `array_index` of `texture`, visible size `width` x `height` (the texture
@@ -11,4 +12,6 @@ pub struct VideoFrame<'a> {
     pub array_index: u32,
     pub width: u32,
     pub height: u32,
+    /// YCbCr → RGB matrix the stream was encoded with (limited range).
+    pub matrix: ColorMatrix,
 }

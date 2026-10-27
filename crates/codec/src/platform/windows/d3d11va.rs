@@ -11,7 +11,9 @@ use windows::core::Interface;
 use super::copy::GpuCopy;
 use super::frame_pool::{FramePool, PooledFrame};
 use super::hwctx::{FormatState, device_context, get_format};
-use crate::ffi::{EAGAIN, check, codec_id};
+use mixlink_core::video::ColorMatrix;
+
+use crate::ffi::{EAGAIN, check, codec_id, matrix_of};
 use crate::{CodecError, VideoCodec};
 
 const PADDING: usize = ff::AV_INPUT_BUFFER_PADDING_SIZE as usize;
@@ -25,6 +27,7 @@ pub(crate) struct RawFrame {
     pub(crate) height: u32,
     /// Which `decode` call (0-based) brought the AU this picture came from.
     pub(crate) au_index: u64,
+    pub(crate) matrix: ColorMatrix,
     // Keeps the pool surface (and the device) alive; returned to the pool on drop.
     pub(crate) _frame: PooledFrame,
 }
@@ -175,7 +178,7 @@ impl D3d11vaDecoder {
             return Err(CodecError::Corrupt);
         }
         // SAFETY: a D3D11 hw frame: data[0] is the ID3D11Texture2D of the pool, data[1] the slice.
-        let (texture, index, width, height, au_index) = unsafe {
+        let (texture, index, width, height, au_index, matrix) = unsafe {
             let f = &*frame.as_ptr();
             let raw = f.data[0].cast::<c_void>();
             let texture = ID3D11Texture2D::from_raw_borrowed(&raw)
@@ -185,7 +188,14 @@ impl D3d11vaDecoder {
             let width = u32::try_from(f.width).map_err(|_| CodecError::Corrupt)?;
             let height = u32::try_from(f.height).map_err(|_| CodecError::Corrupt)?;
             let au_index = u64::try_from(f.pts).map_err(|_| CodecError::Corrupt)?;
-            (texture, index, width, height, au_index)
+            (
+                texture,
+                index,
+                width,
+                height,
+                au_index,
+                matrix_of(f.colorspace),
+            )
         };
         let (texture, index) = if self.state.gpu_copy {
             let even = |v: u32| (v + 1) & !1;
@@ -200,6 +210,7 @@ impl D3d11vaDecoder {
             width,
             height,
             au_index,
+            matrix,
             _frame: frame,
         }))
     }

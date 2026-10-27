@@ -8,18 +8,23 @@
 
 ## Layout
 - `codec.rs` (`VideoCodec`), `error.rs`, `ffi.rs` (FFmpeg error text, codec ids), `parser.rs` (+ tests),
-  `decoder.rs` (safe API); `platform/windows/`: `probe.rs` (driver decoder profiles), `hwctx.rs`
-  (D3D11VA device context, `get_format`), `d3d11va.rs` (decoder context), `frame_pool.rs`, `copy.rs`.
-- `tests/decode.rs`, `tests/no_alloc.rs`, `tests/common/`, `tests/data/tiny.{h264,hevc}` (256x144, 10 frames,
-  IDR at 0 and 5). Hardware tests print `skip:` and return when the GPU has no decoder (CI).
-- Planned: encoder (host, T7).
+  `decoder.rs`, `encoder.rs` (safe APIs); `platform/windows/`: `probe.rs` (driver decoder profiles), `hwctx.rs`
+  (D3D11VA device context, `get_format`), `d3d11va.rs` (decoder context), `frame_pool.rs`, `copy.rs`,
+  `nvenc.rs` (encoder context, spec 0019).
+- `tests/decode.rs`, `tests/encode.rs`, `tests/no_alloc.rs`, `tests/encode_no_alloc.rs`, `tests/common/`
+  (`pixels.rs`: BGRA textures, NV12 readback, NAL types), `tests/data/tiny.{h264,hevc}` (256x144, 10 frames,
+  IDR at 0 and 5). Hardware tests print `skip:` and return when the GPU has no decoder / NVENC (CI).
 
 ## Public API
 - `VideoCodec` (`H264`, `Hevc`; `from_extension`).
-- `CodecError`: `Ffmpeg { call, code, text }`, `NoHardwareDecoder(codec)`, `Corrupt`, `OutOfMemory`, `Win32`.
+- `CodecError`: `Ffmpeg { call, code, text }`, `NoHardwareDecoder(codec)`, `NoHardwareEncoder(codec)`,
+  `FrameSize { expected, got }`, `AuTooLarge { len }`, `Corrupt`, `OutOfMemory`, `Win32`.
+- `Encoder` (`new(&ID3D11Device, &EncoderConfig)`, `encode(&texture, force_idr) -> &[u8]` Annex-B AU, `config`),
+  `EncoderConfig { codec, width, height, fps, bitrate_kbps }`, `has_hardware_encoder(&ID3D11Device, codec)`.
 - `AccessUnitParser` (`new`, `push(&mut &[u8]) -> Option<&[u8]>`, `flush`, `reset`): Annex-B → AUs, file mode.
 - `Decoder` (`new(&ID3D11Device, codec)`, `with_gpu_copy`, `decode(au) -> Option<DecodedFrame>`, `uses_gpu_copy`).
-- `DecodedFrame` (`texture`, `array_index`, `width`, `height`, `au_index`): holds the pool surface until dropped.
+- `DecodedFrame` (`texture`, `array_index`, `width`, `height`, `au_index`, `matrix` (`core::video::ColorMatrix`
+  from the stream tag; untagged = BT.709)): holds the pool surface until dropped.
 - `has_hardware_decoder(&ID3D11Device, codec)`, `EXTRA_SURFACES` (4 frames the caller may hold).
 
 ## Notes
@@ -34,3 +39,6 @@
   priority (ADR-0005 → Encode priority). NVENC takes `AV_PIX_FMT_D3D11` frames directly (BGRA or NV12);
   NV12 arrays with the render-target flag fail (`E_INVALIDARG`). QSV: derive from a multithread-protected
   D3D11 device; pool with `D3D11_BIND_DECODER`; `hevc_qsv` has no `look_ahead` option.
+- Encoder (spec 0019): the caller's BGRA texture goes straight in (`data[0]`, a dummy `buf[0]`, frames context
+  of pool size 0); NVENC registers it once. One send → one packet (`delay 0`); the texture is free on return.
+  NVENC converts BGRA with BT.601 whatever is asked, so streams are tagged `SMPTE170M`; the client picks the matrix.

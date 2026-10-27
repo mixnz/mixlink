@@ -4,6 +4,7 @@ mod common;
 
 use common::{access_units, device_or_skip, warp_device};
 use mixlink_codec::{CodecError, DecodedFrame, Decoder, EXTRA_SURFACES, VideoCodec};
+use mixlink_core::video::ColorMatrix;
 use windows::Win32::Graphics::Direct3D11::{D3D11_BIND_SHADER_RESOURCE, D3D11_TEXTURE2D_DESC};
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_NV12;
 
@@ -54,6 +55,21 @@ fn decodes_all_frames(codec: VideoCodec, gpu_copy: bool) -> Result<(), CodecErro
         assert!(decoder.uses_gpu_copy());
     }
     Ok(())
+}
+
+#[test]
+fn test_stream_reports_bt709() {
+    let codec = VideoCodec::H264;
+    let Some(device) = device_or_skip(codec) else {
+        return;
+    };
+    let mut decoder = Decoder::new(&device, codec).unwrap();
+    let frame = access_units(codec)
+        .unwrap()
+        .iter()
+        .find_map(|au| decoder.decode(au).unwrap())
+        .expect("a decoded frame");
+    assert_eq!(frame.matrix(), ColorMatrix::Bt709);
 }
 
 #[test]

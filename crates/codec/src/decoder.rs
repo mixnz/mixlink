@@ -1,6 +1,7 @@
 //! Hardware video decoder: FFmpeg D3D11VA on the presenter's device, low delay, GPU zero-copy
 //! (spec 0013).
 
+use mixlink_core::video::ColorMatrix;
 use windows::Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11Texture2D};
 
 use crate::platform::windows::d3d11va::{D3d11vaDecoder, RawFrame};
@@ -82,5 +83,10 @@ impl DecodedFrame {
     /// came from. Equals the current call's index unless the decoder had to delay output.
     pub fn au_index(&self) -> u64 {
         self.raw.au_index
+    }
+
+    /// YCbCr → RGB matrix the stream is tagged with (BT.709 when untagged).
+    pub fn matrix(&self) -> ColorMatrix {
+        self.raw.matrix
     }
 }

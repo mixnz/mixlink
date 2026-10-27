@@ -9,6 +9,7 @@ pub mod ipc;
 pub mod mmcss;
 pub mod stage;
 pub mod svc_ipc;
+pub mod video;
 
 mod platform;
 

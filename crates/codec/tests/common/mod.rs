@@ -11,6 +11,8 @@ use windows::Win32::Graphics::Direct3D11::{
     D3D11_SDK_VERSION, D3D11CreateDevice, ID3D11Device,
 };
 
+pub mod pixels;
+
 pub const TINY_H264: &[u8] = include_bytes!("../data/tiny.h264");
 pub const TINY_HEVC: &[u8] = include_bytes!("../data/tiny.hevc");
 

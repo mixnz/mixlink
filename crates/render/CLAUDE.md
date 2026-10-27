@@ -15,7 +15,8 @@
 ## Public API
 - `Presenter::new(Arc<W: HasWindowHandle>, w, h)`, `resize(w, h)`, `clear_and_present(rgba)`,
   `device()` (for the decoder), `present_nv12(&VideoFrame)`, `wait_gpu()` (measuring only). Windows only.
-- `VideoFrame { texture, array_index, width, height }`: NV12, sampleable, on the presenter's device.
+- `VideoFrame { texture, array_index, width, height, matrix }`: NV12, sampleable, on the presenter's device;
+  `matrix` = `core::video::ColorMatrix` (BT.601 or BT.709, limited range) from the decoder.
 - `viewport::{fit, Rect}`.
 - `RenderError`: `UnsupportedWindow`, `Handle`, `Win32 { context, source }`.
 
@@ -23,6 +24,6 @@
 - Takes `raw-window-handle`, never `winit`. Presenter holds the window `Arc` so the HWND outlives the swapchain.
 - Device: hardware then WARP; video support asked first (dropped where it fails); debug builds try the debug
   layer first; multithread protection on (FFmpeg decodes on the same device). Size 0 = minimized, present skipped.
-- NV12 pass: BT.709 limited range, bilinear, black bars, crops decoder padding (`uv_max`); shaders compiled
+- NV12 pass: BT.601 / BT.709 per frame (constant buffer), limited range, bilinear, black bars, crops decoder padding (`uv_max`); shaders compiled
   at start with `D3DCompile` (vs/ps 4_0). `present_nv12` uses `Present(0, 0)`: no vblank wait.
 - Tests create a hidden `STATIC` window or draw offscreen; they run on CI (WARP).
