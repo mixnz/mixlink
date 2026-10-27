@@ -7,6 +7,7 @@ use mixlink_core::ids::DeviceId;
 use mixlink_core::svc_ipc::PIPE_NAME;
 use mixlink_proto::control::DisplayInfo;
 
+use crate::capture_args::{CaptureCmd, parse_capture};
 use crate::input_args::parse_input;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,6 +23,7 @@ pub enum Mode {
     Drivers(DriversCmd),
     Display(DisplayCmd),
     Input(InputCmd),
+    Capture(CaptureCmd),
     /// The display helper the service starts in the console session (spec 0015); not for people.
     DisplayAgent {
         input: PathBuf,
@@ -76,6 +78,8 @@ pub const USAGE: &str = "usage: mixlink-svc [--console [--pipe <name>] | install
      mixlink-svc display [status | try --client <32 hex> --mode <W>x<H>@<Hz> --topology virtual-only|extend|keep]\n       \
      mixlink-svc input [status | pad [--slot <0-3>] [--delay <s>] | try --script <name> [--slot <0-3>] [--delay <s>]]\n       \
      mixlink-svc input [pad-add --slot <0-3> | pad-remove --slot <0-3>]\n       \
+     mixlink-svc capture try --client <32 hex> --mode <W>x<H>@<Hz> --out <file.h264|.hevc>\n         \
+     [--topology virtual-only|extend|keep] [--codec h264|hevc] [--seconds <n>] [--bitrate <kbps>]\n       \
      scripts: keys chord mouse abs pad all hold uac lock walk";
 
 /// Parses the arguments after the program name.
@@ -128,11 +132,12 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Mode, Strin
         }),
         ["display", "reject-check"] => Ok(Mode::Display(DisplayCmd::RejectCheck)),
         ["input", rest @ ..] => parse_input(rest).map(Mode::Input),
+        ["capture", rest @ ..] => parse_capture(rest).map(Mode::Capture),
         _ => Err(format!("unknown arguments: {}", args.join(" "))),
     }
 }
 
-fn parse_topology(text: &str) -> Result<TryTopology, String> {
+pub(crate) fn parse_topology(text: &str) -> Result<TryTopology, String> {
     match text {
         "keep" => Ok(TryTopology::Keep),
         "virtual-only" => Ok(TryTopology::Apply(Topology::VirtualOnly)),
@@ -144,7 +149,7 @@ fn parse_topology(text: &str) -> Result<TryTopology, String> {
 }
 
 /// `WxH@Hz`, refresh with up to three decimals (`59.94`), stored in millihertz.
-fn parse_mode(text: &str) -> Result<DisplayInfo, String> {
+pub(crate) fn parse_mode(text: &str) -> Result<DisplayInfo, String> {
     let bad = || format!("--mode must look like 2560x1440@120, got {text}");
     let (size, refresh) = text.split_once('@').ok_or_else(bad)?;
     let (width, height) = size.split_once('x').ok_or_else(bad)?;

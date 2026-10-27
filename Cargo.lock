@@ -2715,10 +2715,13 @@ version = "0.1.0"
 dependencies = [
  "env_logger",
  "log",
+ "mixlink-capture",
+ "mixlink-codec",
  "mixlink-core",
  "mixlink-input",
  "mixlink-net",
  "mixlink-proto",
+ "rtrb",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

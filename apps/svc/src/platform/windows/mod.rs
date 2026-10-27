@@ -20,6 +20,7 @@ pub mod install;
 pub mod network_category;
 pub mod pad_nodes;
 pub mod pipe;
+pub mod priority;
 pub mod random;
 pub mod raw_input;
 pub mod security;

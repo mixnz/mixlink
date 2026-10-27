@@ -2,6 +2,8 @@
 //! for development; `install` / `uninstall` register it.
 
 mod args;
+mod capture;
+mod capture_args;
 mod discovery;
 mod display;
 mod drivers;
@@ -96,6 +98,10 @@ fn run_mode(mode: Mode) -> Result<(), SvcError> {
         Mode::Input(cmd) => {
             log_setup::init_console_log();
             input::commands::run(&cmd)
+        }
+        Mode::Capture(cmd) => {
+            log_setup::init_console_log();
+            capture::run(&cmd)
         }
         Mode::DisplayAgent { input, output } => {
             platform::windows::display_agent::serve_one(&input, &output)
