@@ -2561,7 +2561,10 @@ dependencies = [
 name = "mixlink-capture"
 version = "0.1.0"
 dependencies = [
+ "log",
  "mixlink-core",
+ "thiserror 2.0.21",
+ "windows",
 ]
 
 [[package]]
