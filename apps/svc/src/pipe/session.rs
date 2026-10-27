@@ -3,14 +3,43 @@
 
 use std::time::Duration;
 
+use mixlink_core::ids::DeviceId;
 use mixlink_core::ipc::decode_line;
-use mixlink_core::svc_ipc::{PIPE_VERSION, SvcState, SvcToTray, TrayToSvc};
+use mixlink_core::svc_ipc::{
+    PIPE_VERSION, PairedInfo, PairingPrompt, SvcState, SvcToTray, TrayToSvc,
+};
 
 /// The reply to send, and whether to close the connection after it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reply {
     pub msg: SvcToTray,
     pub close: bool,
+}
+
+/// What the pipe may see and do of pairing (spec 0018). Never exposes keys.
+pub trait PairingPort {
+    fn prompt(&self) -> Option<PairingPrompt>;
+    fn paired(&self) -> Vec<PairedInfo>;
+    fn cancel(&self);
+    fn remove(&self, device: DeviceId);
+}
+
+/// Pairing is off (no session listener): nothing to show, requests do nothing.
+#[derive(Debug, Clone, Copy)]
+pub struct NoPairing;
+
+impl PairingPort for NoPairing {
+    fn prompt(&self) -> Option<PairingPrompt> {
+        None
+    }
+
+    fn paired(&self) -> Vec<PairedInfo> {
+        Vec::new()
+    }
+
+    fn cancel(&self) {}
+
+    fn remove(&self, _device: DeviceId) {}
 }
 
 #[derive(Debug, Default)]
@@ -30,6 +59,7 @@ impl Session {
         line: &[u8],
         uptime: Duration,
         network_public: impl FnOnce() -> bool,
+        pairing: &dyn PairingPort,
     ) -> Reply {
         let Ok(text) = std::str::from_utf8(line) else {
             return refuse("line is not UTF-8");
@@ -41,28 +71,42 @@ impl Session {
                 return refuse("message not understood");
             }
         };
-        match (self.greeted, msg) {
-            (false, TrayToSvc::Hello { pipe_version }) => {
-                self.greeted = true;
-                Reply {
-                    msg: SvcToTray::Hello {
-                        pipe_version: PIPE_VERSION,
-                        svc_version: env!("CARGO_PKG_VERSION").to_owned(),
-                    },
-                    close: pipe_version != PIPE_VERSION,
+        if !self.greeted {
+            return match msg {
+                TrayToSvc::Hello { pipe_version } => {
+                    self.greeted = true;
+                    Reply {
+                        msg: SvcToTray::Hello {
+                            pipe_version: PIPE_VERSION,
+                            svc_version: env!("CARGO_PKG_VERSION").to_owned(),
+                        },
+                        close: pipe_version != PIPE_VERSION,
+                    }
                 }
-            }
-            (false, TrayToSvc::GetStatus) => refuse("Hello must come first"),
-            (true, TrayToSvc::Hello { .. }) => refuse("Hello already received"),
-            (true, TrayToSvc::GetStatus) => Reply {
-                msg: SvcToTray::Status {
-                    state: SvcState::Idle,
-                    uptime_s: uptime.as_secs(),
-                    network_public: network_public(),
-                },
-                close: false,
-            },
+                _ => refuse("Hello must come first"),
+            };
         }
+        let msg = match msg {
+            TrayToSvc::Hello { .. } => return refuse("Hello already received"),
+            TrayToSvc::GetStatus => SvcToTray::Status {
+                state: SvcState::Idle,
+                uptime_s: uptime.as_secs(),
+                network_public: network_public(),
+                pairing: pairing.prompt(),
+            },
+            TrayToSvc::CancelPairing => {
+                pairing.cancel();
+                SvcToTray::Done
+            }
+            TrayToSvc::ListPaired => SvcToTray::Paired {
+                devices: pairing.paired(),
+            },
+            TrayToSvc::RemovePaired { device } => {
+                pairing.remove(device);
+                SvcToTray::Done
+            }
+        };
+        Reply { msg, close: false }
     }
 }
 

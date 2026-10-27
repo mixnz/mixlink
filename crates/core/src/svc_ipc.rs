@@ -8,10 +8,11 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
+use crate::ids::DeviceId;
 use crate::ipc::{IpcError, decode_line, encode_line};
 
 /// Bumped on any breaking change to the messages below.
-pub const PIPE_VERSION: u32 = 1;
+pub const PIPE_VERSION: u32 = 2;
 
 /// The service's pipe; tests and `--console --pipe` use other names.
 pub const PIPE_NAME: &str = r"\\.\pipe\mixlink-svc";
@@ -36,8 +37,16 @@ const BUSY_RETRY: Duration = Duration::from_millis(10);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum TrayToSvc {
-    Hello { pipe_version: u32 },
+    Hello {
+        pipe_version: u32,
+    },
     GetStatus,
+    /// Closes the open pairing prompt (spec 0018).
+    CancelPairing,
+    ListPaired,
+    RemovePaired {
+        device: DeviceId,
+    },
 }
 
 /// Sent by the service, one reply per request.
@@ -56,9 +65,34 @@ pub enum SvcToTray {
         /// Absent (older service) = `false`.
         #[serde(default)]
         network_public: bool,
+        /// A client is pairing: show this PIN (spec 0018).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pairing: Option<PairingPrompt>,
     },
+    /// Reply to `ListPaired`.
+    Paired { devices: Vec<PairedInfo> },
+    /// Reply to `CancelPairing` and `RemovePaired`.
+    Done,
     /// The request was refused; the service closes the connection after it.
     Error { message: String },
+}
+
+/// The PIN prompt while a client pairs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairingPrompt {
+    pub device_name: String,
+    /// Six digits.
+    pub pin: String,
+    pub expires_s: u32,
+}
+
+/// A paired client, without its key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairedInfo {
+    pub device: DeviceId,
+    pub name: String,
+    /// Unix seconds.
+    pub paired_at: u64,
 }
 
 /// What the service is doing; streaming and pairing states come with those features.
@@ -69,11 +103,12 @@ pub enum SvcState {
 }
 
 /// The fields of a `SvcToTray::Status`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusReport {
     pub state: SvcState,
     pub uptime_s: u64,
     pub network_public: bool,
+    pub pairing: Option<PairingPrompt>,
 }
 
 impl StatusReport {
@@ -84,12 +119,17 @@ impl StatusReport {
                 state,
                 uptime_s,
                 network_public,
+                pairing,
             } => Some(StatusReport {
                 state,
                 uptime_s,
                 network_public,
+                pairing,
             }),
-            SvcToTray::Hello { .. } | SvcToTray::Error { .. } => None,
+            SvcToTray::Hello { .. }
+            | SvcToTray::Error { .. }
+            | SvcToTray::Paired { .. }
+            | SvcToTray::Done => None,
         }
     }
 }
@@ -188,7 +228,10 @@ impl SvcPipe {
                 theirs: pipe_version,
                 svc_version,
             }),
-            SvcToTray::Status { .. } | SvcToTray::Error { .. } => Err(SvcPipeError::Unexpected),
+            SvcToTray::Status { .. }
+            | SvcToTray::Error { .. }
+            | SvcToTray::Paired { .. }
+            | SvcToTray::Done => Err(SvcPipeError::Unexpected),
         }
     }
 
@@ -215,6 +258,28 @@ impl SvcPipe {
     pub fn status(&mut self) -> Result<StatusReport, SvcPipeError> {
         StatusReport::from_status(self.request(&TrayToSvc::GetStatus)?)
             .ok_or(SvcPipeError::Unexpected)
+    }
+
+    pub fn cancel_pairing(&mut self) -> Result<(), SvcPipeError> {
+        self.expect_done(&TrayToSvc::CancelPairing)
+    }
+
+    pub fn list_paired(&mut self) -> Result<Vec<PairedInfo>, SvcPipeError> {
+        match self.request(&TrayToSvc::ListPaired)? {
+            SvcToTray::Paired { devices } => Ok(devices),
+            _ => Err(SvcPipeError::Unexpected),
+        }
+    }
+
+    pub fn remove_paired(&mut self, device: DeviceId) -> Result<(), SvcPipeError> {
+        self.expect_done(&TrayToSvc::RemovePaired { device })
+    }
+
+    fn expect_done(&mut self, msg: &TrayToSvc) -> Result<(), SvcPipeError> {
+        match self.request(msg)? {
+            SvcToTray::Done => Ok(()),
+            _ => Err(SvcPipeError::Unexpected),
+        }
     }
 }
 

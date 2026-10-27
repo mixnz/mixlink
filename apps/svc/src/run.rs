@@ -12,9 +12,11 @@ use crate::display;
 use crate::error::SvcError;
 use crate::input::{open_feeder, pads};
 use crate::pipe::server::listen;
+use crate::pipe::session::{NoPairing, PairingPort};
 use crate::platform::windows::pad_nodes::WindowsPadHost;
 use crate::platform::windows::pipe::create_instance;
 use crate::platform::windows::security::PipeSecurity;
+use crate::session_listen::{self, SessionSettings};
 use crate::stop::StopSignal;
 use mixlink_input::platform::windows::vhid::VHid;
 
@@ -31,6 +33,8 @@ pub struct RunOptions {
     pub input: bool,
     /// `Some`: advertise the host on the LAN (spec 0017). Tests pass `None`.
     pub discovery: Option<DiscoverySettings>,
+    /// `Some`: pairing and secure sessions on the session port (spec 0018). Tests pass `None`.
+    pub session: Option<SessionSettings>,
 }
 
 /// Serves the pipe until `stop` is set. `on_ready` runs once the pipe accepts clients;
@@ -43,13 +47,29 @@ pub fn run(
     let started = Instant::now();
     let security = Arc::new(PipeSecurity::new()?);
     let first = create_instance(&opts.pipe, true, &security)?.ok_or(SvcError::PipeTaken)?;
+    let session = opts.session.clone().and_then(|settings| {
+        match session_listen::start(Arc::clone(stop), settings) {
+            Ok(sessions) => {
+                log::info!("session listener on {}", sessions.addr);
+                Some(sessions)
+            }
+            Err(error) => {
+                log::error!("{error}");
+                None
+            }
+        }
+    });
+    let pairing: Arc<dyn PairingPort + Send + Sync> = match &session {
+        Some(sessions) => Arc::clone(&sessions.shared) as Arc<dyn PairingPort + Send + Sync>,
+        None => Arc::new(NoPairing),
+    };
     let listener = {
         let name = opts.pipe.clone();
         let stop = Arc::clone(stop);
         let security = Arc::clone(&security);
         thread::Builder::new()
             .name("svc-pipe-listen".into())
-            .spawn(move || listen(&name, first, &security, &stop, started))?
+            .spawn(move || listen(&name, first, &security, &stop, started, &pairing))?
     };
     log::info!("serving {}", opts.pipe);
     let display = match opts.display {
@@ -76,6 +96,11 @@ pub fn run(
         && display.join().is_err()
     {
         log::error!("display thread panicked");
+    }
+    if let Some(sessions) = session
+        && sessions.thread.join().is_err()
+    {
+        log::error!("session thread panicked");
     }
     log::info!("stopped");
     Ok(())

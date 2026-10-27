@@ -8,6 +8,7 @@ use mixlink_core::ids::DeviceId;
 use serde::{Deserialize, Serialize};
 
 use crate::error::SvcError;
+use crate::json_file;
 
 const IDENTITY_VERSION: u32 = 1;
 
@@ -46,21 +47,12 @@ pub fn load_or_create(
     Ok(id)
 }
 
-/// Writes a temporary file, then renames it over the old one.
 fn save(path: &Path, id: DeviceId) -> Result<(), SvcError> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
     let file = IdentityFile {
         version: IDENTITY_VERSION,
         id,
     };
-    let mut text = serde_json::to_string_pretty(&file).map_err(std::io::Error::other)?;
-    text.push('\n');
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, path)?;
-    Ok(())
+    json_file::write_atomic(path, &file)
 }
 
 #[cfg(test)]

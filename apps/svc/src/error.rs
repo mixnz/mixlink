@@ -12,6 +12,8 @@ pub enum SvcError {
         #[source]
         source: windows::core::Error,
     },
+    #[error("pairing and sessions unavailable: {0}")]
+    Session(String),
     #[error("another process already owns the service pipe")]
     PipeTaken,
     #[error("This needs administrator rights. Run it from an administrator terminal.")]
