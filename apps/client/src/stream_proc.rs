@@ -131,7 +131,16 @@ fn supervise(app: &AppHandle, mut child: Child, started: Instant) {
                     ready = Some(ipc_version);
                     on_ready(app, &mut child, ipc_version, started);
                 }
-                Ok(StreamToLauncher::Closed { reason }) => closed = Some(reason),
+                Ok(StreamToLauncher::Closed { reason, .. }) => closed = Some(reason),
+                Ok(StreamToLauncher::Connecting) => log::info!("stream connecting"),
+                Ok(StreamToLauncher::Connected {
+                    width,
+                    height,
+                    codec,
+                    ..
+                }) => {
+                    log::info!("stream connected: {width}x{height} {codec}");
+                }
                 Err(error) => log::warn!("ignoring stream line: {error}"),
             }
         }

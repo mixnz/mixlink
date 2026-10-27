@@ -74,6 +74,7 @@ impl NetConfig {
 pub struct VideoConfig {
     pub max_fps: u32,
     pub bitrate_kbps: u32,
+    pub codec: CodecChoice,
 }
 
 impl Default for VideoConfig {
@@ -81,8 +82,19 @@ impl Default for VideoConfig {
         Self {
             max_fps: 120,
             bitrate_kbps: 50_000,
+            codec: CodecChoice::Auto,
         }
     }
+}
+
+/// Which codec the host streams (spec 0020). `Auto`: HEVC when the client decodes it, else H.264.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CodecChoice {
+    #[default]
+    Auto,
+    H264,
+    Hevc,
 }
 
 impl VideoConfig {

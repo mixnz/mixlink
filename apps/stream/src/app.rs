@@ -129,7 +129,10 @@ impl StreamApp {
         {
             log::info!("frame stats:\n{}", stats.summary());
         }
-        let closed = StreamToLauncher::Closed { reason };
+        let closed = StreamToLauncher::Closed {
+            reason,
+            latency: None,
+        };
         if let Err(error) = send(&mut io::stdout().lock(), &closed) {
             log::debug!("launcher did not get Closed: {error}");
         }
