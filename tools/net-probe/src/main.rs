@@ -2,6 +2,7 @@
 
 mod link;
 mod run;
+mod secure;
 mod serve;
 mod wire;
 
@@ -11,15 +12,20 @@ use std::process::ExitCode;
 use mixlink_core::config::NetConfig;
 
 use crate::run::RunOptions;
+use crate::secure::SecureOptions;
 
 const USAGE: &str = "usage:
   net-probe serve [--port P]
-  net-probe run <host-ip> [--port P] [--seconds 30] [--mbps 50] [--fps 120]";
+  net-probe run <host-ip> [--port P] [--seconds 30] [--mbps 50] [--fps 120]
+  net-probe pair <host-ip:port> <host id> [--store DIR]
+  net-probe connect <host-ip:port> <host id> [--seconds 10] [--store DIR]";
 
 #[derive(Debug)]
 enum Command {
     Serve { port: u16 },
     Run(RunOptions),
+    Pair(SecureOptions),
+    Connect(SecureOptions),
 }
 
 fn main() -> ExitCode {
@@ -35,6 +41,8 @@ fn main() -> ExitCode {
     let result = match command {
         Command::Serve { port } => serve::serve(port),
         Command::Run(opts) => run::run(opts),
+        Command::Pair(opts) => secure::pair(&opts),
+        Command::Connect(opts) => secure::connect(&opts),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -47,6 +55,11 @@ fn main() -> ExitCode {
 
 fn parse(args: &[String]) -> Result<Command, String> {
     let (mode, rest) = args.split_first().ok_or("missing command")?;
+    match mode.as_str() {
+        "pair" => return parse_secure(rest).map(Command::Pair),
+        "connect" => return parse_secure(rest).map(Command::Connect),
+        _ => {}
+    }
     let (host, flags) = match mode.as_str() {
         "serve" => (None, rest),
         "run" => {
@@ -86,4 +99,36 @@ fn parse(args: &[String]) -> Result<Command, String> {
         None => Command::Serve { port: opts.port },
         Some(ip) => Command::Run(RunOptions { host: ip, ..opts }),
     })
+}
+
+/// `<ip:port> <host id> [--seconds N] [--store DIR]` for `pair` / `connect`.
+fn parse_secure(args: &[String]) -> Result<SecureOptions, String> {
+    let [addr, id, flags @ ..] = args else {
+        return Err("needs <host-ip:port> <host id>".to_owned());
+    };
+    let mut opts = SecureOptions {
+        host: addr
+            .parse()
+            .map_err(|_| format!("bad address (ip:port): {addr}"))?,
+        id: id.parse().map_err(|_| format!("bad host id: {id}"))?,
+        store: mixlink_net::client_store::default_dir()
+            .ok_or("LOCALAPPDATA is not set; pass --store")?,
+        seconds: 10,
+    };
+    let mut flags = flags.iter();
+    while let Some(flag) = flags.next() {
+        let value = flags.next().ok_or(format!("{flag} needs a value"))?;
+        match flag.as_str() {
+            "--store" => opts.store = value.into(),
+            "--seconds" => {
+                opts.seconds = value
+                    .parse()
+                    .ok()
+                    .filter(|&s| s > 0)
+                    .ok_or(format!("bad value for --seconds: {value}"))?;
+            }
+            _ => return Err(format!("unknown option: {flag}")),
+        }
+    }
+    Ok(opts)
 }

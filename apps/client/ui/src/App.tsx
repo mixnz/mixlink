@@ -1,29 +1,22 @@
-import { useEffect, useState } from "react";
-import { type HostRow, listHosts, onHostsChanged } from "./api/hosts.ts";
+import { useCallback, useEffect, useState } from "react";
+import { forgetHost, pairCancel, pairRequest, pairSubmit } from "./api/pairing.ts";
 import { isStreamResult, lastStreamResult, onStreamResult, startStream } from "./api/stream.ts";
+import { HostActions } from "./components/HostActions/index.ts";
 import { HostList } from "./components/HostList/index.ts";
+import { PairDialog } from "./components/PairDialog/index.ts";
+import { useHosts, usePairState } from "./hooks.ts";
 import { t } from "./i18n/en.ts";
 import { streamResultText } from "./streamResultText.ts";
 
 export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
-  const [hosts, setHosts] = useState<HostRow[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-
-  useEffect(() => {
-    listHosts()
-      .then(setHosts)
-      .catch((error: unknown) => {
-        setNotice(String(error));
-      });
-    const unlisten = onHostsChanged(setHosts);
-    return () => {
-      void unlisten.then((stop) => {
-        stop();
-      });
-    };
+  const report = useCallback((error: unknown) => {
+    setNotice(String(error));
   }, []);
+  const hosts = useHosts(report);
+  const pairing = usePairState();
 
   useEffect(() => {
     lastStreamResult()
@@ -54,6 +47,19 @@ export function App() {
     });
   }
 
+  function pair(id: string) {
+    setNotice(null);
+    pairRequest(id).catch(report);
+  }
+
+  function forget(id: string) {
+    forgetHost(id).catch(report);
+  }
+
+  const host = hosts.find((row) => row.id === selected) ?? null;
+  const pairingHost = pairing.kind === "idle" ? null : hosts.find((row) => row.id === pairing.host);
+  const busy = pairing.kind === "requesting" || pairing.kind === "awaitingPin" || pairing.kind === "checking";
+
   return (
     <main>
       <h1>{t("app.title")}</h1>
@@ -61,6 +67,19 @@ export function App() {
       <section>
         <h2>{t("devices.heading")}</h2>
         <HostList hosts={hosts} selected={selected} onSelect={setSelected} />
+        {host && <HostActions key={host.id} host={host} busy={busy} onPair={pair} onForget={forget} />}
+        {pairing.kind !== "idle" && (
+          <PairDialog
+            state={pairing}
+            hostName={pairingHost?.name ?? pairing.host}
+            onSubmit={(pin) => {
+              pairSubmit(pin).catch(report);
+            }}
+            onCancel={() => {
+              pairCancel().catch(report);
+            }}
+          />
+        )}
       </section>
       <button type="button" onClick={connect} disabled={starting}>
         {t("connect.demo")}

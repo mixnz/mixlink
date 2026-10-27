@@ -36,6 +36,8 @@ pub enum NetError {
     Rejected(RejectReason),
     #[error("session handshake failed: {0}")]
     Noise(String),
+    #[error("cannot save or load client files: {0}")]
+    Store(String),
     #[error("no session keys yet")]
     NoSession,
     #[error("unexpected reply from the host")]

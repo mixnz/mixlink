@@ -4,6 +4,7 @@
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use crate::hosts::HostsState;
+use crate::pairing;
 use crate::strings;
 
 pub const MAIN_WINDOW: &str = "main";
@@ -19,6 +20,8 @@ pub fn open_main_window(app: &AppHandle) -> tauri::Result<()> {
             handle.state::<HostsState>().stop();
         }
     });
-    app.state::<HostsState>().start(app);
+    let hosts = app.state::<HostsState>();
+    hosts.set_known(app, pairing::known_ids());
+    hosts.start(app);
     Ok(())
 }

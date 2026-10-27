@@ -43,8 +43,12 @@ Details live in each spec; one line per item here.
 - T5 LAN discovery (0017): service advertises over mDNS (Windows DNS-SD API) + answers broadcast probes on
   47800; host id in `identity.json`; `install` adds firewall rule `MixLink` (Private + Domain); tray hints on a
   Public network; launcher lists hosts (5 s expiry). Two-PC run passes (mDNS only, broadcast only, stop → gone).
+- T6 pairing (0018): PIN prompt in the tray → SPAKE2 in the launcher; Noise KK session (`svc-session` on 47801),
+  host commits on the first sealed Ping; AES-128-GCM datagrams (seal / open p99 0.4 µs); keys in `secrets\`
+  (SYSTEM + Admins) and `%LOCALAPPDATA%\MixLink`; pipe v2; tray trusts only the service PID; `net-probe pair | connect`.
 
 ## In progress
+- T6 open rows (spec 0018 → Results): two-PC pairing + `net-probe connect`, fake pipe server, `secrets\` ACL.
 - T5 open rows (spec 0017 → Results): host with several adapters; "Needs update" row with a host on another
   version. Main PC: MixLink service and firewall rule removed, `identity.json` kept.
 - T21 open rows (spec 0015): frame grab of login / lock screen on the headless monitor (T7 harness), power cut
@@ -57,9 +61,10 @@ Details live in each spec; one line per item here.
 - Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
 - 60 Hz clients: `Present` blocks the video thread at vblank, AUs wait 2–6 ms before decode (spec 0013 →
   Latency impact). Use the frame-latency waitable object in T9 or phase 3.
-- Roadmap phase 1: T6 (pairing) and T7 unblocked. Needs a roadmap row: physical monitor plugged in while
+- Roadmap phase 1: T7 next (T9 needs T6 + T7 + T8). Needs a roadmap row: physical monitor plugged in while
   headless is main (login prompt stays on the virtual monitor). Maybe a row: add a host by IP (other subnet).
-- T6 adds the key pair to `identity.json` (protect the file then) and the client device id.
+- T9: start / end the virtual monitor on `EndpointEvent::SessionStarted` / `Ended` (`session_listen.rs`), replace
+  the echo `Welcome` in `net::endpoint`, seal media lanes, launcher Connect through `connect_secure`.
 - Spec 0014 open row: tampered package with the remove-first install. (Steam open on a pad: `drivers
   uninstall` passes, pads unplug, spec 0016.)
 - T12 creates a pad per client gamepad; rumble (report 0x03) is kept per pad, not yet sent to the client.

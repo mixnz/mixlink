@@ -1,6 +1,6 @@
 # 0018 — Pairing (PIN) and the encrypted session
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-27
 **Roadmap:** T6
 **Plan:** [0018-pairing-secure-session](../plans/0018-pairing-secure-session.md) (local only, written by writing-plans skill)
@@ -169,3 +169,21 @@ Calls made in this spec (review them):
 - Private keys in ACL-protected files, no DPAPI. `PIPE_VERSION` 2 (tray and service ship together).
 - Size: about 6 plan tasks (crypto, pairing + session logic, svc, pipe + tray, launcher, net-probe +
   runs). If too big, split tray + launcher UI into a new row.
+
+## Results
+Benchmark (main PC, release, `crypto_bench`, 1216 B datagram + tag, 2026-10-27): seal p50 / p99 400 / 400 ns,
+open 400 / 400 ns (timer step 100 ns), about 3.4 GB/s each way. Target p99 ≤ 2 µs: pass.
+
+| Criterion | Result |
+|---|---|
+| Tampered, replayed, other-direction datagrams dropped; seq wrap | automated (`crypto_tests.rs`, `no_alloc.rs`) |
+| Right PIN pairs, wrong PIN, 3 attempts, 120 s expiry, cancel | automated (`pairing/host_tests.rs`, `pair_loopback.rs`) |
+| Session up + ping + `Bye`; unpaired / removed → `NotPaired`; forged key → no session | automated (`session/host_tests.rs`, `endpoint_tests.rs`, `session_listen_tests.rs`) |
+| Forget clears the row and `known_hosts.json` | automated (`apps/client` `pairing_tests.rs`) |
+| Two PCs: launcher pairing, tray prompt, Cancel, `net-probe connect` RTT | open (manual run) |
+| Fake pipe server → tray `untrusted` | open (manual run) |
+| `secrets\` ACL for a standard user (`icacls`) | open (manual run, needs the installed service) |
+
+- Built on: snow 0.10 needs `use-chacha20poly1305` (it imports `KeyInit` only behind it) and `risky-raw-split`.
+- One `ControlLink` per peer for its whole life: a new link to the same address restarts frame numbers at 0
+  and the host drops them as late. Clients open a new socket per pairing or session, so this holds.

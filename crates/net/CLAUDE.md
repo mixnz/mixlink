@@ -9,7 +9,7 @@
 
 ## Layout
 - `socket.rs`, `lane.rs` (SPSC slot lanes), `transport.rs`, `send_loop.rs`, `recv_loop.rs`, `stats.rs`, `resend.rs`,
-  `handshake.rs`, `keys.rs`, `control_link.rs`, `endpoint.rs`, `error.rs` (logic files + `<name>_tests.rs`).
+  `handshake.rs`, `keys.rs`, `control_link.rs`, `endpoint.rs`, `client_store.rs`, `error.rs` (logic files + `<name>_tests.rs`).
 - `pairing/` (spec 0018): `transcript.rs`, pure `host.rs`, `client.rs`; `session/`: `noise.rs`, pure `host.rs`, `client.rs`.
 - `discovery/` (spec 0017): pure `advert.rs`, `wire.rs`, `list.rs`, `limiter.rs`, `local_net.rs`; threads
   `advertiser.rs` (`svc-discovery`), `browser.rs` (`discovery-browse`).
@@ -23,6 +23,7 @@
 - `lane`: `SLOT_LEN` (1232), `TxLane` (`try_reserve`), `TxSlot` (`buf`, `datagram`, `commit`, `seal_commit`),
   `RxLane` (`try_recv`, `recv_timeout`, `attach_current_thread`), `RxDatagram` (`data`, `peer`, `at`, `open`).
 - `keys`: `StaticKeyPair` (`generate`; serde hex), `ClientIdentity`, `random_pin`, `random_session`.
+- `client_store`: `default_dir`, `load_or_create_identity`, `load_known`, `save_known`, `remember`, `forget`.
 - `control_link`: `ControlLink` (`new`, `set_keys`, `send`, `send_sealed`, `accept`, `exchange`), `Wire`, `Incoming`.
 - `pairing`: `PairedDevice`, `KnownHost`, `Now`, `PromptView`, `PairError`, `PROMPT_TIME` (120 s), `MAX_ATTEMPTS` (3);
   `host::HostPairing`; `client::{PairContext, request, submit, start, finish}`.
