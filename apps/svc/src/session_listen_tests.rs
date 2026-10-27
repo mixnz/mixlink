@@ -145,3 +145,93 @@ fn pair_and_connect_over_loopback() {
     stop.stop();
     listener.thread.join().unwrap();
 }
+
+/// Answers display requests like `svc-display`: the monitor is "up" on `connector`.
+fn fake_display(connector: u32) -> DisplayHandle {
+    use crate::display::requests::{DisplayRequest, StreamTarget};
+    use crate::display::session::Active;
+    let (handle, inbox) = DisplayHandle::channel();
+    thread::spawn(move || {
+        for request in inbox {
+            match request {
+                DisplayRequest::Begin { client, reply, .. } => {
+                    let _ = reply.send(Ok(StreamTarget {
+                        active: Active { monitor: 9, client },
+                        connector,
+                    }));
+                }
+                DisplayRequest::End { reply, .. } => {
+                    let _ = reply.send(Ok(()));
+                }
+            }
+        }
+    });
+    handle
+}
+
+#[test]
+fn stream_failure_sends_bye_host_error() {
+    let secrets = temp_dir("stream-failure");
+    std::fs::create_dir_all(&secrets).unwrap();
+    let me = ClientIdentity {
+        id: DeviceId::from_bytes([0x22; 16]),
+        keys: StaticKeyPair::generate().unwrap(),
+    };
+    let host_keys = StaticKeyPair::generate().unwrap();
+    let host_pub = host_keys.public;
+    secrets::save_paired(
+        &secrets,
+        &[PairedDevice {
+            device: me.id,
+            name: "Laptop".to_owned(),
+            key: me.keys.public,
+            paired_at: 0,
+        }],
+    )
+    .unwrap();
+    let stop = Arc::new(StopSignal::new());
+    let settings = SessionSettings {
+        net: NetConfig {
+            session_port: 0,
+            ..NetConfig::default()
+        },
+        video: VideoConfig::default(),
+        // Connector 3 has no frame share here, so capture fails right after the monitor is "up".
+        display: Some(fake_display(3)),
+        host: HOST,
+        keys: host_keys,
+        secrets,
+    };
+    let listener = start(Arc::clone(&stop), settings).unwrap();
+    let host_addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, listener.addr.port());
+    let known = mixlink_net::pairing::KnownHost {
+        host: HOST,
+        name: "Desk".to_owned(),
+        key: host_pub,
+    };
+    let mut c = Client::new();
+    let mut session = connect_secure(
+        ControlLink::new(host_addr),
+        &mut c.wire(),
+        &me,
+        &known,
+        &hello(&me),
+    )
+    .unwrap();
+    let mut bye = None;
+    for _ in 0..40 {
+        if let Some(mut dg) = c.rx.recv_timeout(Duration::from_millis(100))
+            && let Some(incoming) = session.link.accept(&mut dg)
+            && let ControlMessage::Bye { reason } = incoming.msg
+        {
+            bye = Some((reason, incoming.sealed));
+            break;
+        }
+    }
+    assert_eq!(
+        bye,
+        Some((mixlink_proto::control::ByeReason::HostError, true))
+    );
+    stop.stop();
+    listener.thread.join().unwrap();
+}

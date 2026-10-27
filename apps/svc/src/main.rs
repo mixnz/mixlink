@@ -24,6 +24,7 @@ mod secrets;
 #[cfg(windows)]
 mod session_listen;
 mod stop;
+mod stream;
 mod strings;
 
 use std::process::ExitCode;
