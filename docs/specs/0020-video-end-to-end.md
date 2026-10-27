@@ -69,8 +69,9 @@ end: Bye / 10 s silence / error → svc-session: SessionEnded → stop threads �
 
 ### Host: mode and codec choice (`Welcome`)
 - `welcome` moves from `net::endpoint` to a `ModePolicy` the service passes to `HostControlConfig`.
-- Mode: the client's `stream_display` mode if width, height even, ≤ 3840 x 2160, refresh ≤ `video.max_fps`
-  (rounded); otherwise the largest mode from the client's display list that fits; none fits → `BadDisplay`.
+- Mode: the client's `stream_display` mode if width, height even, ≤ 3840 x 2160; otherwise the largest mode
+  from the client's display list that fits; none fits → `BadDisplay`. A refresh above `video.max_fps` is capped
+  to it (a 165 Hz screen streams at 120 Hz).
   The virtual monitor is created with exactly that mode, so the EDID's preferred mode is it.
 - `Hello` gains `codecs: [h264, hevc]` (decoders the client has; default `[h264]` when missing, so older
   clients still parse). `host.json` `video.codec`: `auto` (default: HEVC if the client has it, else H.264),

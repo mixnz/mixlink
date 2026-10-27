@@ -11,7 +11,7 @@ const MAX_HEIGHT: u32 = 2160;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ModePolicy {
-    /// `video.max_fps`; a mode's refresh rounded up to whole Hz must not exceed it.
+    /// `video.max_fps`; a faster display is streamed at this rate.
     pub max_fps: u32,
     pub codec: CodecChoice,
 }
@@ -41,23 +41,26 @@ impl ModePolicy {
         }
     }
 
-    /// The display at `index` if it fits, else the fitting one with the most pixels (ties: higher refresh).
+    /// The display at `index` if its size fits, else the fitting one with the most pixels (ties: higher
+    /// refresh). A refresh above `max_fps` is capped to it: the stream runs at the host's limit.
     pub fn choose_mode(&self, displays: &[DisplayInfo], index: u8) -> Option<DisplayInfo> {
-        if let Some(mode) = displays.get(usize::from(index))
-            && self.fits(mode)
-        {
-            return Some(*mode);
-        }
-        displays
-            .iter()
-            .filter(|mode| self.fits(mode))
-            .max_by_key(|mode| {
-                (
-                    u64::from(mode.width) * u64::from(mode.height),
-                    mode.refresh_mhz,
-                )
-            })
-            .copied()
+        let chosen = match displays.get(usize::from(index)) {
+            Some(mode) if fits(mode) => Some(*mode),
+            _ => displays
+                .iter()
+                .filter(|mode| fits(mode))
+                .max_by_key(|mode| {
+                    (
+                        u64::from(mode.width) * u64::from(mode.height),
+                        mode.refresh_mhz,
+                    )
+                })
+                .copied(),
+        };
+        chosen.map(|mut mode| {
+            mode.refresh_mhz = mode.refresh_mhz.min(self.max_fps.saturating_mul(1000));
+            mode
+        })
     }
 
     /// `Auto`: HEVC when offered, else H.264. A forced codec the client lacks falls back to H.264.
@@ -72,14 +75,14 @@ impl ModePolicy {
             CodecId::H264
         }
     }
+}
 
-    fn fits(&self, mode: &DisplayInfo) -> bool {
-        mode.width.is_multiple_of(2)
-            && mode.height.is_multiple_of(2)
-            && mode.width <= MAX_WIDTH
-            && mode.height <= MAX_HEIGHT
-            && mode.refresh_mhz.div_ceil(1000) <= self.max_fps
-    }
+/// Even sides (4:2:0 video) and at most 3840 x 2160.
+fn fits(mode: &DisplayInfo) -> bool {
+    mode.width.is_multiple_of(2)
+        && mode.height.is_multiple_of(2)
+        && mode.width <= MAX_WIDTH
+        && mode.height <= MAX_HEIGHT
 }
 
 #[cfg(test)]

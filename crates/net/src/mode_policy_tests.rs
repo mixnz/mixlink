@@ -68,11 +68,15 @@ fn tie_prefers_higher_refresh() {
 }
 
 #[test]
-fn refresh_above_max_fps_is_not_used() {
+fn refresh_above_max_fps_is_capped() {
+    // A laptop with one 165 Hz screen still streams, at the host's 120 fps limit.
     let p = policy(CodecChoice::Auto);
-    assert_eq!(p.choose_mode(&[mode(2560, 1440, 144_000)], 0), None);
-    let displays = [mode(2560, 1440, 144_000), mode(1920, 1080, 60_000)];
-    assert_eq!(p.choose_mode(&displays, 0), Some(mode(1920, 1080, 60_000)));
+    assert_eq!(
+        p.choose_mode(&[mode(2560, 1440, 165_000)], 0),
+        Some(mode(2560, 1440, 120_000))
+    );
+    let displays = [mode(1920, 1080, 60_000), mode(2560, 1440, 144_000)];
+    assert_eq!(p.choose_mode(&displays, 1), Some(mode(2560, 1440, 120_000)));
 }
 
 #[test]

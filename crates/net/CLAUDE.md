@@ -33,7 +33,7 @@
 - `endpoint`: `HostControl` (`new`, `on_datagram`, `tick`, `prompt`, `cancel_prompt(tx)`, `paired`, `set_paired`,
   `end_session`, `end_all`: sealed `Bye` x3), `HostControlConfig` (`policy`), `EndpointEvent` (`Paired`, `SessionStarted { keys, mode, codec, .. }`, `SessionEnded`).
 - `mode_policy` (spec 0020): `ModePolicy { max_fps, codec }` (`welcome`, `choose_mode`, `choose_codec`): mode even,
-  ≤ 3840 x 2160, refresh ≤ `max_fps`; else the largest fitting display; `auto` codec = HEVC if offered.
+  ≤ 3840 x 2160, else the largest fitting display; refresh capped at `max_fps`; `auto` codec = HEVC if offered.
 - `stats`, `socket`, `resend` (`ResendTimer`, `HELLO_RESEND` 250 ms, `HELLO_GIVE_UP` 10 s), `handshake`, `error::NetError`.
 - `discovery`: `Advert`, `SERVICE_TYPE`, `CAPS_V1`; `Advertiser` + `AdvertiserConfig`; `Browser` + `BrowserConfig`,
   `ProbeTargets`, `OnChange`, `DiscoveryEvent`; `HostList`, `HostEntry`, `Source`, `EXPIRY` (5 s); `LocalNet`; `wire`.
