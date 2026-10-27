@@ -23,6 +23,7 @@ Environment:
 #include "SurfaceShare.h"
 #include "Control.h"
 #include "Monitors.h"
+#include "CursorShare.h"
 
 using namespace std;
 using namespace Microsoft::IndirectDisp;
@@ -489,11 +490,13 @@ IndirectMonitorContext::IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor, UINT3
 
 IndirectMonitorContext::~IndirectMonitorContext()
 {
+    m_Cursor.reset();
     m_ProcessingThread.reset();
 }
 
 void IndirectMonitorContext::AssignSwapChain(IDDCX_SWAPCHAIN SwapChain, LUID RenderAdapter, HANDLE NewFrameEvent)
 {
+    m_Cursor.reset();
     m_ProcessingThread.reset();
 
     auto Device = make_shared<Direct3DDevice>(RenderAdapter);
@@ -507,11 +510,14 @@ void IndirectMonitorContext::AssignSwapChain(IDDCX_SWAPCHAIN SwapChain, LUID Ren
     {
         // Create a new swap-chain processing thread
         m_ProcessingThread.reset(new SwapChainProcessor(SwapChain, Device, NewFrameEvent, m_Connector, &m_RefreshMhz));
+        // After the swapchain: IddCx takes the hardware cursor setup only once a swapchain is assigned.
+        m_Cursor = std::make_unique<CursorShare>(m_Monitor, m_Connector);
     }
 }
 
 void IndirectMonitorContext::UnassignSwapChain()
 {
+    m_Cursor.reset();
     // Stop processing the last swap-chain
     m_ProcessingThread.reset();
 }

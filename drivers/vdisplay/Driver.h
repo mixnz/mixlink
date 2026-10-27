@@ -94,6 +94,8 @@ namespace Microsoft
             IDDCX_ADAPTER m_Adapter;
         };
 
+        class CursorShare;
+
         class IndirectMonitorContext
         {
         public:
@@ -110,6 +112,8 @@ namespace Microsoft
             UINT32 m_Connector;
             std::atomic<UINT32> m_RefreshMhz{ 0 };
             std::unique_ptr<SwapChainProcessor> m_ProcessingThread;
+            // MixLink (spec 0020): hardware cursor share while a swapchain is assigned.
+            std::unique_ptr<CursorShare> m_Cursor;
         } ;
     }
 }

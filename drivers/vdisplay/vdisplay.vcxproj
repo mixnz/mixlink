@@ -27,6 +27,7 @@
     <ClCompile Include="SurfaceShare.cpp" />
     <ClCompile Include="Control.cpp" />
     <ClCompile Include="Monitors.cpp" />
+    <ClCompile Include="CursorShare.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Driver.h" />
@@ -37,6 +38,7 @@
     <ClInclude Include="SurfaceShare.h" />
     <ClInclude Include="Control.h" />
     <ClInclude Include="Monitors.h" />
+    <ClInclude Include="CursorShare.h" />
     <ClInclude Include="Trace.h" />
   </ItemGroup>
   <ItemGroup>
