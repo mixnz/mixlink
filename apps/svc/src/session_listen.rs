@@ -187,7 +187,7 @@ impl Worker {
         match command {
             SessionCommand::CancelPrompt => {
                 log::info!("pairing prompt cancelled from the tray");
-                self.control.cancel_prompt();
+                self.control.cancel_prompt(&mut self.tx);
                 Vec::new()
             }
             SessionCommand::Remove(device) => {

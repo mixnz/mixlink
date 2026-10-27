@@ -20,6 +20,8 @@ use crate::session::host::{HostSessions, Init, InitOutcome};
 const MAX_PEERS: usize = 8;
 /// A peer without a session is forgotten after this long.
 const IDLE_PEER: Duration = Duration::from_secs(60);
+/// Copies of the close notice sent on cancel; the client also learns on its next PIN.
+const CLOSE_NOTICES: usize = 3;
 
 #[derive(Debug, Clone)]
 pub struct HostControlConfig {
@@ -76,6 +78,8 @@ pub struct HostControl {
     pairing: HostPairing,
     sessions: HostSessions,
     peers: Vec<Peer>,
+    /// Address of the client waiting on the open prompt; that peer is kept past `IDLE_PEER`.
+    prompt_peer: Option<SocketAddrV4>,
 }
 
 impl HostControl {
@@ -84,6 +88,7 @@ impl HostControl {
             pairing: HostPairing::new(config.host, config.keys.clone()),
             sessions: HostSessions::new(config.host, config.keys, config.paired),
             peers: Vec::new(),
+            prompt_peer: None,
         }
     }
 
@@ -111,8 +116,27 @@ impl HostControl {
         self.pairing.prompt(now)
     }
 
-    pub fn cancel_prompt(&mut self) {
-        self.pairing.cancel();
+    /// Closes the prompt and tells the waiting client with `Reject(PairingClosed)`.
+    pub fn cancel_prompt(&mut self, tx: &mut TxLane) {
+        let addr = self.prompt_peer.take();
+        if !self.pairing.cancel() {
+            return;
+        }
+        let Some(peer) = self
+            .peers
+            .iter_mut()
+            .find(|peer| Some(peer.link.peer()) == addr)
+        else {
+            return;
+        };
+        let notice = ControlMessage::Reject {
+            reason: RejectReason::PairingClosed,
+        };
+        for _ in 0..CLOSE_NOTICES {
+            if let Err(error) = peer.link.send(tx, &notice) {
+                log::debug!("close notice not sent: {error}");
+            }
+        }
     }
 
     /// Handles one datagram from the control lane.
@@ -136,6 +160,9 @@ impl HostControl {
     /// Ends sessions with no valid datagram for 10 s, closes an expired prompt, forgets idle peers.
     pub fn tick(&mut self, now: Now) -> Vec<EndpointEvent> {
         self.pairing.expire(now);
+        if !self.pairing.is_open() {
+            self.prompt_peer = None;
+        }
         let mut events = Vec::new();
         for peer in &mut self.peers {
             let stale = peer.live.as_ref().is_some_and(|live| {
@@ -147,6 +174,7 @@ impl HostControl {
         }
         self.peers.retain(|peer| {
             peer.live.is_some()
+                || Some(peer.link.peer()) == self.prompt_peer
                 || now.mono.saturating_duration_since(peer.last_seen.mono) < IDLE_PEER
         });
         events
@@ -233,6 +261,9 @@ impl HostControl {
             }
             _ => match self.pairing.handle(msg, now, random_pin) {
                 Some(event) => {
+                    if matches!(event.reply, ControlMessage::PairPrompt { .. }) {
+                        self.prompt_peer = Some(self.peers[index].link.peer());
+                    }
                     if let Some(paired) = event.paired {
                         self.sessions.add_paired(paired.clone());
                         events.push(EndpointEvent::Paired(paired));

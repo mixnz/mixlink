@@ -1,5 +1,7 @@
 //! Pairing in the tray (spec 0018): the PIN prompt the service reports, paired devices, Remove.
 
+use std::fs::File;
+
 use mixlink_core::ids::DeviceId;
 use mixlink_core::svc_ipc::{PIPE_NAME, PairedInfo, PairingPrompt, SvcPipe, SvcPipeError};
 use serde::Serialize;
@@ -63,8 +65,6 @@ pub fn rows(devices: Vec<PairedInfo>) -> Vec<PairedRow> {
 pub enum TrayPairError {
     #[error(transparent)]
     Pipe(#[from] SvcPipeError),
-    #[error("the pipe is not served by the MixLink service")]
-    Untrusted,
     #[error("bad device id: {0}")]
     Device(String),
 }
@@ -79,18 +79,15 @@ impl Serialize for TrayPairError {
 fn with_pipe<T>(
     f: impl FnOnce(&mut SvcPipe) -> Result<T, SvcPipeError>,
 ) -> Result<T, TrayPairError> {
-    let (mut pipe, _) = SvcPipe::connect(PIPE_NAME)?;
-    if !trusted(&pipe) {
-        return Err(TrayPairError::Untrusted);
-    }
+    let (mut pipe, _) = SvcPipe::connect_checked(PIPE_NAME, trusted)?;
     Ok(f(&mut pipe)?)
 }
 
-/// The pipe server is the MixLink service (spec 0018); always false off Windows.
-pub fn trusted(pipe: &SvcPipe) -> bool {
+/// The server of the pipe `file` is the MixLink service (spec 0018); always false off Windows.
+pub fn trusted(file: &File) -> bool {
     #[cfg(windows)]
     {
-        match crate::platform::windows::pipe_owner::server_is_service(pipe.file()) {
+        match crate::platform::windows::pipe_owner::server_is_service(file) {
             Ok(trusted) => trusted,
             Err(error) => {
                 log::warn!("cannot check the service pipe owner: {error}");
@@ -100,7 +97,7 @@ pub fn trusted(pipe: &SvcPipe) -> bool {
     }
     #[cfg(not(windows))]
     {
-        let _ = pipe;
+        let _ = file;
         false
     }
 }

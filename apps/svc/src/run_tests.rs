@@ -201,3 +201,14 @@ fn display_thread_stops_while_waiting() {
     server.shutdown();
     assert!(started.elapsed() < Duration::from_secs(1));
 }
+
+#[test]
+fn untrusted_server_is_refused_before_hello() {
+    let server = Server::start();
+    let refused = SvcPipe::connect_checked(&server.pipe, |_| false);
+    assert!(matches!(refused, Err(SvcPipeError::Untrusted)));
+    let (mut pipe, _) = SvcPipe::connect_checked(&server.pipe, |_| true).unwrap();
+    assert_eq!(pipe.status().unwrap().state, SvcState::Idle);
+    drop(pipe);
+    server.shutdown();
+}

@@ -75,6 +75,7 @@ pub fn state_from_error(error: &SvcPipeError) -> LinkState {
         SvcPipeError::VersionMismatch { svc_version, .. } => LinkState::VersionMismatch {
             svc_version: svc_version.clone(),
         },
+        SvcPipeError::Untrusted => LinkState::Untrusted,
         SvcPipeError::NotRunning
         | SvcPipeError::Io(_)
         | SvcPipeError::Ipc(_)
@@ -116,14 +117,9 @@ pub fn spawn_link(app: AppHandle) -> std::io::Result<()> {
 fn link_loop(app: &AppHandle) {
     let mut tracker = LinkTracker::default();
     loop {
-        match SvcPipe::connect(PIPE_NAME) {
+        // The server is checked before anything is sent: a fake one may never answer `Hello`.
+        match SvcPipe::connect_checked(PIPE_NAME, trusted) {
             Ok((mut pipe, svc_version)) => {
-                if !trusted(&pipe) {
-                    log::warn!("service pipe is not served by the MixLink service");
-                    publish(app, &mut tracker, LinkState::Untrusted);
-                    thread::sleep(RETRY);
-                    continue;
-                }
                 let mut shown: Option<PromptState> = None;
                 loop {
                     match pipe.status() {
@@ -149,6 +145,10 @@ fn link_loop(app: &AppHandle) {
                     }
                     thread::sleep(POLL);
                 }
+            }
+            Err(SvcPipeError::Untrusted) => {
+                log::warn!("service pipe is not served by the MixLink service");
+                publish(app, &mut tracker, LinkState::Untrusted);
             }
             Err(error) => {
                 log::debug!("service link: {error}");

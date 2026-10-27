@@ -136,6 +136,23 @@ pub fn request(
     }
 }
 
+/// While the user types the PIN: reads what is queued without waiting; true once the host has
+/// sent `Reject(PairingClosed)` (cancelled in the tray). Other messages are stale replies.
+pub fn closed_by_host(link: &mut ControlLink, wire: &mut Wire<'_>) -> bool {
+    let mut closed = false;
+    while let Some(mut dg) = wire.rx.try_recv() {
+        if dg.peer() != link.peer() {
+            continue;
+        }
+        closed |= link.accept(&mut dg).and_then(plain).is_some_and(|msg| {
+            msg == ControlMessage::Reject {
+                reason: RejectReason::PairingClosed,
+            }
+        });
+    }
+    closed
+}
+
 /// Runs one PIN attempt to the end; on success the host is stored as paired on its side too.
 pub fn submit(
     link: &mut ControlLink,

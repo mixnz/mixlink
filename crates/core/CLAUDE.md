@@ -26,8 +26,8 @@
   `CloseReason`, `IpcError`, `encode_line`, `decode_line`.
 - `svc_ipc`: tray <-> service pipe contract (spec 0012, 0018) — `PIPE_VERSION` (2), `PIPE_NAME`, `SERVICE_NAME`, `MAX_LINE`, `TrayToSvc`,
   `SvcToTray` (`Status` has `network_public`, `pairing`; `Paired`, `Done`), `PairingPrompt`, `PairedInfo`,
-  `SvcState`, `StatusReport` (`from_status`), `read_line_limited` / `LineRead`, blocking client `SvcPipe` (`connect`,
-  `request`, `status`, `cancel_pairing`, `list_paired`, `remove_paired`, `file`), `open_pipe` (read + write-data access only, see spec 0012), `SvcPipeError` (`NotRunning` =
+  `SvcState`, `StatusReport` (`from_status`), `read_line_limited` / `LineRead`, blocking client `SvcPipe` (`connect`, `connect_checked` (server check before `Hello`),
+  `request`, `status`, `cancel_pairing`, `list_paired`, `remove_paired`, `file`), `open_pipe` (read + write-data access only, see spec 0012), `SvcPipeError` (`Untrusted`, `NotRunning` =
   pipe missing or busy).
 - `device_io` (Windows): `open_interface(&GUID) -> Result<Option<OwnedHandle>>` (first present interface,
   read + write; `None` = absent), `ioctl(&handle, code, input, output) -> Result<usize>`. Used for `vdisplay`, `vhid`.

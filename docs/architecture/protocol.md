@@ -21,6 +21,9 @@ Spec 0017; code `crates/net/src/discovery/`.
 - 3 `PairStart` attempts per prompt (a repeated message is not an attempt), then `Reject(PairingClosed)`.
   Wrong confirm → `Reject(BadPin)`. Keys: host `%ProgramData%\MixLink\secrets\` (SYSTEM + Admins), client
   `%LOCALAPPDATA%\MixLink\`.
+- Cancel in the tray sends `Reject(PairingClosed)` (3 copies) to the waiting client, which checks every 100 ms
+  while the user types the PIN; a lost notice shows up as the reply to the next `PairStart`. The host keeps
+  the waiting client's peer while the prompt is open (idle peers go after 60 s, prompts last 120 s).
 
 ## Session transport (spec 0018; `crates/net/src/session/`, `crates/proto/src/crypto.rs`)
 - One UDP socket per side (default port 47801), all channels multiplexed.

@@ -195,6 +195,9 @@ pub enum SvcPipeError {
     },
     #[error("unexpected reply from the service")]
     Unexpected,
+    /// The pipe's server is not the MixLink service (spec 0018); nothing was sent to it.
+    #[error("the service pipe is served by another program")]
+    Untrusted,
 }
 
 /// Blocking client end of the service pipe (used by the tray and tests).
@@ -208,7 +211,19 @@ pub struct SvcPipe {
 impl SvcPipe {
     /// Opens the pipe and exchanges `Hello`; returns the service's version.
     pub fn connect(name: &str) -> Result<(SvcPipe, String), SvcPipeError> {
+        SvcPipe::connect_checked(name, |_| true)
+    }
+
+    /// Like `connect`, but `verify` checks the pipe's server before anything is sent; false gives
+    /// `Untrusted`. The tray passes its service-PID check (spec 0018).
+    pub fn connect_checked(
+        name: &str,
+        verify: impl FnOnce(&File) -> bool,
+    ) -> Result<(SvcPipe, String), SvcPipeError> {
         let file = open_pipe(name)?;
+        if !verify(&file) {
+            return Err(SvcPipeError::Untrusted);
+        }
         let writer = file.try_clone().map_err(SvcPipeError::Io)?;
         let mut pipe = SvcPipe {
             reader: BufReader::new(file),

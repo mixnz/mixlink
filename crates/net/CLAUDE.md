@@ -26,10 +26,10 @@
 - `client_store`: `default_dir`, `load_or_create_identity`, `load_known`, `save_known`, `remember`, `forget`.
 - `control_link`: `ControlLink` (`new`, `set_keys`, `send`, `send_sealed`, `accept`, `exchange`), `Wire`, `Incoming`.
 - `pairing`: `PairedDevice`, `KnownHost`, `Now`, `PromptView`, `PairError`, `PROMPT_TIME` (120 s), `MAX_ATTEMPTS` (3);
-  `host::HostPairing`; `client::{PairContext, request, submit, start, finish}`.
+  `host::HostPairing`; `client::{PairContext, request, closed_by_host, submit, start, finish}`.
 - `session`: `client::{connect_secure, SecureSession (ping, bye), init, finish}`; `host::HostSessions`;
   `noise::{NOISE_PATTERN, prologue, derive}`; `PING_EVERY` (1 s), `SESSION_TIMEOUT` (10 s).
-- `endpoint`: `HostControl` (`new`, `on_datagram`, `tick`, `prompt`, `cancel_prompt`, `paired`, `set_paired`),
+- `endpoint`: `HostControl` (`new`, `on_datagram`, `tick`, `prompt`, `cancel_prompt(tx)`, `paired`, `set_paired`),
   `HostControlConfig`, `EndpointEvent` (`Paired`, `SessionStarted`, `SessionEnded`).
 - `stats`, `socket`, `resend` (`ResendTimer`, `HELLO_RESEND` 250 ms, `HELLO_GIVE_UP` 10 s), `handshake`, `error::NetError`.
 - `discovery`: `Advert`, `SERVICE_TYPE`, `CAPS_V1`; `Advertiser` + `AdvertiserConfig`; `Browser` + `BrowserConfig`,

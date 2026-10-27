@@ -258,13 +258,7 @@ impl PairJob {
                 expires_s: u32::try_from(left.as_secs()).unwrap_or(expires_s),
                 wrong_pin,
             });
-            let pin = match pins.recv_timeout(left) {
-                Ok(pin) => pin,
-                Err(RecvTimeoutError::Timeout) => return Err(PairError::Closed),
-                Err(RecvTimeoutError::Disconnected) => {
-                    return Err(PairError::Net(NetError::Cancelled));
-                }
-            };
+            let pin = wait_pin(pins, deadline, &mut link, &mut wire)?;
             self.emit(&PairState::Checking {
                 host: host.to_owned(),
             });
@@ -281,6 +275,31 @@ impl PairJob {
                 }
                 Err(PairError::BadPin) => wrong_pin = true,
                 Err(error) => return Err(error),
+            }
+        }
+    }
+}
+
+/// How often the host is checked for a cancelled prompt while the user types the PIN.
+const CLOSE_POLL: Duration = Duration::from_millis(100);
+
+/// The PIN the user types before `deadline`; `Closed` once the host cancels or time runs out.
+fn wait_pin(
+    pins: &Receiver<u32>,
+    deadline: Instant,
+    link: &mut ControlLink,
+    wire: &mut Wire<'_>,
+) -> Result<u32, PairError> {
+    loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        match pins.recv_timeout(left.min(CLOSE_POLL)) {
+            Ok(pin) => return Ok(pin),
+            Err(RecvTimeoutError::Disconnected) => return Err(PairError::Net(NetError::Cancelled)),
+            Err(RecvTimeoutError::Timeout) if left <= CLOSE_POLL => return Err(PairError::Closed),
+            Err(RecvTimeoutError::Timeout) => {
+                if client::closed_by_host(link, wire) {
+                    return Err(PairError::Closed);
+                }
             }
         }
     }

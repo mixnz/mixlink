@@ -46,14 +46,14 @@ Details live in each spec; one line per item here.
 - T6 pairing (0018): PIN prompt in the tray → SPAKE2 in the launcher; Noise KK session (`svc-session` on 47801),
   host commits on the first sealed Ping; AES-128-GCM datagrams (seal / open p99 0.4 µs); keys in `secrets\`
   (SYSTEM + Admins) and `%LOCALAPPDATA%\MixLink`; pipe v2; tray trusts only the service PID; `net-probe pair | connect`.
+  Two-PC run passes (fixed: tray Cancel reaches the launcher; tray checks the pipe server before `Hello`).
 
 ## In progress
-- T6 open rows (spec 0018 → Results): two-PC pairing + `net-probe connect`, fake pipe server, `secrets\` ACL.
-- T5 open rows (spec 0017 → Results): host with several adapters; "Needs update" row with a host on another
-  version. Main PC: MixLink service and firewall rule removed, `identity.json` kept.
+- T5 open rows (spec 0017 → Results): host with several adapters; "Needs update" row with a host on another version.
 - T21 open rows (spec 0015): frame grab of login / lock screen on the headless monitor (T7 harness), power cut
   during a session, iGPU + dGPU host.
-- Main PC: drivers installed from `target\drivers` (T22 build, no pad added), MixLink service removed.
+- Main PC: drivers installed from `target\drivers` (T22 build, no pad added); MixLink service installed from `dist\`
+  (spec 0018 run), laptop paired with it.
 - Main PC and laptop: `MixLinkS4` removed; main PC: S5 drivers removed (`RESULT CLEAN`). Test
   machine: ViGEmBus may still be installed (Settings → Apps). S2b clean-up (spec 0005 → Verdict) not confirmed.
 

@@ -115,8 +115,14 @@ impl HostPairing {
         })
     }
 
-    pub fn cancel(&mut self) {
-        self.prompt = None;
+    /// Closes the prompt; whether one was open.
+    pub fn cancel(&mut self) -> bool {
+        self.prompt.take().is_some()
+    }
+
+    /// Whether a prompt is open (expired ones count until `expire` runs).
+    pub fn is_open(&self) -> bool {
+        self.prompt.is_some()
     }
 
     /// Closes a prompt whose time is up.

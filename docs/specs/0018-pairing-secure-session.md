@@ -145,19 +145,19 @@ A PIN in a plain HMAC confirm would be brute-forced offline from one exchange (1
 - `tests/no_alloc.rs` (proto, net) cover `seal` / `open`. Handshake and pairing are control plane.
 
 ## Acceptance criteria
-- [ ] Pair from the launcher on a second PC: the tray pops up with the device name and PIN; the right
+- [x] Pair from the launcher on a second PC: the tray pops up with the device name and PIN; the right
       PIN gives "Paired" on both sides; files on both sides hold the peer's key.
-- [ ] A wrong PIN shows "wrong PIN"; after 3 wrong PINs or 120 s the prompt closes and a new request is needed.
-- [ ] Cancel in the tray: the launcher shows the pairing was cancelled.
-- [ ] `net-probe connect` from a paired client: session up, Ping RTT printed, `Bye` ends it; the host log
+- [x] A wrong PIN shows "wrong PIN"; after 3 wrong PINs or 120 s the prompt closes and a new request is needed.
+- [x] Cancel in the tray: the launcher shows the pairing was cancelled.
+- [x] `net-probe connect` from a paired client: session up, Ping RTT printed, `Bye` ends it; the host log
       shows the session start and end.
-- [ ] Unpaired client, or a client removed in the tray: `connect` gets `NotPaired`; launcher shows not paired.
-- [ ] Forget in the launcher: the row shows not paired, `known_hosts.json` loses the entry; Pair works again.
-- [ ] A client with a forged id (real id, other key): handshake fails, no session on the host.
-- [ ] Tampered, replayed, or other-session datagrams are dropped and counted (unit tests; seq wrap included).
-- [ ] Another process holding `\\.\pipe\mixlink-svc` before the service: the tray shows untrusted, no PIN.
-- [ ] Standard user cannot read or write `secrets\` (`icacls`).
-- [ ] Benchmark numbers in Results, p99 ≤ 2 µs per datagram on the main PC.
+- [x] Unpaired client, or a client removed in the tray: `connect` gets `NotPaired`; launcher shows not paired.
+- [x] Forget in the launcher: the row shows not paired, `known_hosts.json` loses the entry; Pair works again.
+- [x] A client with a forged id (real id, other key): handshake fails, no session on the host.
+- [x] Tampered, replayed, or other-session datagrams are dropped and counted (unit tests; seq wrap included).
+- [x] Another process holding `\\.\pipe\mixlink-svc` before the service: the tray shows untrusted, no PIN.
+- [x] Standard user cannot read or write `secrets\` (`icacls`).
+- [x] Benchmark numbers in Results, p99 ≤ 2 µs per datagram on the main PC.
 
 ## Open questions
 Calls made in this spec (review them):
@@ -180,9 +180,9 @@ open 400 / 400 ns (timer step 100 ns), about 3.4 GB/s each way. Target p99 ≤ 2
 | Right PIN pairs, wrong PIN, 3 attempts, 120 s expiry, cancel | automated (`pairing/host_tests.rs`, `pair_loopback.rs`) |
 | Session up + ping + `Bye`; unpaired / removed → `NotPaired`; forged key → no session | automated (`session/host_tests.rs`, `endpoint_tests.rs`, `session_listen_tests.rs`) |
 | Forget clears the row and `known_hosts.json` | automated (`apps/client` `pairing_tests.rs`) |
-| Two PCs: launcher pairing, tray prompt, Cancel, `net-probe connect` RTT | open (manual run) |
-| Fake pipe server → tray `untrusted` | open (manual run) |
-| `secrets\` ACL for a standard user (`icacls`) | open (manual run, needs the installed service) |
+| Two PCs: launcher pairing, tray prompt, Cancel, `net-probe connect` RTT | pass (2026-10-27, host main PC Wi-Fi Private, client laptop): Cancel, wrong then right PIN, `known_hosts.json`; connect RTT p50 3.8 ms, p99 8.4 ms (Wi-Fi); Remove → `NotPaired` + forgotten; `net-probe pair`; Forget local only. First run: Cancel did not reach the launcher, fixed (host sends `Reject(PairingClosed)`) |
+| Fake pipe server → tray `untrusted` | pass (PowerShell pipe server, service stopped). First run: tray sent `Hello` before the check and showed "not running", fixed (`connect_checked`). A server that accepts once then holds the pipe reads as busy → "not running" |
+| `secrets\` ACL for a standard user (`icacls`) | pass: SYSTEM + Administrators only, not inherited; non-elevated read of the folder and `host_key.json` denied |
 
 - Built on: snow 0.10 needs `use-chacha20poly1305` (it imports `KeyInit` only behind it) and `risky-raw-split`.
 - One `ControlLink` per peer for its whole life: a new link to the same address restarts frame numbers at 0

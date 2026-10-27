@@ -3,11 +3,11 @@
 use std::time::{Duration, Instant};
 
 use mixlink_proto::channel::Channel;
-use mixlink_proto::control::DisplayInfo;
+use mixlink_proto::control::{Blob, DisplayInfo};
 use mixlink_proto::header::WIRE_VERSION;
 
 use super::*;
-use crate::control_link::Incoming;
+use crate::control_link::{Incoming, Wire};
 use crate::keys::ClientIdentity;
 use crate::lane::RxLane;
 use crate::pairing::KnownHost;
@@ -305,4 +305,64 @@ fn pairing_through_endpoint() {
         ControlMessage::PairDone
     );
     assert_eq!(h.host.paired().len(), 1);
+}
+
+/// Opens a prompt for `me`; returns the client's link to the host.
+fn open_prompt(h: &mut Harness, client: &mut Side, me: &ClientIdentity) -> ControlLink {
+    let mut link = ControlLink::new(h.host_side.addr);
+    let ctx = PairContext {
+        me: me.clone(),
+        name: "Laptop".to_owned(),
+        host: HOST,
+        host_name: "Desk".to_owned(),
+    };
+    link.send(&mut client.tx, &ctx.request()).unwrap();
+    pump(h, 0);
+    assert!(matches!(
+        client_recv(client, &mut link).unwrap().msg,
+        ControlMessage::PairPrompt { .. }
+    ));
+    link
+}
+
+#[test]
+fn cancel_tells_waiting_client() {
+    let me = identity(1);
+    let mut h = harness(Vec::new());
+    let mut client = side();
+    let mut link = open_prompt(&mut h, &mut client, &me);
+    h.host.cancel_prompt(&mut h.host_side.tx);
+    assert!(h.host.prompt(at(&h, 1)).is_none());
+    std::thread::sleep(Duration::from_millis(100));
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let mut wire = Wire {
+        tx: &mut client.tx,
+        rx: &mut client.rx,
+        cancel: &cancel,
+    };
+    assert!(pair_client::closed_by_host(&mut link, &mut wire));
+    // Nothing is sent once no prompt is open.
+    h.host.cancel_prompt(&mut h.host_side.tx);
+    std::thread::sleep(Duration::from_millis(100));
+    assert!(client_recv(&mut client, &mut link).is_none());
+}
+
+#[test]
+fn prompt_peer_outlives_idle_time() {
+    let me = identity(1);
+    let mut h = harness(Vec::new());
+    let mut client = side();
+    let mut link = open_prompt(&mut h, &mut client, &me);
+    assert!(h.host.tick(at(&h, 90)).is_empty());
+    // A reply from a fresh host link would restart frame numbers and be dropped as late.
+    link.send(
+        &mut client.tx,
+        &ControlMessage::PairStart {
+            device: me.id,
+            spake: Blob(vec![0; 33]),
+        },
+    )
+    .unwrap();
+    pump(&mut h, 91);
+    assert!(client_recv(&mut client, &mut link).is_some());
 }

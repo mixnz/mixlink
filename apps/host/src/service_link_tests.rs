@@ -76,6 +76,10 @@ fn state_from_error_maps_version_mismatch() {
         state_from_error(&SvcPipeError::NotRunning),
         LinkState::NotRunning
     );
+    assert_eq!(
+        state_from_error(&SvcPipeError::Untrusted),
+        LinkState::Untrusted
+    );
 }
 
 #[test]

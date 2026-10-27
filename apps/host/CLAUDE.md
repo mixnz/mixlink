@@ -25,7 +25,7 @@ Talks to `mixlink-svc` over a named pipe (ADR-0005, spec 0012); the pipeline liv
 - Tray menu ids: `open`, `quit`; tray id `main` (tooltip follows `LinkState`).
 
 ## Notes
-- Thread `host-svc-link`: connects to `svc_ipc::PIPE_NAME`, checks the pipe server's PID is the `MixLink` service
+- Thread `host-svc-link`: connects to `svc_ipc::PIPE_NAME`, checks the pipe server's PID is the `MixLink` service before `Hello`
   (`untrusted` otherwise, also for `--console`), asks `GetStatus` every 1 s, retries every 2 s after any error.
   Never joined; app exit ends it.
 - A new PIN prompt shows and focuses the window. Pairing commands open their own short pipe connection (same check).
