@@ -7,7 +7,7 @@
 **Hot path:** `clock::now` and `StageStamps::mark`/`mark_at` are called per frame: allocation-free.
 
 ## Layout
-- `ids.rs`, `clock.rs`, `stage.rs`, `config.rs`, `ipc.rs`, `svc_ipc.rs`, `error.rs`, `mmcss.rs` (each + `<name>_tests.rs`)
+- `ids.rs`, `hex.rs`, `clock.rs`, `stage.rs`, `config.rs`, `ipc.rs`, `svc_ipc.rs`, `error.rs`, `mmcss.rs` (each + `<name>_tests.rs`)
 - `platform/windows/{qpc,mmcss,device_io}.rs`, `platform/fallback.rs` (`Instant`, no MMCSS; non-Windows): the only platform code.
 
 ## Public API
@@ -18,7 +18,8 @@
   `get`, `span`).
 - `config`: `CONFIG_VERSION`, `MAX_NAME_BYTES` (63, shared with `proto::control`), `HostConfig`,
   `ClientConfig` (`from_json`, `to_json_pretty`, `validate`), `NetConfig`, `VideoConfig`.
-- `error`: `IdParseError`, `ConfigError`.
+- `hex`: `encode` (lowercase), `decode_into`, `decode_vec` (both cases accepted), `digit`.
+- `error`: `IdParseError`, `HexError`, `ConfigError`.
 - `mmcss`: `MmcssTask` (`ProAudio` critical, `Games` high), `Mmcss::enter(task) -> Option<Mmcss>` (reverts on drop,
   same thread; `None` + warning when refused).
 - `ipc`: launcher <-> stream JSON-lines contract — `IPC_VERSION`, `StreamToLauncher`, `LauncherToStream`,

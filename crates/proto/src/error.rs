@@ -51,6 +51,27 @@ pub enum ControlError {
     NameTooLong { len: usize },
 }
 
+/// A datagram that cannot be sealed or opened (spec 0018). Opening failures are also counted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum CryptoError {
+    #[error("datagram too short to seal or open")]
+    TooShort,
+    #[error("no room for the authentication tag")]
+    NoRoom,
+    #[error("datagram is on another channel")]
+    WrongChannel,
+    #[error("seq is not newer than the last sealed one")]
+    SeqNotNewer,
+    #[error("seq counter exhausted for this session")]
+    Exhausted,
+    #[error("authentication tag does not match")]
+    BadTag,
+    #[error("datagram already received")]
+    Replayed,
+    #[error("datagram older than the replay window")]
+    TooOld,
+}
+
 /// A cursor message that does not follow the fixed layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum CursorError {

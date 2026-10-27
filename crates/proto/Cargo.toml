@@ -10,6 +10,7 @@ mixlink-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+aes-gcm.workspace = true
 
 [lints]
 workspace = true

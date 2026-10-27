@@ -32,6 +32,14 @@ windows = "0.62.2"
 winit = "0.30.13"
 tauri = "2.12.5"
 tauri-build = "2.7.4"
+# Crypto (spec 0018).
+aes-gcm = { version = "0.11.1", default-features = false, features = ["aes"] }
+hkdf = "0.13.0"
+hmac = "0.13.0"
+sha2 = "0.11.1"
+snow = { version = "0.10.0", default-features = false, features = ["use-aes-gcm", "use-sha2", "use-curve25519", "use-getrandom", "std"] }
+spake2 = "0.4.0"
+getrandom = "0.3.4"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

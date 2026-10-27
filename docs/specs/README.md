@@ -19,5 +19,6 @@
 | 0015 | [0015-virtual-display](0015-virtual-display.md) | done |
 | 0016 | [0016-virtual-hid](0016-virtual-hid.md) | done |
 | 0017 | [0017-lan-discovery](0017-lan-discovery.md) | done |
+| 0018 | [0018-pairing-secure-session](0018-pairing-secure-session.md) | in-progress |
 
 Rules: `../conventions/docs-writing.md`. Template: `_template.md`.
