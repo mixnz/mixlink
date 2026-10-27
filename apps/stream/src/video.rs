@@ -1,9 +1,10 @@
 //! The `video` thread: owns the presenter and the decoder, decodes every queued access unit and
-//! presents only the newest frame (spec 0013). The winit thread only passes sizes in.
+//! presents only the newest frame (spec 0013), with the host cursor (spec 0020). The winit thread only
+//! passes sizes in.
 
 use std::io;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -14,7 +15,8 @@ use mixlink_core::stage::{Stage, StageStamps};
 use mixlink_render::{Presenter, VideoFrame};
 use winit::raw_window_handle::HasWindowHandle;
 
-use crate::au_queue::AuReceiver;
+use crate::au_queue::{AuInfo, AuReceiver};
+use crate::net::cursor_state::{CursorChange, CursorRx};
 use crate::stats::{FrameStats, STATS_FRAMES};
 
 /// Shown until the first video frame (and without video).
@@ -31,13 +33,31 @@ pub enum VideoEvent {
     Failed(String),
 }
 
-/// Access units to decode (play mode now, network later).
+/// Access units to decode: a file (play mode) or the network (spec 0020).
 #[derive(Debug)]
 pub struct VideoSource {
     pub rx: AuReceiver,
-    pub codec: VideoCodec,
+    /// Set before the first AU (play: at start; network: from `Welcome`); the decoder opens then.
+    pub codec: Arc<OnceLock<VideoCodec>>,
     /// Wait for the GPU after each decode so `DecodeEnd` is GPU-complete.
     pub measure: bool,
+    /// Network mode: the host cursor, drawn over the video.
+    pub cursor: Option<CursorRx>,
+    /// Set when an AU did not decode, so the network asks the host for a keyframe.
+    pub want_keyframe: Arc<AtomicBool>,
+}
+
+impl VideoSource {
+    /// Play mode: the codec is known, no cursor.
+    pub fn play(rx: AuReceiver, codec: VideoCodec, measure: bool) -> Self {
+        Self {
+            rx,
+            codec: Arc::new(OnceLock::from(codec)),
+            measure,
+            cursor: None,
+            want_keyframe: Arc::default(),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -100,15 +120,14 @@ fn run<W: HasWindowHandle + Send + Sync + 'static>(
     stats: &mut FrameStats,
 ) -> Result<(), String> {
     let mut presenter = Presenter::new(window, size.0, size.1).map_err(|e| e.to_string())?;
-    let mut video = match source {
-        Some(source) => {
-            source.rx.attach_current_thread();
-            let decoder =
-                Decoder::new(&presenter.device(), source.codec).map_err(|e| e.to_string())?;
-            Some((source, decoder))
+    let mut video = source.map(|source| {
+        source.rx.attach_current_thread();
+        if let Some(cursor) = &source.cursor {
+            cursor.attach_current_thread();
         }
-        None => None,
-    };
+        (source, None::<Decoder>)
+    });
+    let mut loaded_shape = 0u32;
     presenter
         .clear_and_present(IDLE_COLOR)
         .map_err(|e| e.to_string())?;
@@ -125,14 +144,31 @@ fn run<W: HasWindowHandle + Send + Sync + 'static>(
         }
         let newest = match video.as_mut() {
             Some((source, decoder)) => {
-                decode_queued(source, decoder, &mut presenter, &mut frame_id, stats)?
+                if let Some(cursor) = source.cursor.as_mut()
+                    && let Some(change) = cursor.take()
+                {
+                    apply_cursor(&mut presenter, change, &mut loaded_shape)?;
+                    redraw = true;
+                }
+                if decoder.is_none()
+                    && let Some(codec) = source.codec.get()
+                {
+                    let opened = Decoder::new(&presenter.device(), *codec);
+                    *decoder = Some(opened.map_err(|e| e.to_string())?);
+                }
+                match decoder.as_mut() {
+                    Some(decoder) => {
+                        decode_queued(source, decoder, &mut presenter, &mut frame_id, stats)?
+                    }
+                    None => None,
+                }
             }
             None => None,
         };
-        if let Some((frame, mut stamps)) = newest {
+        if let Some((frame, mut stamps, info)) = newest {
             present(&mut presenter, &frame)?;
             stamps.mark(Stage::Presented);
-            stats.record(&stamps);
+            stats.record_with(&stamps, &info);
             stats.presented += 1;
             shown = Some(frame);
         } else if redraw {
@@ -157,7 +193,7 @@ fn decode_queued(
     presenter: &mut Presenter,
     frame_id: &mut u32,
     stats: &mut FrameStats,
-) -> Result<Option<(DecodedFrame, StageStamps)>, String> {
+) -> Result<Option<(DecodedFrame, StageStamps, AuInfo)>, String> {
     let mut newest = None;
     while let Some(au) = source.rx.try_recv() {
         let mut stamps = StageStamps::new(FrameId::new(*frame_id));
@@ -171,16 +207,37 @@ fn decode_queued(
                 }
                 stamps.mark(Stage::DecodeEnd);
                 stats.decoded += 1;
-                if newest.replace((frame, stamps)).is_some() {
+                if newest.replace((frame, stamps, au.info())).is_some() {
                     stats.dropped += 1;
                 }
             }
             Ok(None) => {}
-            Err(CodecError::Corrupt) => stats.corrupt += 1,
+            Err(CodecError::Corrupt) => {
+                stats.corrupt += 1;
+                source.want_keyframe.store(true, Ordering::Release);
+            }
             Err(e) => return Err(e.to_string()),
         }
     }
     Ok(newest)
+}
+
+/// A new shape is uploaded; the cursor is drawn only while its shape is the one loaded (a lost shape
+/// hides it until the host resends it).
+fn apply_cursor(
+    presenter: &mut Presenter,
+    change: CursorChange,
+    loaded: &mut u32,
+) -> Result<(), String> {
+    if let Some((id, image)) = change.new_shape {
+        presenter
+            .set_cursor(Some(&image))
+            .map_err(|e| e.to_string())?;
+        *loaded = id;
+    }
+    let draw = (change.shape_id != 0 && change.shape_id == *loaded).then_some(change.draw);
+    presenter.move_cursor(draw);
+    Ok(())
 }
 
 // HOT PATH

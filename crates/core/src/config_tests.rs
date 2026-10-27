@@ -227,3 +227,12 @@ fn codec_hevc_parses() {
         r#""h264""#
     );
 }
+
+#[test]
+fn computer_name_is_cut_on_a_char_boundary() {
+    assert_eq!(fit_name("Den PC"), "Den PC");
+    let long = "é".repeat(40);
+    let cut = fit_name(&long);
+    assert!(cut.len() <= MAX_NAME_BYTES);
+    assert_eq!(cut.len(), 62, "31 two-byte chars");
+}

@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use mixlink_core::config::MAX_NAME_BYTES;
+use mixlink_core::config::computer_name;
 use mixlink_core::ids::DeviceId;
 use mixlink_net::client_store;
 use mixlink_net::control_link::{ControlLink, Wire};
@@ -107,12 +107,7 @@ fn store_dir() -> Result<PathBuf, String> {
 
 /// This PC's name as hosts see it; at most 63 bytes, cut on a character boundary.
 fn device_name() -> String {
-    let name = std::env::var("COMPUTERNAME").unwrap_or_else(|_| strings::DEVICE_NAME.to_owned());
-    let mut end = name.len().min(MAX_NAME_BYTES);
-    while !name.is_char_boundary(end) {
-        end -= 1;
-    }
-    name[..end].to_owned()
+    computer_name(strings::DEVICE_NAME)
 }
 
 fn parse_id(id: &str) -> Result<DeviceId, String> {

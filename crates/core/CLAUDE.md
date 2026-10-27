@@ -16,7 +16,7 @@
 - `clock`: `Ticks` (`ZERO`, `from_raw`, `raw`, `duration_since`), `now()`, `ticks_per_sec()`.
 - `stage`: `Stage` (8 stages, `COUNT`, `ALL`, `index`), `StageStamps` (`new`, `frame`, `mark`, `mark_at`,
   `get`, `span`).
-- `config`: `CONFIG_VERSION`, `MAX_NAME_BYTES` (63, shared with `proto::control`), `HostConfig`,
+- `config`: `CONFIG_VERSION`, `MAX_NAME_BYTES` (63, shared with `proto::control`), `computer_name`, `fit_name`, `HostConfig`,
   `ClientConfig` (`from_json`, `to_json_pretty`, `validate`), `NetConfig`, `VideoConfig` (`codec`: `CodecChoice`
   `auto` / `h264` / `hevc`, spec 0020).
 - `hex`: `encode` (lowercase), `decode_into`, `decode_vec` (both cases accepted), `digit`.

@@ -2703,6 +2703,8 @@ dependencies = [
  "log",
  "mixlink-codec",
  "mixlink-core",
+ "mixlink-net",
+ "mixlink-proto",
  "mixlink-render",
  "rtrb",
  "thiserror 2.0.21",

@@ -11,6 +11,20 @@ pub const CONFIG_VERSION: u32 = 1;
 
 /// Device name limit in UTF-8 bytes (mDNS label); config and the control handshake share it.
 pub const MAX_NAME_BYTES: usize = 63;
+
+/// This PC's name for the other side (`COMPUTERNAME`), else `fallback`; cut to `MAX_NAME_BYTES`.
+pub fn computer_name(fallback: &str) -> String {
+    fit_name(&std::env::var("COMPUTERNAME").unwrap_or_else(|_| fallback.to_owned()))
+}
+
+/// `name` cut to at most `MAX_NAME_BYTES` on a char boundary.
+pub fn fit_name(name: &str) -> String {
+    let mut end = name.len().min(MAX_NAME_BYTES);
+    while !name.is_char_boundary(end) {
+        end -= 1;
+    }
+    name[..end].to_owned()
+}
 const FPS_RANGE: std::ops::RangeInclusive<u32> = 1..=240;
 const BITRATE_KBPS_RANGE: std::ops::RangeInclusive<u32> = 1_000..=500_000;
 

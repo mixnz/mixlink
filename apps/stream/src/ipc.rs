@@ -3,7 +3,10 @@
 
 use std::io::{self, BufRead, Write};
 
-use mixlink_core::ipc::{LauncherToStream, StreamToLauncher, decode_line, encode_line};
+use mixlink_core::ipc::{
+    CloseReason, LauncherToStream, StreamToLauncher, decode_line, encode_line,
+};
+use mixlink_proto::control::{CodecId, DisplayInfo};
 use mixlink_stream::video::VideoEvent;
 
 /// Event forwarded to the window event loop (stdin thread, video thread).
@@ -14,6 +17,18 @@ pub enum StreamEvent {
     LauncherGone,
     /// From the video thread.
     Video(VideoEvent),
+    /// From `stream-net` (spec 0020).
+    Net(NetEvent),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NetEvent {
+    Connected {
+        mode: DisplayInfo,
+        codec: CodecId,
+    },
+    /// The session ended from the host side or the network.
+    Ended(CloseReason),
 }
 
 /// Reads launcher commands until EOF. Undecodable lines are logged and skipped.
