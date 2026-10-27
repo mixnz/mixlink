@@ -1,11 +1,9 @@
 //! NV12 → BGRA draw pass: limited range, BT.601 or BT.709 per frame, bilinear, aspect fit
 //! (specs 0013, 0019).
-//! Shaders are compiled once at start with `D3DCompile` (ships with Windows): no shader tools
-//! in the build.
+//! Shaders are compiled once at start (`shader::compile`).
 
 use mixlink_core::video::ColorMatrix;
-use windows::Win32::Graphics::Direct3D::Fxc::{D3DCOMPILE_OPTIMIZATION_LEVEL3, D3DCompile};
-use windows::Win32::Graphics::Direct3D::{D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, ID3DBlob};
+use windows::Win32::Graphics::Direct3D::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 use windows::Win32::Graphics::Direct3D11::{
     D3D11_BIND_CONSTANT_BUFFER, D3D11_BUFFER_DESC, D3D11_COMPARISON_NEVER,
     D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_SAMPLER_DESC, D3D11_TEXTURE_ADDRESS_CLAMP,
@@ -13,9 +11,10 @@ use windows::Win32::Graphics::Direct3D11::{
     ID3D11PixelShader, ID3D11RenderTargetView, ID3D11SamplerState, ID3D11ShaderResourceView,
     ID3D11VertexShader,
 };
-use windows::core::{PCSTR, s};
+use windows::core::s;
 
 use super::nv12_views::ViewCache;
+use super::shader::{blob_bytes, compile, filled, win32};
 use crate::viewport::fit;
 use crate::{RenderError, VideoFrame};
 
@@ -30,15 +29,6 @@ fn coefficients(matrix: ColorMatrix) -> [f32; 4] {
     }
 }
 
-fn win32(context: &'static str) -> impl FnOnce(windows::core::Error) -> RenderError {
-    move |source| RenderError::Win32 { context, source }
-}
-
-/// Unwraps a `windows` out-parameter that a successful call must have filled.
-fn filled<T>(value: Option<T>, context: &'static str) -> Result<T, RenderError> {
-    value.ok_or_else(|| win32(context)(windows::core::Error::empty()))
-}
-
 #[derive(Debug)]
 pub(crate) struct Nv12Pass {
     vs: ID3D11VertexShader,
@@ -51,8 +41,8 @@ pub(crate) struct Nv12Pass {
 
 impl Nv12Pass {
     pub(crate) fn new(device: &ID3D11Device) -> Result<Self, RenderError> {
-        let vs_code = compile(s!("vs_main"), s!("vs_4_0"))?;
-        let ps_code = compile(s!("ps_main"), s!("ps_4_0"))?;
+        let vs_code = compile(SHADER, s!("nv12.hlsl"), s!("vs_main"), s!("vs_4_0"))?;
+        let ps_code = compile(SHADER, s!("nv12.hlsl"), s!("ps_main"), s!("ps_4_0"))?;
         let (mut vs, mut ps, mut sampler, mut crop) = (None, None, None, None);
         let sampler_desc = D3D11_SAMPLER_DESC {
             Filter: D3D11_FILTER_MIN_MAG_MIP_LINEAR,
@@ -144,33 +134,6 @@ impl Nv12Pass {
         }
         Ok(())
     }
-}
-
-fn compile(entry: PCSTR, target: PCSTR) -> Result<ID3DBlob, RenderError> {
-    let mut code = None;
-    // SAFETY: the source slice is valid for its length; `code` is a valid out-pointer.
-    unsafe {
-        D3DCompile(
-            SHADER.as_ptr().cast(),
-            SHADER.len(),
-            s!("nv12.hlsl"),
-            None,
-            None,
-            entry,
-            target,
-            D3DCOMPILE_OPTIMIZATION_LEVEL3,
-            0,
-            &mut code,
-            None,
-        )
-    }
-    .map_err(win32("D3DCompile"))?;
-    filled(code, "D3DCompile")
-}
-
-fn blob_bytes(blob: &ID3DBlob) -> &[u8] {
-    // SAFETY: the blob owns `GetBufferSize` bytes at `GetBufferPointer` while borrowed.
-    unsafe { std::slice::from_raw_parts(blob.GetBufferPointer().cast(), blob.GetBufferSize()) }
 }
 
 #[cfg(test)]

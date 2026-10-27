@@ -17,8 +17,10 @@ use windows::Win32::Graphics::Dxgi::{
 };
 use windows::core::Interface;
 
+use super::cursor_pass::CursorPass;
 use super::device::{create_device, create_event_query};
 use super::nv12::Nv12Pass;
+use crate::cursor::{CursorDraw, CursorImage};
 use crate::{RenderError, VideoFrame};
 
 const BUFFER_COUNT: u32 = 2;
@@ -32,6 +34,9 @@ pub(crate) struct D3d11Swapchain {
     minimized: bool,
     size: (u32, u32),
     nv12: Nv12Pass,
+    cursor: CursorPass,
+    /// Where the cursor goes on the next present; `None` = no cursor.
+    cursor_at: Option<CursorDraw>,
     /// Event query for `wait_gpu` (made once).
     gpu_done: ID3D11Query,
 }
@@ -75,6 +80,7 @@ impl D3d11Swapchain {
         };
         let minimized = width == 0 || height == 0;
         let nv12 = Nv12Pass::new(&device)?;
+        let cursor = CursorPass::new(&device)?;
         let gpu_done = create_event_query(&device)?;
         let mut this = Self {
             device,
@@ -84,6 +90,8 @@ impl D3d11Swapchain {
             minimized,
             size: (width, height),
             nv12,
+            cursor,
+            cursor_at: None,
             gpu_done,
         };
         if !minimized {
@@ -122,6 +130,14 @@ impl D3d11Swapchain {
         self.device.clone()
     }
 
+    pub(crate) fn set_cursor(&mut self, image: Option<&CursorImage>) -> Result<(), RenderError> {
+        self.cursor.set_image(&self.device, image)
+    }
+
+    pub(crate) fn move_cursor(&mut self, at: Option<CursorDraw>) {
+        self.cursor_at = at;
+    }
+
     // HOT PATH
     pub(crate) fn present_nv12(&mut self, frame: &VideoFrame) -> Result<(), RenderError> {
         if self.minimized {
@@ -129,6 +145,10 @@ impl D3d11Swapchain {
         }
         let rtv = self.current_rtv()?;
         self.nv12.draw(&self.context, frame, &rtv, self.size)?;
+        if let Some(at) = self.cursor_at {
+            let video = (frame.width, frame.height);
+            self.cursor.draw(&self.context, &rtv, self.size, video, at);
+        }
         // SAFETY: live swapchain; sync interval 0: never waits for vblank, DWM shows the newest.
         unsafe { self.swapchain.Present(0, DXGI_PRESENT(0)) }
             .ok()
