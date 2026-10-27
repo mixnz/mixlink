@@ -33,16 +33,10 @@
     <ClInclude Include="SharedHeader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="FrameShare12.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Control.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Monitors.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="SwapChain12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SurfaceShare.h">
@@ -65,16 +59,10 @@
     <ClCompile Include="SharedHeader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="FrameShare12.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Control.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Monitors.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="SwapChain12.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SurfaceShare.cpp">

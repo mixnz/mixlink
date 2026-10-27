@@ -57,7 +57,10 @@ namespace Microsoft
         class SwapChainProcessor
         {
         public:
-            SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, std::shared_ptr<Direct3DDevice> Device, HANDLE NewFrameEvent);
+            // MixLink (spec 0019): Connector names the frame share; RefreshMhz is the monitor's committed refresh
+            // (owned by the monitor context, which outlives this processor).
+            SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, std::shared_ptr<Direct3DDevice> Device, HANDLE NewFrameEvent,
+                UINT32 Connector, const std::atomic<UINT32>* RefreshMhz);
             ~SwapChainProcessor();
 
         private:
@@ -69,8 +72,8 @@ namespace Microsoft
             IDDCX_SWAPCHAIN m_hSwapChain;
             std::shared_ptr<Direct3DDevice> m_Device;
             HANDLE m_hAvailableBufferEvent;
-            UINT32 m_Levers = 0; // lever bits for this swapchain (Levers.h, spec 0005)
-            HRESULT m_L1Hr = S_OK; // result of the L1 MMCSS setup in Run()
+            UINT32 m_Connector;
+            const std::atomic<UINT32>* m_RefreshMhz;
             Microsoft::WRL::Wrappers::Thread m_hThread;
             Microsoft::WRL::Wrappers::Event m_hTerminateEvent;
         };
@@ -94,14 +97,18 @@ namespace Microsoft
         class IndirectMonitorContext
         {
         public:
-            IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor);
+            IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor, UINT32 Connector);
             virtual ~IndirectMonitorContext();
 
             void AssignSwapChain(IDDCX_SWAPCHAIN SwapChain, LUID RenderAdapter, HANDLE NewFrameEvent);
             void UnassignSwapChain();
+            // MixLink (spec 0019): refresh of the mode Windows committed, in millihertz; 0 when inactive.
+            void SetRefreshMhz(UINT32 RefreshMhz) { m_RefreshMhz.store(RefreshMhz); }
 
         private:
             IDDCX_MONITOR m_Monitor;
+            UINT32 m_Connector;
+            std::atomic<UINT32> m_RefreshMhz{ 0 };
             std::unique_ptr<SwapChainProcessor> m_ProcessingThread;
         } ;
     }
