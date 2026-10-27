@@ -79,9 +79,10 @@ fn encode_one<S: FrameSource, E: EncodeSink<S>>(
         }
     };
     let nanos = |d: Duration| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX);
+    // From the driver's acquire: IddCx's present stamp is the planned display time, often later.
     stats
         .capture
-        .push(nanos(frame.captured().duration_since(frame.present_qpc())));
+        .push(nanos(frame.captured().duration_since(frame.acquire_qpc())));
     stats.encode.push(nanos(end.duration_since(start)));
     stats.au_bytes.push(bytes as u64);
     Ok(sent)

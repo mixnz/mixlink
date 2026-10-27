@@ -105,7 +105,7 @@ DWM → IddCx swapchain → vdisplay RunCore: acquire → GPU touch + fence sign
 - Priority levers on `cap-frames`: MMCSS "Pro Audio" critical, `IDXGIDevice::SetGPUThreadPriority(7)` on
   the reader's device, `HIGH_PRIORITY_CLASS`. Hidden `--levers mmcss,gpu,class|none` (default all).
 - Report at the end: frames, IDRs, `HoldTimeouts`, `RingFallbacks`, p50 / p99 / max of
-  capture (`present_qpc → Captured`), encode (`EncodeStart → EncodeEnd`), and AU size.
+  capture (`acquire_qpc → captured`; IddCx's present stamp is the planned display time), encode (`EncodeStart → EncodeEnd`), and AU size.
 
 ## Latency impact
 - Capture budget ≤ 1 ms: S2b measured 256 µs p99 (present → reader) with L1 + L3; the 1-texel copy adds a

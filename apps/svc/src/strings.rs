@@ -191,7 +191,7 @@ pub fn capture_report(stats: &crate::capture::report::Stats, out: &std::path::Pa
     let (cap, enc, au) = (&stats.capture, &stats.encode, &stats.au_bytes);
     format!(
         "Saved {}. Frames {}, keyframes {}, size changes {}.\n\
-         Capture (present to encoder): p50 {:.2} ms, p99 {:.2} ms, max {:.2} ms\n\
+         Capture (driver to encoder): p50 {:.2} ms, p99 {:.2} ms, max {:.2} ms\n\
          Encode: p50 {:.2} ms, p99 {:.2} ms, max {:.2} ms\n\
          Frame size: p50 {} KiB, max {} KiB\n\
          Driver waits that ran out: {}, ring copies: {}, frames not saved (a keyframe follows each): {}",

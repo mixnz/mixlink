@@ -72,7 +72,7 @@ pub struct Stats {
     pub hold_timeouts: u32,
     pub ring_fallbacks: u32,
     pub dropped_aus: u64,
-    /// DWM present → frame ready for the encoder (ns).
+    /// Driver acquire → frame ready for the encoder (ns).
     pub capture: Samples,
     /// Encode call (ns).
     pub encode: Samples,

@@ -15,6 +15,9 @@ enum Step {
     Stop,
 }
 
+/// Driver acquire → frame ready, in clock ticks.
+const CAPTURE_TICKS: u64 = 5000;
+
 #[derive(Debug)]
 struct FakeFrame(u64);
 
@@ -28,14 +31,15 @@ impl Frame for FakeFrame {
     fn height(&self) -> u32 {
         64
     }
+    /// IddCx gives the planned display time: later than the capture itself.
     fn present_qpc(&self) -> Ticks {
-        Ticks::from_raw(1000)
+        Ticks::from_raw(1_000_000)
     }
     fn acquire_qpc(&self) -> Ticks {
-        Ticks::from_raw(1001)
+        Ticks::from_raw(1000)
     }
     fn captured(&self) -> Ticks {
-        Ticks::from_raw(1002)
+        Ticks::from_raw(1000 + CAPTURE_TICKS)
     }
 }
 
@@ -191,6 +195,14 @@ fn idle_timeout_is_not_an_error() {
 fn stop_ends_loop() {
     let (sink, _) = run(&[Step::Reopen(64, 64), Step::Stop, Step::Frame(1)]);
     assert_eq!(sink.log, [("reopen", 64, false)]);
+}
+
+#[test]
+fn capture_time_counts_from_acquire() {
+    let (_, stats) = run(&[Step::Reopen(64, 64), Step::Frame(1)]);
+    let want = Ticks::from_raw(1000 + CAPTURE_TICKS).duration_since(Ticks::from_raw(1000));
+    assert_eq!(u128::from(stats.capture.max()), want.as_nanos());
+    assert!(stats.capture.max() > 0);
 }
 
 #[test]
