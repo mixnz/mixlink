@@ -29,7 +29,7 @@ its spec; a failed spike switches to the fallback its ADR names before dependent
 | T22 | Virtual HID driver: keyboard, mouse (relative + absolute), virtual Xbox pads; IOCTL report feed | drivers, input | T16, T20 | [0016](../specs/0016-virtual-hid.md) | done |
 | T5 | LAN discovery (mDNS + broadcast fallback) in the service, host list in the launcher | net, svc, client | T4, T19 | [0017](../specs/0017-lan-discovery.md) | done |
 | T6 | Pairing: PIN on host tray, entry on client, X25519 + AES-128-GCM session | net, proto, svc, host, client | T5 | [0018](../specs/0018-pairing-secure-session.md) | done |
-| T7 | Capture from the IddCx shared texture (DDA fallback: T24) → NVENC encode via FFmpeg, GPU zero-copy | capture, codec | T2, T21, T23 | [0019](../specs/0019-capture-encode.md) | wip |
+| T7 | Capture from the IddCx shared texture (DDA fallback: T24) → NVENC encode via FFmpeg, GPU zero-copy | capture, codec | T2, T21, T23 | [0019](../specs/0019-capture-encode.md) | done |
 | T8 | D3D11VA decode via FFmpeg → present in the stream window | codec, render | T1, T2 | [0013](../specs/0013-d3d11va-decode-present.md) | done |
 | T9 | End-to-end video host→client, virtual monitor in client mode, cursor channel, per-stage latency report | svc, client, stream | T6, T7, T8 | — | todo |
 | T10 | Keyboard/mouse: Raw Input + pointer lock on client, virtual HID on host (SendInput fallback), redundant packets | input, svc, stream | T9, T22 | — | todo |

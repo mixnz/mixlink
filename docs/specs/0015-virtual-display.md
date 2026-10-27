@@ -165,9 +165,10 @@ baseline (specs 0004, 0005). Session start cost (add + switch) is measured and r
 - [ ] `display try` killed from Task Manager: the monitor goes away; next service start restores the layout
       and deletes `topology.json`. Power cut during `try`: layout right after the next boot.
       (Kill + service-start restore pass; power cut not tried.)
-- [ ] Headless (no physical monitor active), service running: a virtual monitor exists from boot, the login
+- [x] Headless (no physical monitor active), service running: a virtual monitor exists from boot, the login
       screen and lock screen render to it (checked with the S2 harness or a DDA grab).
-      (Monitor from boot passes and the login screen went to it; no frame grab yet, lock screen not tried.)
+      (Monitor from boot passes and the login screen went to it; frame grab: spec 0019 `capture try` with
+      `virtual-only` recorded the lock screen and sign-in box.)
 - [x] Host with a monitor, service running: no headless monitor is added.
 - [x] `drivers uninstall` with the service running: stops it, removes everything, exit 0; `drivers install`
       starts it again. (Checked with `drivers install`, which runs the uninstall steps first.)

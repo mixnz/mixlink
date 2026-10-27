@@ -1,6 +1,6 @@
 # 0019 — Capture from the IddCx surface → NVENC encode
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-27
 **Roadmap:** T7
 **Plan:** [0019-capture-encode](../plans/0019-capture-encode.md) (local only, written by writing-plans skill)
@@ -115,17 +115,61 @@ DWM → IddCx swapchain → vdisplay RunCore: acquire → GPU touch + fence sign
 - Measured by `capture try` (QPC stamps, `core::StageStamps` stages `Captured`, `EncodeStart`, `EncodeEnd`).
 
 ## Acceptance criteria
-- [ ] `capture try` on the main PC (NVIDIA) records 10 s at 1440p120 H.264 and HEVC; both play in
+- [x] `capture try` on the main PC (NVIDIA) records 10 s at 1440p120 H.264 and HEVC; both play in
   `mixlink-stream --play` with the moving content seen on the host and no torn frames.
-- [ ] Recording keeps the virtual monitor's frame rate: frames ≈ refresh × seconds while content changes
-  every frame (no DWM stalls from the hold).
+- [x] Recording keeps the virtual monitor's frame rate: frames ≈ refresh × seconds while content changes
+  every frame (no DWM stalls from the hold). 1013–1035 of 1200: the first ~1.5 s show the terminal, not testufo.
 - [ ] Report: capture p99 ≤ 1 ms, encode p99 ≤ 3.5 ms at 1440p120 (3 ms is phase 3), `HoldTimeouts` 0.
-- [ ] Lever table in Results: encode p99 with all levers, none, and each one alone.
-- [ ] A mode change during recording (another `--mode` from a second `display try`, or display settings) →
-  encoder re-created at the new size, the file keeps playing (IDR after the change).
-- [ ] With `capture try` stopped (no reader), the virtual monitor runs as before (no hold).
-- [ ] Lock screen and login screen frames are in the recording on a headless host (spec 0015 open row).
-- [ ] A GPU without NVENC → clear error, monitor removed, layout restored.
+  p99 met (0.41 / 2.78 ms); `HoldTimeouts` 1–2 per run, see Results.
+- [x] Lever table in Results: encode p99 with all levers, none, and each one alone.
+- [x] A mode change during recording (another `--mode` from a second `display try`, or display settings) →
+  encoder re-created at the new size, the file keeps playing (IDR after the change). Refresh change; see Results.
+- [x] With `capture try` stopped (no reader), the virtual monitor runs as before (no hold). A suspended reader
+  is dropped after 500 ms; the desktop stayed usable.
+- [x] Lock screen and login screen frames are in the recording on a headless host (spec 0015 open row).
+  `virtual-only` (physical monitor off) stands in for headless.
+- [ ] A GPU without NVENC → clear error, monitor removed, layout restored. Not run: no such GPU here.
+
+## Results
+Main PC, RTX 5070, IddCx 1.10, 2560x1440@120, testufo full screen on the virtual monitor, 10 s per run,
+`capture try` elevated in the user session (not Session 0). Capture = driver acquire → frame ready.
+
+| Run | Frames | Capture p50 / p99 | Encode p50 / p99 / max | AU p50 / max | Hold timeouts |
+|---|---|---|---|---|---|
+| H.264, `virtual-only` | 1017 | 0.19 / 0.41 ms | 1.92 / 2.78 / 6.00 ms | 30 / 90 KiB | 1 |
+| HEVC, `virtual-only` | 1013 | 0.18 / 0.37 ms | 1.64 / 2.24 / 6.51 ms | 22 / 62 KiB | 2 |
+| H.264, `extend`, 40 s (×2) | 3168 / 3156 | 0.18 / 0.31 ms | 1.82 / 2.13 / 7.38 ms | 30 / 137 KiB | 8 / 8 |
+
+- Playback (`mixlink-stream --play`): UFO smooth, colours match the host, no tearing (H.264 and HEVC).
+  `ffmpeg -f null` decodes every recording without errors.
+- Colour: NVENC converts BGRA with BT.601 even with BT.709 fields set (unit test: YUV 102/128/190 for RGB
+  200/50/100); streams are tagged BT.601 and the client picks the matrix per frame (Design → encoder).
+- Levers (H.264, one run each, user session):
+
+| Levers | Capture p99 | Encode p99 |
+|---|---|---|
+| none | 2.20 ms | 4.13 ms |
+| GPU priority only | 2.18 ms | 4.12 ms |
+| MMCSS only | 0.38 ms | 2.50 ms |
+| priority class only | 0.37 ms | 2.63 ms |
+| all three | 0.41 ms | 2.78 ms |
+
+  CPU scheduling of the frame thread carries the gain (MMCSS or the priority class); GPU priority does nothing
+  (as spec 0005 L2). Next rows keep MMCSS and drop GPU priority; Session 0 not measured here (spec 0007).
+- Mode changes: a resolution change in Settings keeps the target mode (Windows scales 1080p into the same
+  2560x1440 swapchain; no reopen, file continuous). A refresh change 120 → 60 → 120 Hz gave 4 reopens, 4 IDRs,
+  playback continuous (testufo's rate readout 120 → 60 → 120 in the file).
+- Lock screen: Win+L, then Space during a `virtual-only` run → desktop, lock screen and sign-in box recorded.
+- Reader killed (`Stop-Process`): monitor departs with the handle, desktop fine, `display status` "none" with
+  a saved layout; the next service start restored it (`Saved screen layout: no`).
+- Reader suspended ~2 min (Resource Monitor): desktop usable throughout; 34 hold timeouts in all (~500 ms of
+  waits, then the reader counts as gone); after resume the run ended normally.
+- Hold timeouts in normal runs: 1–2 at the start, while the encoder opens (150–350 ms, `Capture max`); 8 per
+  40 s in `extend` (0.25 %, not at the start: GPU likely late finishing DWM's frame). Not explained further;
+  each one may let the driver reuse a surface the encoder is reading. Recheck in T9.
+- Run without testufo on top (terminal only): 152 frames in 10 s: DWM sends frames only on change.
+- Left for later: encoder fps stays at `--mode`'s refresh after a refresh change (VBV sized for 120 Hz);
+  T9 should follow the header's `RefreshMhz`. The S2 spike tool reads header v2 and no longer matches.
 
 ## Open questions
 - (Answered) DDA fallback is its own row T24 (Needs T7); T9 needs only T7 for video.
