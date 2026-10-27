@@ -9,7 +9,8 @@
 
 ## Layout
 - `socket.rs`, `lane.rs` (SPSC slot lanes), `transport.rs`, `send_loop.rs`, `recv_loop.rs`, `stats.rs`, `resend.rs`,
-  `handshake.rs`, `keys.rs`, `control_link.rs`, `endpoint.rs`, `client_store.rs`, `error.rs` (logic files + `<name>_tests.rs`).
+  `handshake.rs`, `keys.rs`, `control_link.rs`, `endpoint.rs` (+ `endpoint_peer.rs`), `mode_policy.rs`, `client_store.rs`,
+  `error.rs` (logic files + `<name>_tests.rs`).
 - `pairing/` (spec 0018): `transcript.rs`, pure `host.rs`, `client.rs`; `session/`: `noise.rs`, pure `host.rs`, `client.rs`.
 - `discovery/` (spec 0017): pure `advert.rs`, `wire.rs`, `list.rs`, `limiter.rs`, `local_net.rs`; threads
   `advertiser.rs` (`svc-discovery`), `browser.rs` (`discovery-browse`).
@@ -27,10 +28,12 @@
 - `control_link`: `ControlLink` (`new`, `set_keys`, `send`, `send_sealed`, `accept`, `exchange`), `Wire`, `Incoming`.
 - `pairing`: `PairedDevice`, `KnownHost`, `Now`, `PromptView`, `PairError`, `PROMPT_TIME` (120 s), `MAX_ATTEMPTS` (3);
   `host::HostPairing`; `client::{PairContext, request, closed_by_host, submit, start, finish}`.
-- `session`: `client::{connect_secure, SecureSession (ping, bye), init, finish}`; `host::HostSessions`;
+- `session`: `client::{connect_secure, SecureSession (ping, bye; `mode`, `codec`), init, finish}`; `host::HostSessions`;
   `noise::{NOISE_PATTERN, prologue, derive}`; `PING_EVERY` (1 s), `SESSION_TIMEOUT` (10 s).
-- `endpoint`: `HostControl` (`new`, `on_datagram`, `tick`, `prompt`, `cancel_prompt(tx)`, `paired`, `set_paired`),
-  `HostControlConfig`, `EndpointEvent` (`Paired`, `SessionStarted`, `SessionEnded`).
+- `endpoint`: `HostControl` (`new`, `on_datagram`, `tick`, `prompt`, `cancel_prompt(tx)`, `paired`, `set_paired`,
+  `end_session`, `end_all`: sealed `Bye` x3), `HostControlConfig` (`policy`), `EndpointEvent` (`Paired`, `SessionStarted { keys, mode, codec, .. }`, `SessionEnded`).
+- `mode_policy` (spec 0020): `ModePolicy { max_fps, codec }` (`welcome`, `choose_mode`, `choose_codec`): mode even,
+  ≤ 3840 x 2160, refresh ≤ `max_fps`; else the largest fitting display; `auto` codec = HEVC if offered.
 - `stats`, `socket`, `resend` (`ResendTimer`, `HELLO_RESEND` 250 ms, `HELLO_GIVE_UP` 10 s), `handshake`, `error::NetError`.
 - `discovery`: `Advert`, `SERVICE_TYPE`, `CAPS_V1`; `Advertiser` + `AdvertiserConfig`; `Browser` + `BrowserConfig`,
   `ProbeTargets`, `OnChange`, `DiscoveryEvent`; `HostList`, `HostEntry`, `Source`, `EXPIRY` (5 s); `LocalNet`; `wire`.

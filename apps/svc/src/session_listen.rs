@@ -9,11 +9,12 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use mixlink_core::config::NetConfig;
+use mixlink_core::config::{NetConfig, VideoConfig};
 use mixlink_core::ids::DeviceId;
 use mixlink_core::svc_ipc::{PairedInfo, PairingPrompt};
 use mixlink_net::endpoint::{EndpointEvent, HostControl, HostControlConfig};
 use mixlink_net::keys::StaticKeyPair;
+use mixlink_net::mode_policy::ModePolicy;
 use mixlink_net::pairing::{Now, PairedDevice};
 use mixlink_net::{Transport, TransportConfig};
 use mixlink_proto::channel::Channel;
@@ -29,6 +30,8 @@ const POLL: Duration = Duration::from_millis(50);
 #[derive(Debug, Clone)]
 pub struct SessionSettings {
     pub net: NetConfig,
+    /// Mode limit and codec for `Welcome` (spec 0020).
+    pub video: VideoConfig,
     pub host: DeviceId,
     pub keys: StaticKeyPair,
     /// `secrets` folder, already secured.
@@ -130,6 +133,10 @@ pub fn start(
         host: settings.host,
         keys: settings.keys,
         paired,
+        policy: ModePolicy {
+            max_fps: settings.video.max_fps,
+            codec: settings.video.codec,
+        },
     });
     let worker = Worker {
         _transport: transport,
@@ -212,7 +219,16 @@ impl Worker {
                 session,
                 device,
                 peer,
-            } => log::info!("session {} started: {device} at {peer}", session.get()),
+                mode,
+                codec,
+                ..
+            } => log::info!(
+                "session {} started: {device} at {peer}, {}x{} at {} mHz, {codec:?}",
+                session.get(),
+                mode.width,
+                mode.height,
+                mode.refresh_mhz
+            ),
             EndpointEvent::SessionEnded { session, device } => {
                 log::info!("session {} ended: {device}", session.get());
             }

@@ -3,7 +3,7 @@
 use std::net::SocketAddrV4;
 
 use mixlink_core::ids::{DeviceId, SessionId};
-use mixlink_proto::control::{self, Blob, ControlMessage, RejectReason};
+use mixlink_proto::control::{self, Blob, CodecId, ControlMessage, DisplayInfo, RejectReason};
 use mixlink_proto::crypto::SessionKeys;
 use mixlink_proto::header::WIRE_VERSION;
 
@@ -33,6 +33,9 @@ pub enum InitOutcome {
         session: SessionId,
         device: DeviceId,
         keys: SessionKeys,
+        /// From the `Welcome` sent.
+        mode: DisplayInfo,
+        codec: CodecId,
     },
 }
 
@@ -137,11 +140,13 @@ impl HostSessions {
         };
         self.remember(peer, init.noise, &reply);
         match inner {
-            ControlMessage::Welcome { .. } => InitOutcome::Accepted {
+            ControlMessage::Welcome { mode, codec, .. } => InitOutcome::Accepted {
                 reply,
                 session,
                 device: init.device,
                 keys: noise::derive(state.dangerously_get_raw_split()),
+                mode,
+                codec,
             },
             _ => InitOutcome::Reply(reply),
         }

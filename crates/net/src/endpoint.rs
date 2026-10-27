@@ -5,12 +5,14 @@ use std::net::SocketAddrV4;
 use std::time::Duration;
 
 use mixlink_core::ids::{DeviceId, SessionId};
-use mixlink_proto::control::{CodecId, ControlMessage, RejectReason};
-use mixlink_proto::crypto::Role;
+use mixlink_proto::control::{ByeReason, CodecId, ControlMessage, DisplayInfo, RejectReason};
+use mixlink_proto::crypto::{Role, SessionKeys};
 
 use crate::control_link::ControlLink;
+use crate::endpoint_peer::{CLOSE_NOTICES, Live, Peer};
 use crate::keys::{StaticKeyPair, random_pin, random_session};
 use crate::lane::{RxDatagram, TxLane};
+use crate::mode_policy::ModePolicy;
 use crate::pairing::host::HostPairing;
 use crate::pairing::{Now, PairedDevice, PromptView};
 use crate::session::SESSION_TIMEOUT;
@@ -20,57 +22,31 @@ use crate::session::host::{HostSessions, Init, InitOutcome};
 const MAX_PEERS: usize = 8;
 /// A peer without a session is forgotten after this long.
 const IDLE_PEER: Duration = Duration::from_secs(60);
-/// Copies of the close notice sent on cancel; the client also learns on its next PIN.
-const CLOSE_NOTICES: usize = 3;
-
 #[derive(Debug, Clone)]
 pub struct HostControlConfig {
     pub host: DeviceId,
     pub keys: StaticKeyPair,
     pub paired: Vec<PairedDevice>,
+    pub policy: ModePolicy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EndpointEvent {
     Paired(PairedDevice),
-    /// The client proved its keys with a sealed datagram.
+    /// The client proved its keys with a sealed datagram. `keys` seal the media lanes; `mode` and
+    /// `codec` are what `Welcome` promised (spec 0020).
     SessionStarted {
         session: SessionId,
         device: DeviceId,
         peer: SocketAddrV4,
+        keys: SessionKeys,
+        mode: DisplayInfo,
+        codec: CodecId,
     },
     SessionEnded {
         session: SessionId,
         device: DeviceId,
     },
-}
-
-#[derive(Debug)]
-struct Live {
-    id: SessionId,
-    device: DeviceId,
-    committed: bool,
-    last_valid: Now,
-}
-
-#[derive(Debug)]
-struct Peer {
-    link: ControlLink,
-    last_seen: Now,
-    live: Option<Live>,
-}
-
-impl Peer {
-    /// Drops the session keys; an event when the session had started.
-    fn end(&mut self) -> Option<EndpointEvent> {
-        self.link.clear_keys();
-        let live = self.live.take()?;
-        log::info!("session {} with {} ended", live.id.get(), live.device);
-        live.committed.then_some(EndpointEvent::SessionEnded {
-            session: live.id,
-            device: live.device,
-        })
-    }
 }
 
 #[derive(Debug)]
@@ -80,6 +56,7 @@ pub struct HostControl {
     peers: Vec<Peer>,
     /// Address of the client waiting on the open prompt; that peer is kept past `IDLE_PEER`.
     prompt_peer: Option<SocketAddrV4>,
+    policy: ModePolicy,
 }
 
 impl HostControl {
@@ -89,6 +66,7 @@ impl HostControl {
             sessions: HostSessions::new(config.host, config.keys, config.paired),
             peers: Vec::new(),
             prompt_peer: None,
+            policy: config.policy,
         }
     }
 
@@ -137,6 +115,32 @@ impl HostControl {
                 log::debug!("close notice not sent: {error}");
             }
         }
+    }
+
+    /// Ends `device`'s session from the host side (spec 0020): sealed `Bye { reason }`, then the
+    /// keys go. `None` when it has no session.
+    pub fn end_session(
+        &mut self,
+        tx: &mut TxLane,
+        device: DeviceId,
+        reason: ByeReason,
+    ) -> Option<EndpointEvent> {
+        let peer = self
+            .peers
+            .iter_mut()
+            .find(|peer| peer.live.as_ref().is_some_and(|live| live.device == device))?;
+        peer.say_bye(tx, reason);
+        peer.end()
+    }
+
+    /// Ends every session with `Bye { reason }` (service stop).
+    pub fn end_all(&mut self, tx: &mut TxLane, reason: ByeReason) -> Vec<EndpointEvent> {
+        let mut events = Vec::new();
+        for peer in self.peers.iter_mut().filter(|peer| peer.live.is_some()) {
+            peer.say_bye(tx, reason);
+            events.extend(peer.end());
+        }
+        events
     }
 
     /// Handles one datagram from the control lane.
@@ -224,6 +228,9 @@ impl HostControl {
                         session: live.id,
                         device: live.device,
                         peer: peer.link.peer(),
+                        keys: live.keys.clone(),
+                        mode: live.mode,
+                        codec: live.codec,
                     });
                 }
                 if let Err(error) = peer.link.send_sealed(tx, &ControlMessage::Pong { n }) {
@@ -308,7 +315,11 @@ impl HostControl {
                 return None;
             }
         };
-        match self.sessions.on_init(addr, init, session, welcome) {
+        let policy = self.policy;
+        match self
+            .sessions
+            .on_init(addr, init, session, |hello, id| policy.welcome(hello, id))
+        {
             InitOutcome::Ignore => None,
             InitOutcome::Reply(reply) => Some(reply),
             InitOutcome::Accepted {
@@ -316,6 +327,8 @@ impl HostControl {
                 session,
                 device,
                 keys,
+                mode,
+                codec,
             } => {
                 // A new session replaces this device's old one, on any address.
                 for peer in &mut self.peers {
@@ -332,34 +345,13 @@ impl HostControl {
                     device,
                     committed: false,
                     last_valid: now,
+                    keys,
+                    mode,
+                    codec,
                 });
                 Some(reply)
             }
         }
-    }
-}
-
-/// Streams the client's own display mode back. The real mode choice (virtual monitor) comes with
-/// streaming; spec 0018 only proves the session.
-fn welcome(hello: &ControlMessage, session: SessionId) -> ControlMessage {
-    match hello {
-        ControlMessage::Hello {
-            displays,
-            stream_display,
-            ..
-        } => match displays.get(usize::from(*stream_display)) {
-            Some(mode) => ControlMessage::Welcome {
-                session,
-                mode: *mode,
-                codec: CodecId::H264,
-            },
-            None => ControlMessage::Reject {
-                reason: RejectReason::BadDisplay,
-            },
-        },
-        _ => ControlMessage::Reject {
-            reason: RejectReason::BadDisplay,
-        },
     }
 }
 

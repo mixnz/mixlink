@@ -106,17 +106,20 @@ fn welcome_keys_match() {
         session,
         device: got,
         keys,
+        mode: sent_mode,
+        codec: sent_codec,
     } = run(&mut s, device, WIRE_VERSION, &noise)
     else {
         panic!("not accepted");
     };
     assert_eq!(session, SessionId::new(77));
     assert_eq!(got, device);
-    let (client_keys, id, got_mode) = client::finish(start, &reply).unwrap();
+    let (client_keys, id, got_mode, got_codec) = client::finish(start, &reply).unwrap();
     assert_eq!(client_keys, keys);
     assert_ne!(keys.c2h, keys.h2c);
     assert_eq!(id, SessionId::new(77));
     assert_eq!(got_mode, mode());
+    assert_eq!((sent_mode, sent_codec), (got_mode, got_codec));
 }
 
 #[test]
