@@ -2,7 +2,12 @@
 
 pub mod error;
 pub mod header;
+mod platform;
 pub mod reader;
+pub mod source;
 pub mod surface_cache;
 
 pub use error::CaptureError;
+#[cfg(windows)]
+pub use platform::windows::idd_source::{CapturedFrame, IddSource};
+pub use source::{CaptureEvent, Frame, FrameSource};
