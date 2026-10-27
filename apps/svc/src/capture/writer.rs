@@ -29,19 +29,17 @@ pub struct WriterTx {
     filled: Producer<Buf>,
     free: Consumer<Buf>,
     writer: Thread,
-    dropped: u64,
 }
 
 impl WriterTx {
     // HOT PATH
-    /// Queues a copy of `au`; `false` (counted) when it is too large or every buffer is in use.
+    /// Queues a copy of `au`; `false` when it is too large or every buffer is in use (the caller
+    /// then forces an IDR, see `flow::Delivery`).
     pub fn push(&mut self, au: &[u8]) -> bool {
         if au.len() > AU_CAPACITY {
-            self.dropped += 1;
             return false;
         }
         let Ok(mut buf) = self.free.pop() else {
-            self.dropped += 1;
             return false;
         };
         buf.data[..au.len()].copy_from_slice(au);
@@ -50,10 +48,6 @@ impl WriterTx {
         let _ = self.filled.push(buf);
         self.writer.unpark();
         true
-    }
-
-    pub fn dropped(&self) -> u64 {
-        self.dropped
     }
 }
 
@@ -79,7 +73,6 @@ impl Writer {
             filled: filled_tx,
             free: free_rx,
             writer: handle.thread().clone(),
-            dropped: 0,
         };
         Ok((tx, handle))
     }

@@ -144,7 +144,6 @@ mod windows {
         )?;
         stats.hold_timeouts = src.hold_timeouts();
         stats.ring_fallbacks = src.ring_fallbacks();
-        stats.dropped_aus = sink.dropped_aus();
         Ok(stats)
     }
 }

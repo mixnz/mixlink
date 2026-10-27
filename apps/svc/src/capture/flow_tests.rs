@@ -66,10 +66,12 @@ impl FrameSource for FakeSource {
     }
 }
 
-/// Records what the loop asked for: ("reopen", w) or ("encode", seq, idr).
+/// Records what the loop asked for: ("reopen", w) or ("encode", seq, idr). Frames whose seq is in
+/// `drop_seqs` are reported as not delivered (writer full).
 #[derive(Default)]
 struct FakeSink {
     log: Vec<(&'static str, u64, bool)>,
+    drop_seqs: Vec<u64>,
 }
 
 impl EncodeSink<FakeSource> for FakeSink {
@@ -78,23 +80,69 @@ impl EncodeSink<FakeSource> for FakeSink {
         Ok(())
     }
 
-    fn encode(&mut self, frame: &FakeFrame, force_idr: bool) -> Result<usize, SvcError> {
+    fn encode(&mut self, frame: &FakeFrame, force_idr: bool) -> Result<Delivery, SvcError> {
         self.log.push(("encode", frame.0, force_idr));
-        Ok(100)
+        Ok(if self.drop_seqs.contains(&frame.0) {
+            Delivery::Dropped(100)
+        } else {
+            Delivery::Sent(100)
+        })
     }
 }
 
 fn run(steps: &[Step]) -> (FakeSink, Stats) {
+    run_dropping(steps, &[])
+}
+
+fn run_dropping(steps: &[Step], drop_seqs: &[u64]) -> (FakeSink, Stats) {
     let stop = std::rc::Rc::new(std::cell::Cell::new(false));
     let mut src = FakeSource {
         steps: steps.iter().copied().chain([Step::Stop]).collect(),
         stop: stop.clone(),
     };
-    let mut sink = FakeSink::default();
+    let mut sink = FakeSink {
+        drop_seqs: drop_seqs.to_vec(),
+        ..FakeSink::default()
+    };
     let mut stats = Stats::with_capacity(16);
     let deadline = Instant::now() + Duration::from_secs(10);
     run_loop(&mut src, &mut sink, &|| stop.get(), deadline, &mut stats).unwrap();
     (sink, stats)
+}
+
+#[test]
+fn dropped_au_forces_next_idr() {
+    // Every P-frame needs the one before it: after a lost AU only an IDR makes the file decodable again.
+    let (sink, stats) = run_dropping(
+        &[
+            Step::Reopen(64, 64),
+            Step::Frame(1),
+            Step::Frame(2),
+            Step::Frame(3),
+            Step::Frame(4),
+        ],
+        &[2],
+    );
+    assert_eq!(
+        &sink.log[1..],
+        [
+            ("encode", 1, true),
+            ("encode", 2, false),
+            ("encode", 3, true),
+            ("encode", 4, false)
+        ]
+    );
+    assert_eq!((stats.frames, stats.idrs, stats.dropped_aus), (4, 2, 1));
+}
+
+#[test]
+fn dropped_idr_is_retried() {
+    let (sink, stats) = run_dropping(
+        &[Step::Reopen(64, 64), Step::Frame(1), Step::Frame(2)],
+        &[1],
+    );
+    assert_eq!(&sink.log[1..], [("encode", 1, true), ("encode", 2, true)]);
+    assert_eq!((stats.idrs, stats.dropped_aus), (2, 1));
 }
 
 #[test]

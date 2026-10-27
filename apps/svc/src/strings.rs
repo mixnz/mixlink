@@ -194,7 +194,7 @@ pub fn capture_report(stats: &crate::capture::report::Stats, out: &std::path::Pa
          Capture (present to encoder): p50 {:.2} ms, p99 {:.2} ms, max {:.2} ms\n\
          Encode: p50 {:.2} ms, p99 {:.2} ms, max {:.2} ms\n\
          Frame size: p50 {} KiB, max {} KiB\n\
-         Driver waits that ran out: {}, ring copies: {}, frames not saved: {}",
+         Driver waits that ran out: {}, ring copies: {}, frames not saved (a keyframe follows each): {}",
         out.display(),
         stats.frames,
         stats.idrs,

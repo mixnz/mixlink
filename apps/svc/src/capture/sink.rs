@@ -3,7 +3,7 @@
 use mixlink_capture::{CaptureError, CapturedFrame, IddSource};
 use mixlink_codec::{Encoder, EncoderConfig};
 
-use super::flow::EncodeSink;
+use super::flow::{Delivery, EncodeSink};
 use super::writer::WriterTx;
 use crate::error::SvcError;
 use crate::platform::windows::priority::raise_gpu;
@@ -26,10 +26,6 @@ impl NvencSink {
             gpu_lever,
         }
     }
-
-    pub fn dropped_aus(&self) -> u64 {
-        self.writer.dropped()
-    }
 }
 
 impl EncodeSink<IddSource> for NvencSink {
@@ -46,12 +42,15 @@ impl EncodeSink<IddSource> for NvencSink {
     }
 
     // HOT PATH
-    fn encode(&mut self, frame: &CapturedFrame<'_>, force_idr: bool) -> Result<usize, SvcError> {
+    fn encode(&mut self, frame: &CapturedFrame<'_>, force_idr: bool) -> Result<Delivery, SvcError> {
         let Some(encoder) = self.encoder.as_mut() else {
-            return Ok(0);
+            return Ok(Delivery::Dropped(0));
         };
         let au = encoder.encode(frame.texture(), force_idr)?;
-        self.writer.push(au);
-        Ok(au.len())
+        Ok(if self.writer.push(au) {
+            Delivery::Sent(au.len())
+        } else {
+            Delivery::Dropped(au.len())
+        })
     }
 }

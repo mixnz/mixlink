@@ -8,7 +8,7 @@ fn temp_path(name: &str) -> std::path::PathBuf {
 fn writes_aus_in_order() {
     let path = temp_path("order.h264");
     let (mut tx, handle) = Writer::spawn(&path).unwrap();
-    // More AUs than buffers: a full queue refuses (counted), so wait for the writer and resend.
+    // More AUs than buffers: a full queue refuses, so wait for the writer and resend.
     for i in 0u8..20 {
         while !tx.push(&[i; 3]) {
             std::thread::sleep(std::time::Duration::from_millis(1));
@@ -24,12 +24,11 @@ fn writes_aus_in_order() {
 }
 
 #[test]
-fn oversized_au_counted() {
+fn oversized_au_refused() {
     let path = temp_path("big.h264");
     let (mut tx, handle) = Writer::spawn(&path).unwrap();
     let big = vec![0u8; 5 * 1024 * 1024];
     assert!(!tx.push(&big));
-    assert_eq!(tx.dropped(), 1);
     drop(tx);
     assert_eq!(handle.join().unwrap().unwrap(), 0);
     assert_eq!(std::fs::metadata(&path).unwrap().len(), 0);
