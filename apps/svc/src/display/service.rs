@@ -5,6 +5,7 @@
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::mpsc::Receiver;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -12,6 +13,7 @@ use mixlink_core::config::DisplaySettings;
 
 use super::agent::AgentConfig;
 use super::ports::DisplayConfig;
+use super::requests::{DisplayHandle, DisplayRequest, serve};
 use super::session::{self, Ports};
 use super::store::SnapshotStore;
 use crate::error::SvcError;
@@ -41,14 +43,20 @@ pub fn secured_store() -> Result<SnapshotStore, SvcError> {
     Ok(store)
 }
 
-/// Runs the display start-up on its own thread; it never fails the service.
-pub fn spawn(stop: Arc<StopSignal>, settings: DisplaySettings) -> io::Result<JoinHandle<()>> {
-    std::thread::Builder::new()
+/// Runs the display start-up on its own thread, then answers monitor requests (spec 0020) until stop;
+/// it never fails the service.
+pub fn spawn(
+    stop: Arc<StopSignal>,
+    settings: DisplaySettings,
+) -> io::Result<(JoinHandle<()>, DisplayHandle)> {
+    let (handle, inbox) = DisplayHandle::channel();
+    let thread = std::thread::Builder::new()
         .name("svc-display".into())
-        .spawn(move || run(&stop, settings))
+        .spawn(move || run(&stop, settings, &inbox))?;
+    Ok((thread, handle))
 }
 
-fn run(stop: &StopSignal, settings: DisplaySettings) {
+fn run(stop: &StopSignal, settings: DisplaySettings, inbox: &Receiver<DisplayRequest>) {
     log::info!("virtual display: topology setting {:?}", settings.topology);
     let deadline = Instant::now() + OPEN_FOR;
     let mut headless = None;
@@ -69,8 +77,45 @@ fn run(stop: &StopSignal, settings: DisplaySettings) {
         }
     };
     log::info!("virtual display ready (headless monitor: {headless:?})");
-    stop.wait();
-    drop(driver);
+    if let Err(error) = serve_requests(driver, &mut headless, settings, inbox, stop) {
+        log::warn!("client monitors unavailable: {error}");
+        stop.wait();
+    }
+}
+
+/// Answers monitor requests until stop; the driver handle (and every monitor) goes when it returns.
+fn serve_requests(
+    mut driver: VDisplay,
+    headless: &mut Option<u32>,
+    settings: DisplaySettings,
+    inbox: &Receiver<DisplayRequest>,
+    stop: &StopSignal,
+) -> Result<(), SvcError> {
+    let store = secured_store()?;
+    let topology = Some(settings.topology);
+    let sleep = std::thread::sleep;
+    if current_session()? == 0 {
+        let dir = store
+            .path()
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_default();
+        let mut config = AgentConfig::new(ProcessRunner::new(dir)?);
+        let mut ports = Ports {
+            driver: &mut driver,
+            config: &mut config,
+            store: &store,
+        };
+        serve(&mut ports, headless, topology, inbox, stop, &sleep);
+    } else {
+        let mut ports = Ports {
+            driver: &mut driver,
+            config: &mut CcdConfig,
+            store: &store,
+        };
+        serve(&mut ports, headless, topology, inbox, stop, &sleep);
+    }
+    Ok(())
 }
 
 fn start(headless: &mut Option<u32>) -> Result<VDisplay, SvcError> {

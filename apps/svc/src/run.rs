@@ -47,7 +47,13 @@ pub fn run(
     let started = Instant::now();
     let security = Arc::new(PipeSecurity::new()?);
     let first = create_instance(&opts.pipe, true, &security)?.ok_or(SvcError::PipeTaken)?;
-    let session = opts.session.clone().and_then(|settings| {
+    // Before the session listener: streams ask this thread for the client monitor (spec 0020).
+    let display = match opts.display {
+        Some(settings) => Some(display::service::spawn(Arc::clone(stop), settings)?),
+        None => None,
+    };
+    let session = opts.session.clone().and_then(|mut settings| {
+        settings.display = display.as_ref().map(|(_, handle)| handle.clone());
         match session_listen::start(Arc::clone(stop), settings) {
             Ok(sessions) => {
                 log::info!("session listener on {}", sessions.addr);
@@ -72,10 +78,6 @@ pub fn run(
             .spawn(move || listen(&name, first, &security, &stop, started, &pairing))?
     };
     log::info!("serving {}", opts.pipe);
-    let display = match opts.display {
-        Some(settings) => Some(display::service::spawn(Arc::clone(stop), settings)?),
-        None => None,
-    };
     // Pad nodes left by a crash go first; pads come and go per session (spec 0016).
     if opts.input
         && let Err(error) = pads::remove_all(&mut WindowsPadHost)
@@ -92,7 +94,7 @@ pub fn run(
     if listener.join().is_err() {
         log::error!("pipe listener panicked");
     }
-    if let Some(display) = display
+    if let Some((display, _)) = display
         && display.join().is_err()
     {
         log::error!("display thread panicked");

@@ -19,6 +19,7 @@ use mixlink_net::pairing::{Now, PairedDevice};
 use mixlink_net::{Transport, TransportConfig};
 use mixlink_proto::channel::Channel;
 
+use crate::display::requests::DisplayHandle;
 use crate::error::SvcError;
 use crate::pipe::session::PairingPort;
 use crate::secrets;
@@ -32,6 +33,8 @@ pub struct SessionSettings {
     pub net: NetConfig,
     /// Mode limit and codec for `Welcome` (spec 0020).
     pub video: VideoConfig,
+    /// The display thread, which adds and removes the client monitor; `None` = no streaming.
+    pub display: Option<DisplayHandle>,
     pub host: DeviceId,
     pub keys: StaticKeyPair,
     /// `secrets` folder, already secured.

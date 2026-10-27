@@ -23,7 +23,7 @@ mod windows {
     use super::writer::{Writer, WriterTx};
     use crate::args::TryTopology;
     use crate::capture_args::{CaptureCmd, CaptureTry};
-    use crate::display::ports::DisplayDriver;
+    use crate::display::requests::connector_of;
     use crate::display::service::secured_store;
     use crate::display::session::{self, Ports};
     use crate::error::SvcError;
@@ -77,16 +77,6 @@ mod windows {
         eprintln!("{}", strings::MONITOR_OFF);
         eprintln!("{}", strings::capture_report(&recorded?, &cmd.out));
         Ok(())
-    }
-
-    fn connector_of(driver: &mut VDisplay, monitor: u32) -> Result<u32, SvcError> {
-        driver
-            .query()?
-            .monitors
-            .iter()
-            .find(|m| m.id == monitor)
-            .map(|m| m.connector)
-            .ok_or(SvcError::DisplayNotReady)
     }
 
     /// Writer thread + thread `cap-frames` (wait, encode, queue: one thread, the driver's hold makes

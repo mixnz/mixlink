@@ -94,6 +94,7 @@ fn pair_and_connect_over_loopback() {
             ..NetConfig::default()
         },
         video: VideoConfig::default(),
+        display: None,
         host: HOST,
         keys: StaticKeyPair::generate().unwrap(),
         secrets: secrets.clone(),

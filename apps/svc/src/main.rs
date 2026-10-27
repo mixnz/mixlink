@@ -177,6 +177,7 @@ fn session_settings(
         Ok(keys) => Some(session_listen::SessionSettings {
             net: config.net.clone(),
             video: config.video.clone(),
+            display: None,
             host,
             keys,
             secrets: dir,

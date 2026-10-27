@@ -15,8 +15,8 @@ display (0015), virtual input (0016), LAN discovery (0017), pairing + secure ses
   (`DriverHost` trait, install / uninstall order + rollback, fake host in tests), `status.rs`, `mod.rs` (`run`).
 - `display/` (spec 0015), pure: `wire.rs` (= `drivers/vdisplay/Control.h`), `edid.rs` + `cvt.rs`, `modes.rs`,
   `topology.rs`, `store.rs` (`topology.json`), `ports.rs` (`DisplayDriver`, `DisplayConfig`), `session.rs`
-  (`begin` / `end` / `start_up`), `agent.rs` (helper protocol). Windows: `service.rs` (thread `svc-display`;
-  Session 0 → helper), `commands.rs`. `host_config.rs`: `%ProgramData%\MixLink\host.json`.
+  (`begin`/`end`/`start_up`), `requests.rs` (`DisplayHandle` → `serve`, 0020), `agent.rs`, `fakes.rs` (tests). Windows:
+  `service.rs` (`svc-display`; Session 0 → helper), `commands.rs`. `host_config.rs`: `%ProgramData%\MixLink\host.json`.
 - `input/` (spec 0016, ADR-0009): `feeder.rs` (`open_feeder`; `run.rs` holds it), `pads.rs` (`PadHost`, `add`,
   `remove`, `remove_all`), `pad_ids.rs`, `padmap.rs`, `script.rs`, `probe*.rs`, `status.rs`, `commands.rs`.
 - Discovery (0017): `identity.rs`, `discovery.rs`, `net_check.rs`. Pairing (0018): `secrets.rs` (`secrets` folder:
