@@ -3,13 +3,13 @@
 > Module card. Keep <= 50 lines. Update when the public API changes.
 
 **Purpose:** UDP socket setup, send pacer, bitrate/congestion controller, LAN discovery (mDNS + broadcast), pairing handshake. Later: ICE/STUN/TURN.
-**Depends on:** mixlink-proto, mixlink-core; `socket2`, `rtrb`, `log`, `thiserror`, `serde(_json)`; `windows`
+**Depends on:** mixlink-proto, mixlink-core; `socket2`, `rtrb`, `log`, `thiserror`, `serde(_json)`, `snow`, `getrandom`; `windows`
 (WinSock, IpHelper, DNS-SD).
 **Hot path:** send/recv loops and lanes; discovery and pairing are control plane (plain threads).
 
 ## Layout
 - `socket.rs` (open + configure), `lane.rs` (SPSC slot lanes), `transport.rs` (start / stop, lanes),
-  `send_loop.rs`, `recv_loop.rs`, `stats.rs`, `resend.rs`, `handshake.rs`, `error.rs`
+  `send_loop.rs`, `recv_loop.rs`, `stats.rs`, `resend.rs`, `handshake.rs`, `keys.rs`, `session/`, `error.rs`
   (each logic file + `<name>_tests.rs`); MMCSS via `core::mmcss`.
 - `discovery/` (spec 0017): pure `advert.rs`, `wire.rs`, `list.rs`, `limiter.rs`, `local_net.rs`; threads
   `advertiser.rs` (`svc-discovery`), `browser.rs` (`discovery-browse`).
@@ -22,8 +22,9 @@
 ## Public API
 - `transport`: `Transport` (`start`, `local_addr`, `stats`, `shutdown`), `TransportConfig` (`host`,
   `client`, `loopback`), `LaneCapacities` (`get`, `set`), `Lanes` (`take_tx`, `take_rx`).
-- `lane`: `SLOT_LEN` (1232), `TxLane` (`try_reserve`), `TxSlot` (`buf`, `datagram`, `commit`),
-  `RxLane` (`try_recv`, `recv_timeout`, `attach_current_thread`), `RxDatagram` (`data`, `peer`, `at`).
+- `lane`: `SLOT_LEN` (1232), `TxLane` (`try_reserve`), `TxSlot` (`buf`, `datagram`, `commit`, `seal_commit`),
+  `RxLane` (`try_recv`, `recv_timeout`, `attach_current_thread`), `RxDatagram` (`data`, `peer`, `at`, `open`).
+- `keys`: `StaticKeyPair` (`generate`; serde hex), `random_pin`, `random_session`.
 - `stats`: `TransportStats` (`tx`, `rx` per channel, socket counters), `LaneCount`, `LaneCounters`.
 - `socket`: `SocketConfig`, `OpenSocket`, `open`, `SOCKET_BUFFER` (4 MiB), `READ_TIMEOUT` (20 ms).
 - `resend`: `ResendTimer` (`new`, `poll`), `ResendAction`, `HELLO_RESEND` (250 ms), `HELLO_GIVE_UP` (10 s).

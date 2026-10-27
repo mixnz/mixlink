@@ -3,8 +3,10 @@
 pub mod discovery;
 pub mod error;
 pub mod handshake;
+pub mod keys;
 pub mod lane;
 pub mod resend;
+pub mod session;
 pub mod socket;
 pub mod stats;
 pub mod transport;

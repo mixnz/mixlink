@@ -7,7 +7,7 @@
 **Hot path:** yes — packetize/depacketize every packet; zero-copy, preallocated buffers.
 
 ## Layout
-- `header.rs`, `channel.rs`, `packetizer.rs`, `reassembler.rs` (+ private `slot.rs`), `control.rs`, private `replay.rs`,
+- `header.rs`, `channel.rs`, `packetizer.rs`, `reassembler.rs` (+ private `slot.rs`), `control.rs` (+ `blob.rs`), private `replay.rs`,
   `cursor.rs`, `crypto.rs`, `error.rs` (each + `<name>_tests.rs`; `reassembler_stress_tests.rs` fuzz + timing;
   `test_util.rs` helpers);
   `tests/no_alloc.rs` (counting allocator, test-only `unsafe`), `tests/crypto_bench.rs` (ignored, by hand).
@@ -21,7 +21,8 @@
   `Fragments` (`count`, `next_into`).
 - `reassembler`: `ReassemblerConfig` (`for_channel`), `Reassembler` (`new`, `push`, `stats`),
   `Push`, `Message`, `DropReason`, `ReassemblerStats`.
-- `control`: `ControlMessage` (`Hello`, `Welcome`, `Reject`, `Bye`; `validate`), `DisplayInfo`,
+- `control`: `ControlMessage` (`Hello`, `Welcome`, `Reject`, `Bye`, pairing `Pair*`, `SessionInit` / `Accept`, `Ping` / `Pong`;
+  `validate`), `PublicKey` + `Blob` (hex in JSON, `blob::MAX_BLOB`), `SPAKE_LEN`, `MAC_LEN`, `MAX_NOISE`, `DisplayInfo`,
   `RejectReason`, `ByeReason`, `encode`, `decode`.
 - `cursor`: `CursorPosition` (`encode`), `CursorShapeHeader` (`encode_into`), `ShapeKind`,
   `CursorMessage`, `decode`, `CURSOR_POSITION_LEN`, `CURSOR_SHAPE_HEADER_LEN`.

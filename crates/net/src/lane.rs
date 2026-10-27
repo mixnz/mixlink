@@ -12,6 +12,8 @@ use std::thread::{self, Thread};
 use std::time::{Duration, Instant};
 
 use mixlink_core::clock::{self, Ticks};
+use mixlink_proto::crypto::{Opener, Sealer};
+use mixlink_proto::error::CryptoError;
 use mixlink_proto::header::MAX_DATAGRAM;
 use rtrb::{Consumer, Producer, RingBuffer};
 
@@ -161,7 +163,9 @@ impl Reader {
         let done = std::mem::replace(&mut self.stage, next);
         // Cannot fail: boxes in the two rings never exceed the ring capacity.
         let _ = self.free.push(done);
-        Some(Received { slot: &self.stage })
+        Some(Received {
+            slot: &mut self.stage,
+        })
     }
 
     pub(crate) fn attach_current_thread(&self) {
@@ -191,12 +195,21 @@ impl Reader {
 /// A received datagram; valid until the next pop on the same lane.
 #[derive(Debug)]
 pub(crate) struct Received<'a> {
-    slot: &'a Slot,
+    slot: &'a mut Slot,
 }
 
 impl Received<'_> {
     pub(crate) fn data(&self) -> &[u8] {
         &self.slot.buf[..usize::from(self.slot.len)]
+    }
+
+    pub(crate) fn data_mut(&mut self) -> &mut [u8] {
+        &mut self.slot.buf[..usize::from(self.slot.len)]
+    }
+
+    /// The datagram is now `len` bytes (it was opened in place).
+    pub(crate) fn truncate(&mut self, len: usize) {
+        self.slot.len = self.slot.len.min(u16::try_from(len).unwrap_or(u16::MAX));
     }
 
     pub(crate) fn peer(&self) -> SocketAddrV4 {
@@ -239,6 +252,20 @@ impl TxSlot<'_> {
     pub fn commit(self, len: usize, peer: SocketAddrV4) {
         self.0.commit(len, peer, clock::now());
     }
+
+    /// Seals the `len`-byte datagram in `buf()` (spec 0018), then commits it. On error nothing is
+    /// queued and the slot stays staged for the next reserve.
+    // HOT PATH
+    pub fn seal_commit(
+        mut self,
+        sealer: &mut Sealer,
+        len: usize,
+        peer: SocketAddrV4,
+    ) -> Result<(), CryptoError> {
+        let total = sealer.seal(self.0.buf(), len)?;
+        self.0.commit(total, peer, clock::now());
+        Ok(())
+    }
 }
 
 /// Application end of a receive lane. One owner thread; `Send`, not `Clone`.
@@ -279,6 +306,15 @@ impl RxDatagram<'_> {
     /// Receive time (`clock::now()` on the recv thread).
     pub fn at(&self) -> Ticks {
         self.0.at()
+    }
+
+    /// Opens the sealed datagram in place (spec 0018); afterwards `data()` is the plaintext
+    /// datagram. On error `data()` is undefined and the datagram must be dropped.
+    // HOT PATH
+    pub fn open(&mut self, opener: &mut Opener) -> Result<&[u8], CryptoError> {
+        let len = opener.open(self.0.data_mut())?;
+        self.0.truncate(len);
+        Ok(self.0.data())
     }
 }
 

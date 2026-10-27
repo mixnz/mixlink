@@ -49,6 +49,8 @@ pub enum ControlError {
     EmptyName,
     #[error("name is {len} bytes, at most 63 allowed")]
     NameTooLong { len: usize },
+    #[error("{field} is {len} bytes, outside the allowed size")]
+    BlobLen { field: &'static str, len: usize },
 }
 
 /// A datagram that cannot be sealed or opened (spec 0018). Opening failures are also counted.

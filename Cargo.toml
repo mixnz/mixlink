@@ -37,7 +37,8 @@ aes-gcm = { version = "0.11.1", default-features = false, features = ["aes"] }
 hkdf = "0.13.0"
 hmac = "0.13.0"
 sha2 = "0.11.1"
-snow = { version = "0.10.0", default-features = false, features = ["use-aes-gcm", "use-sha2", "use-curve25519", "use-getrandom", "std"] }
+snow = { version = "0.10.0", default-features = false, features = ["use-aes-gcm", "use-chacha20poly1305", "use-sha2", "use-curve25519", "use-getrandom", "std"] }
+# `use-chacha20poly1305` only because snow 0.10 imports `KeyInit` behind it; AES-GCM needs that import.
 spake2 = "0.4.0"
 getrandom = "0.3.4"
 

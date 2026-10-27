@@ -140,3 +140,68 @@ fn huge_timeout_waits_without_overflow() {
     assert!(reader.recv_timeout(Duration::MAX).is_some());
     producer.join().unwrap();
 }
+
+fn header(seq: u32) -> [u8; mixlink_proto::header::HEADER_LEN] {
+    use mixlink_core::ids::{FrameId, Seq};
+    use mixlink_proto::channel::Channel;
+    use mixlink_proto::header::{Flags, PacketHeader};
+    let mut head = [0u8; mixlink_proto::header::HEADER_LEN];
+    PacketHeader {
+        channel: Channel::Input,
+        flags: Flags::empty(),
+        seq: Seq::new(seq),
+        frame: FrameId::new(1),
+        frag_index: 0,
+        frag_count: 1,
+    }
+    .encode(&mut head);
+    head
+}
+
+fn session_keys() -> mixlink_proto::crypto::SessionKeys {
+    mixlink_proto::crypto::SessionKeys {
+        c2h: [7; 16],
+        h2c: [8; 16],
+    }
+}
+
+#[test]
+fn sealed_slot_round_trips() {
+    use mixlink_proto::channel::Channel;
+    use mixlink_proto::crypto::Role;
+    let (writer, reader, _) = lane(4);
+    let (mut tx, mut rx) = (TxLane(writer), RxLane(reader));
+    let keys = session_keys();
+    let mut sealer = keys.sealer(Role::Client, Channel::Input);
+    let mut opener = keys.opener(Role::Host, Channel::Input);
+    let head = header(1);
+    let mut slot = tx.try_reserve().unwrap();
+    slot.buf()[..16].copy_from_slice(&head);
+    slot.buf()[16..21].copy_from_slice(b"hello");
+    slot.seal_commit(&mut sealer, 21, peer()).unwrap();
+    let mut got = rx.try_recv().unwrap();
+    assert_eq!(got.data().len(), 21 + 16);
+    assert_ne!(&got.data()[16..21], b"hello");
+    let plain = got.open(&mut opener).unwrap();
+    assert_eq!(&plain[..16], &head);
+    assert_eq!(&plain[16..], b"hello");
+    assert_eq!(got.data().len(), 21);
+}
+
+#[test]
+fn failed_seal_returns_slot() {
+    use mixlink_proto::channel::Channel;
+    use mixlink_proto::crypto::Role;
+    use mixlink_proto::error::CryptoError;
+    let (writer, reader, _) = lane(1);
+    let (mut tx, mut rx) = (TxLane(writer), RxLane(reader));
+    let mut sealer = session_keys().sealer(Role::Client, Channel::Video);
+    let mut slot = tx.try_reserve().unwrap();
+    slot.buf()[..16].copy_from_slice(&header(1));
+    assert_eq!(
+        slot.seal_commit(&mut sealer, 16, peer()),
+        Err(CryptoError::WrongChannel)
+    );
+    assert!(rx.try_recv().is_none());
+    assert!(tx.try_reserve().is_some());
+}
