@@ -20,7 +20,7 @@ with the host (spec 0020), D3D11VA decode and present with the host cursor on a 
   the monitors, keys from `client_store`, thread `stream-net`), `ipc.rs` (+ tests), `platform/window.rs`, `strings.rs`.
 
 ## Public API (process contract)
-- `mixlink-stream --connect <host id> --addr <ip:port> [--drop video=N,cursor=N]` (launcher; `--drop` = dev loss).
+- `mixlink-stream --connect <host id> --addr <ip:port> [--drop video=0.1,cursor=5]` (launcher; `--drop` = dev loss, %).
 - Stdout: `StreamToLauncher` JSON lines only (IPC v2) — `Connecting`, `Connected { width, height, refresh_mhz,
   codec }`, `Ready` after the first present, `Closed { reason, latency }` before exit (`latency` in connect mode).
   Reasons: `User`, `Stopped`, `Error`, `Rejected { busy | badDisplay | version }`, `HostEnded { userClosed |
@@ -36,7 +36,7 @@ with the host (spec 0020), D3D11VA decode and present with the host cursor on a 
 - Never print to stdout outside `ipc::send`; logs go to stderr (`RUST_LOG`).
 - Release builds use the GUI subsystem (no console); piped stdio still works.
 - The video thread owns the `Presenter` and `Decoder` (opened once the codec is known: `Welcome` or `--play`);
-  the winit thread only passes sizes. It decodes every queued AU and presents the newest; a cursor change
+  the winit thread only passes sizes. It decodes every queued AU as it comes; a cursor change
   re-presents the last frame. The cursor is drawn only while its shape is loaded. It presents only when the
   swapchain's frame-latency waitable is signaled (never blocks in `Present`), decoding meanwhile; decoded
   frames wait in `FrameQueue` (3, oldest first; half a second of backlog skips one: `pop_paced`).

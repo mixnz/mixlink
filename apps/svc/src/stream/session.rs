@@ -143,7 +143,8 @@ fn capture(connector: u32, sink: &mut NetSink, stop: &AtomicBool) -> Result<(), 
     );
     let gaps = sink.gaps();
     log::info!(
-        "longest gap between frames {} ms; stalls while playing: {} (ms into the stream, length ms): {:?}",
+        "IDRs the client asked for: {}; longest gap between frames {} ms; stalls while playing: {} (ms into the \n         stream, length ms): {:?}",
+        sink.asked_idrs(),
         gaps.longest().as_millis(),
         gaps.stall_count(),
         gaps.stalls()

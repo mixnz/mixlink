@@ -56,7 +56,7 @@ pub enum ArgsError {
     BadHost(String),
     #[error("{0}: not an IPv4 address with a port")]
     BadAddr(String),
-    #[error("--drop {0}: expected video=N,cursor=N with N in 0..=100")]
+    #[error("--drop {0}: expected video=N,cursor=N with N a percentage in 0..=100")]
     BadDrop(String),
     #[error("--connect and --play cannot be used together")]
     BothModes,

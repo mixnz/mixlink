@@ -179,8 +179,8 @@ end: Bye / 10 s silence / error → svc-session: SessionEnded → stop threads �
 - [ ] Cursor: moves with the host mouse, shape changes (arrow, I-beam, resize, busy) are right, the
   cursor is not also in the video; an inverted (XOR) cursor in a text box stays visible.
 - [ ] Shape recovery: `--drop cursor=5` → the cursor shape recovers after each request.
-- [ ] Loss: `--drop video=1` → picture recovers after each loss (keyframe request), no lasting freeze or
-  garbage.
+- [ ] Loss: `--drop video=0.1` → picture recovers after each loss (keyframe request), no lasting freeze or
+  garbage. (1 % at 50 Mbps loses most frames without FEC: ~87 packets a frame; that level is T13's.)
 - [ ] Close the window → host layout restored (spec 0015) and the headless monitor back on a headless
   host; launcher shows the latency table.
 - [ ] Host service stop or tray → client shows "host ended"; cable pulled → "connection lost" within

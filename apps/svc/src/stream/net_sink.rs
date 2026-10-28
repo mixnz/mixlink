@@ -27,6 +27,8 @@ pub struct NetSink {
     shape_request: Arc<AtomicBool>,
     /// Gaps between frames (driver acquire to acquire), for the session log.
     gaps: GapStats,
+    /// IDRs the client asked for (feedback), for the session log.
+    asked_idrs: u64,
 }
 
 impl NetSink {
@@ -44,11 +46,16 @@ impl NetSink {
             feedback,
             shape_request,
             gaps: GapStats::default(),
+            asked_idrs: 0,
         }
     }
 
     pub fn gaps(&self) -> &GapStats {
         &self.gaps
+    }
+
+    pub fn asked_idrs(&self) -> u64 {
+        self.asked_idrs
     }
 
     pub fn into_lanes(self) -> (TxLane, RxLane) {
@@ -80,6 +87,7 @@ impl EncodeSink<IddSource> for NetSink {
         let Some(encoder) = self.encoder.as_mut() else {
             return Ok(Delivery::Dropped(0));
         };
+        self.asked_idrs += u64::from(asked.force_idr);
         let idr = force_idr || asked.force_idr;
         let start = clock::now();
         let au = encoder.encode(frame.texture(), idr)?;

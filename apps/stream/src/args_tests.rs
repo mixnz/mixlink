@@ -130,7 +130,7 @@ fn drop_parses() {
     let Some(Mode::Connect(c)) = mode(&args).unwrap() else {
         panic!("not connect mode");
     };
-    assert_eq!((c.drop.video_pct, c.drop.cursor_pct), (1, 5));
+    assert_eq!((c.drop.video_bp, c.drop.cursor_bp), (100, 500));
 }
 
 #[test]
