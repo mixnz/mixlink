@@ -12,9 +12,10 @@ use mixlink_stream::feeder::Feeder;
 use mixlink_stream::video::{VideoEvent, VideoSource, VideoThread};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::WindowEvent;
+use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
-use winit::window::{Window, WindowId};
+use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::window::{Fullscreen, Window, WindowId};
 
 use crate::connect::{self, NetThread};
 use crate::ipc::{NetEvent, StreamEvent, send};
@@ -174,6 +175,18 @@ impl StreamApp {
         event_loop.exit();
     }
 
+    /// F11: borderless fullscreen on the window's monitor, so Windows can flip frames straight to the
+    /// screen instead of composing the window (steadier pacing at 60 Hz, spec 0020).
+    fn toggle_fullscreen(&self) {
+        if let Some(window) = &self.window {
+            let next = match window.fullscreen() {
+                Some(_) => None,
+                None => Some(Fullscreen::Borderless(None)),
+            };
+            window.set_fullscreen(next);
+        }
+    }
+
     fn send(&self, msg: &StreamToLauncher) {
         if let Err(error) = send(&mut io::stdout().lock(), msg) {
             log::debug!("launcher did not get {msg:?}: {error}");
@@ -198,6 +211,13 @@ impl ApplicationHandler<StreamEvent> for StreamApp {
                 if let Some(video) = &self.video {
                     video.resize(size.width, size.height);
                 }
+            }
+            WindowEvent::KeyboardInput { event, .. }
+                if event.state == ElementState::Pressed
+                    && !event.repeat
+                    && event.physical_key == PhysicalKey::Code(KeyCode::F11) =>
+            {
+                self.toggle_fullscreen();
             }
             WindowEvent::RedrawRequested => {
                 if let (Some(video), Some(window)) = (&self.video, &self.window) {

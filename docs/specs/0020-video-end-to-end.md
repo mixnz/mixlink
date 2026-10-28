@@ -31,8 +31,8 @@ latency for the session. No terminal on either PC.
 - Out:
   - Input (T10), audio (T11), gamepad (T12), FEC and bitrate from feedback (T13), DDA capture (T24).
   - Pacing, power settings: phase 3.
-  - Fullscreen / pointer lock in the stream window: T10. The window keeps T1 behaviour (resizable, video
-    letterboxed); the local Windows cursor stays visible.
+  - Pointer lock and fullscreen by default: T10. The window keeps T1 behaviour (resizable, video letterboxed,
+    local Windows cursor visible); F11 toggles borderless fullscreen (in: steadier pacing, see Results).
   - More than one client at a time (the host answers `Busy`, spec 0018), HDR, AV1, QSV / AMF.
   - Live latency overlay in the stream window: phase 3.
 
