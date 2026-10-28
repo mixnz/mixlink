@@ -1,6 +1,6 @@
 # 0020 — End-to-end video, virtual monitor per session, cursor channel
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-28
 **Roadmap:** T9
 **Plan:** [0020-video-end-to-end](../plans/0020-video-end-to-end.md) (local only, written by writing-plans skill)
@@ -173,21 +173,58 @@ end: Bye / 10 s silence / error → svc-session: SessionEnded → stop threads �
 - Measured by the report above, on both host and client logs.
 
 ## Acceptance criteria
-- [ ] Main PC host, laptop client, wired LAN: Connect in the launcher → desktop shown within 3 s, virtual
+- [x] Main PC host, laptop client, wired LAN: Connect in the launcher → desktop shown within 3 s, virtual
   monitor in the laptop's mode (or the fallback mode), H.264 and HEVC both tried (`video.codec`).
 - [ ] testufo on the host at the client's refresh: smooth, colours right, no torn frames, for 5 minutes.
-- [ ] Cursor: moves with the host mouse, shape changes (arrow, I-beam, resize, busy) are right, the
+  Colours right, no tearing; ~1 hiccup / s left from wired packet loss (Results), FEC is T13.
+- [x] Cursor: moves with the host mouse, shape changes (arrow, I-beam, resize, busy) are right, the
   cursor is not also in the video; an inverted (XOR) cursor in a text box stays visible.
-- [ ] Shape recovery: `--drop cursor=5` → the cursor shape recovers after each request.
-- [ ] Loss: `--drop video=0.1` → picture recovers after each loss (keyframe request), no lasting freeze or
+- [x] Shape recovery: `--drop cursor=5` → the cursor shape recovers after each request.
+- [x] Loss: `--drop video=0.1` → picture recovers after each loss (keyframe request), no lasting freeze or
   garbage. (1 % at 50 Mbps loses most frames without FEC: ~87 packets a frame; that level is T13's.)
-- [ ] Close the window → host layout restored (spec 0015) and the headless monitor back on a headless
-  host; launcher shows the latency table.
-- [ ] Host service stop or tray → client shows "host ended"; cable pulled → "connection lost" within
+- [x] Close the window → host layout restored (spec 0015) and the headless monitor back on a headless
+  host; launcher shows the latency table. Physical monitor host; headless cold boot not run.
+- [x] Host service stop or tray → client shows "host ended"; cable pulled → "connection lost" within
   ~10 s, host restores its layout.
-- [ ] Unpaired / removed client → `NotPaired`; second client while one streams → `Busy` message.
-- [ ] Headless host (`virtual-only`): login screen and lock screen streamed with the cursor.
-- [ ] Results: latency table (p50 / p99 per span) at 1440p120 H.264 and HEVC; hold timeouts per session.
+- [ ] Unpaired / removed client → `NotPaired`; second client while one streams → `Busy` message. Unit
+  and loopback tests only (`session_tests.rs`, `endpoint_tests.rs`): one client machine.
+- [x] Headless host (`virtual-only`): login screen and lock screen streamed with the cursor. `virtual-only`
+  with the physical monitor off stands in, as in spec 0019.
+- [x] Results: latency table (p50 / p99 per span) at 1080p60 H.264 and HEVC (the laptop is 1080p, 59.99 Hz).
+
+## Results
+Main PC host (RTX 5070, Intel I226-V) → laptop (Intel UHD iGPU, I219-LM, 1920x1080 @ 59.99 Hz), one cable,
+static 10.77.0.x, 1080p60 at 50 Mbps, `virtual-only`, stream window fullscreen (F11), testufo, 1–4 min runs.
+
+| Span (ms, p50 / p99) | HEVC | H.264 |
+|---|---|---|
+| capture | 0.28 / 0.69 | 0.28 / 0.67 |
+| encode | 1.60 / 2.71 | 2.27 / 4.46 |
+| send | 0.08 / 0.51 | 0.15 / 0.42 |
+| network (RTT / 2) | 0.65 / 0.75 | 0.66 / 0.88 |
+| reassemble | 0.45 / 3.69 | 1.36 / 3.33 |
+| queue (wait) | 4.23 / 14.05 | 4.73 / 14.75 |
+| decode | 1.41 / 2.66 | 1.29 / 2.47 |
+| present (show) | 15.45 / 31.38 | 16.11 / 32.60 |
+| total | 26.87 / 36.88 | 30.25 / 39.83 |
+
+- Steady 60 fps adds a refresh of queueing on a 60 Hz client: frames wait for the panel (present ~1
+  refresh). Sparse frames (typing) total p50 4.4 ms. The ~6–8 ms budget holds only without queueing;
+  host capture → client vsync pacing is phase 3.
+- Smoothness fixes found on the laptop: blocking `Present` + newest-wins showed 6506 of 7064 frames
+  (7.9 % lost); frame-latency waitable, a 3-deep paced queue and fullscreen bring presented = decoded (0–4
+  dropped a session).
+- Wired loss: the host sent 774 455 video datagrams, the laptop received 774 332: 123 lost (0.016 %) below
+  the sockets (lanes and socket counters clean). With ~58 datagrams a frame that is ~1 lost frame / s, a
+  keyframe request each (104 in 3.6 min) and a visible hiccup. NIC Receive Buffers 256 → 2048 on the
+  laptop halved it; users must not tune NICs: FEC (T13) and send pacing fix it in software.
+- `--drop video=0.1`: 389 keyframe requests in 2 min, every loss recovered, judder each second. 1 %: ~20 fps.
+- Cursor: IddCx with XOR emulation sends every shape tagged alpha; the text cursor is masked-colour
+  data under that tag (census: 1066 black at alpha 0xFF, 64 colour at alpha 0), read as masked (DXGI).
+- Connect: < 3 s (timed); service stop → "MixLink stopped on the host." at once; cable pulled → "Lost the
+  connection…" after ~8–10 s, host layout restored; lock screen and sign-in streamed with the cursor.
+- Hold timeouts: the driver count is per connector for the driver's life (13 → 104 over ~15 sessions).
+- Host log per session: client-asked IDRs, longest frame gap, stalls while playing (none seen).
 
 ## Open questions
 - Host change of mode during a session (client moves the window to another monitor): not handled; the

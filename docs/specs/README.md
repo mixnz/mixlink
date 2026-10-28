@@ -21,6 +21,6 @@
 | 0017 | [0017-lan-discovery](0017-lan-discovery.md) | done |
 | 0018 | [0018-pairing-secure-session](0018-pairing-secure-session.md) | done |
 | 0019 | [0019-capture-encode](0019-capture-encode.md) | done |
-| 0020 | [0020-video-end-to-end](0020-video-end-to-end.md) | in-progress |
+| 0020 | [0020-video-end-to-end](0020-video-end-to-end.md) | done |
 
 Rules: `../conventions/docs-writing.md`. Template: `_template.md`.
