@@ -29,6 +29,8 @@ use crate::net::cursor_state::CursorTx;
 /// No valid datagram from the host for this long: the connection is lost (as the host's timeout).
 pub const SILENCE: Duration = Duration::from_secs(10);
 const PING_EVERY: Duration = Duration::from_secs(1);
+/// Copies of the closing `Bye`, as the host sends its own.
+const BYE_COPIES: usize = 3;
 /// Longest park; any lane with data wakes the thread sooner.
 const PARK: Duration = Duration::from_millis(5);
 
@@ -165,8 +167,11 @@ impl Streaming<'_, '_> {
         loop {
             let now = Instant::now();
             if stop.load(Ordering::Acquire) {
-                if let Err(error) = self.session.bye(&mut self.wire) {
-                    log::debug!("bye not sent: {error}");
+                // A lost bye leaves the host streaming until its 10 s timeout (seen in spec 0020 Results).
+                for _ in 0..BYE_COPIES {
+                    if let Err(error) = self.session.bye(&mut self.wire) {
+                        log::debug!("bye not sent: {error}");
+                    }
                 }
                 return None;
             }
