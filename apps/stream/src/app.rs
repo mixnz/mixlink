@@ -9,6 +9,7 @@ use mixlink_proto::control::CodecId;
 use mixlink_stream::args::Mode;
 use mixlink_stream::au_queue::{AU_CAPACITY, AU_SLOTS, AuSender, channel};
 use mixlink_stream::feeder::Feeder;
+use mixlink_stream::net::drop_knob::DropKnob;
 use mixlink_stream::video::{VideoEvent, VideoSource, VideoThread};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -187,6 +188,14 @@ impl StreamApp {
         }
     }
 
+    fn is_dev_run(&self) -> bool {
+        match &self.mode {
+            Some(Mode::Play(_)) => true,
+            Some(Mode::Connect(args)) => args.drop != DropKnob::default(),
+            None => false,
+        }
+    }
+
     fn send(&self, msg: &StreamToLauncher) {
         if let Err(error) = send(&mut io::stdout().lock(), msg) {
             log::debug!("launcher did not get {msg:?}: {error}");
@@ -232,9 +241,10 @@ impl ApplicationHandler<StreamEvent> for StreamApp {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: StreamEvent) {
         match event {
             StreamEvent::Stop => self.close(event_loop, CloseReason::Stopped),
-            // Play mode runs without a launcher (terminal, Explorer): only the window closes it.
-            StreamEvent::LauncherGone if matches!(self.mode, Some(Mode::Play(_))) => {
-                log::info!("stdin closed; play mode keeps running until the window is closed");
+            // Dev runs have no launcher (terminal, Explorer): `--play`, or `--connect` with `--drop`; only the
+            // window closes them.
+            StreamEvent::LauncherGone if self.is_dev_run() => {
+                log::info!("stdin closed; a dev run keeps going until the window is closed");
             }
             StreamEvent::LauncherGone => self.close(event_loop, CloseReason::Stopped),
             StreamEvent::Video(video) => self.on_video(event_loop, video),

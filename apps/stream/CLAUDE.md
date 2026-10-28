@@ -25,7 +25,8 @@ with the host (spec 0020), D3D11VA decode and present with the host cursor on a 
   codec }`, `Ready` after the first present, `Closed { reason, latency }` before exit (`latency` in connect mode).
   Reasons: `User`, `Stopped`, `Error`, `Rejected { busy | badDisplay | version }`, `HostEnded { userClosed |
   shutdown | hostError | timeout }`, `ConnectionLost`, `HostUnreachable`, `NotPaired` (the host is forgotten here).
-- Stdin: `LauncherToStream::Stop`; EOF = launcher gone → closes with reason `Stopped` (not in `--play` mode).
+- Stdin: `LauncherToStream::Stop`; EOF = launcher gone → closes with reason `Stopped` (not in dev runs: `--play`, or
+  `--connect` with `--drop`).
 - F11 toggles borderless fullscreen on the window's monitor (Windows can then flip frames straight to the screen).
 - Exit code 0 after `Closed`; non-zero only if the event loop fails to start or the arguments are bad (2).
 - Dev: `mixlink-stream --play <file.h264|.hevc> [--fps 120] [--loop] [--measure]` (spec 0013); stats on stderr
