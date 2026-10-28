@@ -12,7 +12,8 @@ pub const CURSOR_MAX_SIDE: u32 = 256;
 pub enum CursorKind {
     /// Straight alpha.
     Alpha,
-    /// Alpha byte is a mask: 0 = opaque colour, 0xFF = XOR with the screen.
+    /// Alpha byte is a mask: 0xFF = opaque colour, 0 = XOR with the screen (IddCx; the reverse of DXGI
+    /// duplication, seen on the text cursor in spec 0020 Results).
     MaskedColor,
 }
 
@@ -67,7 +68,7 @@ pub fn convert_shape(
             let (b, g, r, a) = (px[0], px[1], px[2], px[3]);
             let out = match kind {
                 CursorKind::Alpha => [mul(b, a), mul(g, a), mul(r, a), a],
-                CursorKind::MaskedColor if a == 0 => [b, g, r, 255],
+                CursorKind::MaskedColor if a == 0xFF => [b, g, r, 255],
                 CursorKind::MaskedColor if (b, g, r) == (0, 0, 0) => [0; 4],
                 CursorKind::MaskedColor => {
                     let at = normal.len();

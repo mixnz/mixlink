@@ -123,3 +123,28 @@ fn bad_pixel_length_is_not_sent() {
     let mut p = pair();
     assert!(!p.sender.send_shape(&info(), 1, &[0; 10]));
 }
+
+#[test]
+fn census_counts_mask_and_colour() {
+    // 3 pixels per row + 4 bytes of padding, 2 rows.
+    let px = |b: u8, a: u8| [b, b, b, a];
+    let mut pixels = Vec::new();
+    for row in [
+        [px(0, 0xFF), px(9, 0xFF), px(0, 0)],
+        [px(9, 0), px(5, 7), px(0, 0)],
+    ] {
+        pixels.extend(row.iter().flatten());
+        pixels.extend([0xEE; 4]);
+    }
+    let c = census(&pixels, 16, 3, 2);
+    assert_eq!(
+        c,
+        ShapeCensus {
+            full_black: 1,
+            full_colour: 1,
+            zero_black: 2,
+            zero_colour: 1,
+            other: 1
+        }
+    );
+}

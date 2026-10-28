@@ -30,14 +30,15 @@ fn color_shape_premultiplied() {
 
 #[test]
 fn masked_opaque_colour() {
-    let img = image(CursorKind::MaskedColor, 1, 1, 4, &[bgra(1, 2, 3, 0)]);
+    // IddCx masked colour: mask 0xFF = this colour, opaque (spec 0020 Results).
+    let img = image(CursorKind::MaskedColor, 1, 1, 4, &[bgra(1, 2, 3, 0xFF)]);
     assert_eq!(img.normal, vec![1, 2, 3, 255]);
     assert!(img.invert.is_none());
 }
 
 #[test]
 fn masked_black_xor_is_transparent() {
-    let img = image(CursorKind::MaskedColor, 1, 1, 4, &[bgra(0, 0, 0, 0xFF)]);
+    let img = image(CursorKind::MaskedColor, 1, 1, 4, &[bgra(0, 0, 0, 0)]);
     assert_eq!(img.normal, vec![0, 0, 0, 0]);
     assert!(img.invert.is_none());
 }
@@ -49,7 +50,7 @@ fn masked_white_xor_goes_to_invert() {
         2,
         1,
         8,
-        &[bgra(255, 255, 255, 0xFF), bgra(9, 9, 9, 0)],
+        &[bgra(255, 255, 255, 0), bgra(9, 9, 9, 0xFF)],
     );
     assert_eq!(&img.normal[..4], &[0, 0, 0, 0]);
     assert_eq!(&img.normal[4..], &[9, 9, 9, 255]);
@@ -123,4 +124,18 @@ fn rect_scales_with_letterbox() {
 fn rect_empty_without_video() {
     let r = cursor_rect((0, 0), (960, 1080), (32, 32), (0, 0), (10, 10));
     assert_eq!(r, Rect::default());
+}
+
+#[test]
+fn masked_i_beam_is_a_beam_not_a_box() {
+    // What the host sent for the text cursor: a black beam (mask 0xFF) in a clear box (mask 0, black).
+    let img = image(
+        CursorKind::MaskedColor,
+        2,
+        1,
+        8,
+        &[bgra(0, 0, 0, 0xFF), bgra(0, 0, 0, 0)],
+    );
+    assert_eq!(img.normal, vec![0, 0, 0, 255, 0, 0, 0, 0]);
+    assert!(img.invert.is_none());
 }

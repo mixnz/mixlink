@@ -10,7 +10,7 @@ use mixlink_capture::{CursorSource, IddSource};
 use mixlink_codec::{EncoderConfig, VideoCodec};
 use mixlink_proto::control::CodecId;
 
-use super::cursor_send::CursorSender;
+use super::cursor_send::{CursorSender, census};
 use super::feedback::FeedbackRx;
 use super::net_sink::NetSink;
 use super::streamer::{StreamEnd, StreamLanes, StreamStart, run_session};
@@ -141,6 +141,11 @@ fn capture(connector: u32, sink: &mut NetSink, stop: &AtomicBool) -> Result<(), 
         src.hold_timeouts(),
         src.ring_fallbacks()
     );
+    log::info!(
+        "longest gap between frames {} ms, gaps over 250 ms: {}",
+        sink.longest_gap().as_millis(),
+        sink.long_gaps()
+    );
     ran
 }
 
@@ -171,6 +176,14 @@ fn cursor_loop(
         match source.next(CURSOR_WAIT) {
             Some(update) => {
                 if let Some((info, pixels)) = update.shape {
+                    log::info!(
+                        "cursor shape {}: {:?} {}x{}, {:?}",
+                        update.pos.shape_id,
+                        info.kind,
+                        info.width,
+                        info.height,
+                        census(pixels, info.pitch, info.width, info.height)
+                    );
                     sender.send_shape(&info, update.pos.shape_id, pixels);
                 }
                 sender.send_position(&update.pos);

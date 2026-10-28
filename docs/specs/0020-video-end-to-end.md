@@ -147,7 +147,7 @@ end: Bye / 10 s silence / error → svc-session: SessionEnded → stop threads �
   presents the last decoded frame again with the new cursor (hardware cursor moves make no new frames).
 - `mixlink-render`: `CursorOverlay` on the `Presenter`: shape → BGRA texture (created per shape, off
   the per-frame path); drawn after the video pass, scaled with the letterboxed video rect. `Color`:
-  alpha blend. `MaskedColor`: mask 0 → opaque colour; mask 0xFF → black pixels skipped, others drawn with
+  alpha blend. `MaskedColor` (IddCx mask, the reverse of DXGI): mask 0xFF → opaque colour; mask 0 → black pixels skipped, others drawn with
   an invert blend (approximates XOR).
 
 ### Latency report

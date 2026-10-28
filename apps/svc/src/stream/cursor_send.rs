@@ -108,6 +108,42 @@ impl CursorSender {
     }
 }
 
+/// Pixels of a shape by mask byte and colour, logged on each new shape: the masked-colour meaning
+/// was settled from these (spec 0020 Results).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ShapeCensus {
+    pub full_black: u32,
+    pub full_colour: u32,
+    pub zero_black: u32,
+    pub zero_colour: u32,
+    pub other: u32,
+}
+
+pub fn census(pixels: &[u8], pitch: u32, width: u16, height: u16) -> ShapeCensus {
+    let mut c = ShapeCensus::default();
+    let row_bytes = usize::from(width) * 4;
+    for row in pixels
+        .chunks(pitch.max(1) as usize)
+        .take(usize::from(height))
+    {
+        let Some(row) = row.get(..row_bytes) else {
+            break;
+        };
+        for px in row.as_chunks::<4>().0 {
+            let black = px[..3] == [0, 0, 0];
+            let count = match (px[3], black) {
+                (0xFF, true) => &mut c.full_black,
+                (0xFF, false) => &mut c.full_colour,
+                (0, true) => &mut c.zero_black,
+                (0, false) => &mut c.zero_colour,
+                _ => &mut c.other,
+            };
+            *count += 1;
+        }
+    }
+    c
+}
+
 #[cfg(test)]
 #[path = "cursor_send_tests.rs"]
 mod tests;
