@@ -16,6 +16,7 @@ use mixlink_render::{Presenter, VideoFrame};
 use winit::raw_window_handle::HasWindowHandle;
 
 use crate::au_queue::{AuInfo, AuReceiver};
+use crate::frame_queue::FrameQueue;
 use crate::net::cursor_state::{CursorChange, CursorRx};
 use crate::stats::{FrameStats, STATS_FRAMES};
 
@@ -138,8 +139,8 @@ fn run<W: HasWindowHandle + Send + Sync + 'static>(
         .map_err(|e| e.to_string())?;
     events(VideoEvent::FirstPresent);
     let mut shown: Option<DecodedFrame> = None;
-    // Decoded, waiting for the swapchain (newest wins); presenting never blocks (spec 0020).
-    let mut pending: Option<Pending> = None;
+    // Decoded, waiting for the swapchain (oldest first, at most two); presenting never blocks (spec 0020).
+    let mut pending: FrameQueue<Pending> = FrameQueue::new();
     let mut redraw = false;
     let mut frame_id = 0u32;
     while !shared.stop.load(Ordering::Relaxed) {
@@ -149,44 +150,40 @@ fn run<W: HasWindowHandle + Send + Sync + 'static>(
             presenter.resize(w, h).map_err(|e| e.to_string())?;
             redraw = true;
         }
-        let newest = match video.as_mut() {
-            Some((source, decoder)) => {
-                if let Some(cursor) = source.cursor.as_mut()
-                    && let Some(change) = cursor.take()
-                {
-                    apply_cursor(&mut presenter, change, &mut loaded_shape)?;
-                    redraw = true;
-                }
-                if decoder.is_none()
-                    && let Some(codec) = source.codec.get()
-                {
-                    let opened = Decoder::new(&presenter.device(), *codec);
-                    *decoder = Some(opened.map_err(|e| e.to_string())?);
-                }
-                match decoder.as_mut() {
-                    Some(decoder) => {
-                        decode_queued(source, decoder, &mut presenter, &mut frame_id, stats)?
-                    }
-                    None => None,
-                }
+        if let Some((source, decoder)) = video.as_mut() {
+            if let Some(cursor) = source.cursor.as_mut()
+                && let Some(change) = cursor.take()
+            {
+                apply_cursor(&mut presenter, change, &mut loaded_shape)?;
+                redraw = true;
             }
-            None => None,
-        };
-        if let Some(newest) = newest
-            && pending.replace(newest).is_some()
-        {
-            stats.dropped += 1;
+            if decoder.is_none()
+                && let Some(codec) = source.codec.get()
+            {
+                let opened = Decoder::new(&presenter.device(), *codec);
+                *decoder = Some(opened.map_err(|e| e.to_string())?);
+            }
+            if let Some(decoder) = decoder.as_mut() {
+                decode_queued(
+                    source,
+                    decoder,
+                    &mut presenter,
+                    &mut frame_id,
+                    &mut pending,
+                    stats,
+                )?;
+            }
         }
-        if pending.is_none() && !redraw {
+        if pending.is_empty() && !redraw {
             thread::park_timeout(IDLE_WAIT);
             continue;
         }
-        // Not ready: loop on, so AUs that arrive meanwhile are decoded (and replace the pending one).
+        // Not ready: loop on, so AUs that arrive meanwhile are decoded and queued.
         if !presenter.wait_frame_ready(READY_WAIT) {
             continue;
         }
         redraw = false;
-        if let Some((frame, mut stamps, info)) = pending.take() {
+        if let Some((frame, mut stamps, info)) = pending.pop() {
             present(&mut presenter, &frame)?;
             stamps.mark(Stage::Presented);
             stats.record_with(&stamps, &info);
@@ -204,16 +201,16 @@ fn run<W: HasWindowHandle + Send + Sync + 'static>(
     Ok(())
 }
 
-/// Decodes every queued AU (P-frames need all of them); keeps only the newest frame.
+/// Decodes every queued AU (P-frames need all of them) into `pending`; a full queue drops its oldest.
 // HOT PATH
 fn decode_queued(
     source: &mut VideoSource,
     decoder: &mut Decoder,
     presenter: &mut Presenter,
     frame_id: &mut u32,
+    pending: &mut FrameQueue<Pending>,
     stats: &mut FrameStats,
-) -> Result<Option<(DecodedFrame, StageStamps, AuInfo)>, String> {
-    let mut newest = None;
+) -> Result<(), String> {
     while let Some(au) = source.rx.try_recv() {
         let mut stamps = StageStamps::new(FrameId::new(*frame_id));
         *frame_id = frame_id.wrapping_add(1);
@@ -226,7 +223,7 @@ fn decode_queued(
                 }
                 stamps.mark(Stage::DecodeEnd);
                 stats.decoded += 1;
-                if newest.replace((frame, stamps, au.info())).is_some() {
+                if pending.push((frame, stamps, au.info())).is_some() {
                     stats.dropped += 1;
                 }
             }
@@ -238,7 +235,7 @@ fn decode_queued(
             Err(e) => return Err(e.to_string()),
         }
     }
-    Ok(newest)
+    Ok(())
 }
 
 /// A new shape is uploaded; the cursor is drawn only while its shape is the one loaded (a lost shape

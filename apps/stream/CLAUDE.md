@@ -9,7 +9,7 @@ with the host (spec 0020), D3D11VA decode and present with the host cursor on a 
 
 ## Layout
 - Library (`lib.rs`, used by the binary and `tests/no_alloc.rs`): `args.rs` (`Mode`: `--connect` / `--play`),
-  `au_queue.rs` (SPSC AU queue, `AuInfo`), `feeder.rs` (file → queue at `--fps`), `stats.rs` (`LATENCY_SPANS`,
+  `au_queue.rs` (SPSC AU queue, `AuInfo`), `frame_queue.rs`, `feeder.rs` (file → queue at `--fps`), `stats.rs` (`LATENCY_SPANS`,
   `latency_summary`), `video.rs` (video thread); each with `<name>_tests.rs`.
 - `net/` (spec 0020): `session.rs` (`run`: `connect_secure`, then one loop over control / video / cursor lanes,
   ping 1 s, 10 s silence = lost), `lanes.rs` (`Media`: open, reassemble, AU queue, cursor, keyframe requests),
@@ -36,7 +36,8 @@ with the host (spec 0020), D3D11VA decode and present with the host cursor on a 
 - The video thread owns the `Presenter` and `Decoder` (opened once the codec is known: `Welcome` or `--play`);
   the winit thread only passes sizes. It decodes every queued AU and presents the newest; a cursor change
   re-presents the last frame. The cursor is drawn only while its shape is loaded. It presents only when the
-  swapchain's frame-latency waitable is signaled (never blocks in `Present`), decoding meanwhile.
+  swapchain's frame-latency waitable is signaled (never blocks in `Present`), decoding meanwhile; decoded
+  frames wait in `FrameQueue` (2, oldest first, a third drops the oldest).
 - Latency spans: host capture / encode / send (`FrameMeta`), network = RTT / 2, reassemble, queue, decode,
   present, total; no clock sync between the PCs.
 - The feeder starts after the first present (decoder open), else the first keyframe is lost.

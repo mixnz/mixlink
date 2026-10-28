@@ -147,8 +147,9 @@ end: Bye / 10 s silence / error → svc-session: SessionEnded → stop threads �
 - Video thread: as spec 0013, with the codec from `Welcome`. It also wakes on a cursor change and
   presents the last decoded frame again with the new cursor (hardware cursor moves make no new frames).
 - Present never blocks the video thread: the swapchain has a frame-latency waitable object (max latency 1);
-  the thread presents only when it is signaled and keeps decoding meanwhile (newest decoded frame wins).
-  A blocking `Present` on a 60 Hz client dropped ~5 frames / s of steady 60 fps video (testufo judder).
+  the thread presents only when it is signaled and keeps decoding meanwhile. Decoded frames wait in a queue of
+  two, shown oldest first; a third drops the oldest. Newest-wins (and a blocking `Present`) dropped ~5 frames / s
+  of steady 60 fps video on a 60 Hz client: two arrivals in one refresh lost one (testufo judder).
 - `mixlink-render`: `CursorOverlay` on the `Presenter`: shape → BGRA texture (created per shape, off
   the per-frame path); drawn after the video pass, scaled with the letterboxed video rect. `Color`:
   alpha blend. `MaskedColor`: mask 0 → opaque colour; mask 0xFF → black pixels skipped, others drawn with
