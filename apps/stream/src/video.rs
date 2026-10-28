@@ -23,6 +23,11 @@ use crate::stats::{FrameStats, STATS_FRAMES};
 const IDLE_COLOR: [f32; 4] = [0.05, 0.25, 0.30, 1.0];
 /// Longest sleep with nothing to do; resize and stop also wake the thread.
 const IDLE_WAIT: Duration = Duration::from_millis(16);
+/// Longest wait for the swapchain before decoding again; a refresh is 4–17 ms.
+const READY_WAIT: Duration = Duration::from_millis(1);
+
+/// A decoded frame with its stamps, waiting to be presented.
+type Pending = (DecodedFrame, StageStamps, AuInfo);
 
 /// What the video thread reports to the window thread.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,9 +138,11 @@ fn run<W: HasWindowHandle + Send + Sync + 'static>(
         .map_err(|e| e.to_string())?;
     events(VideoEvent::FirstPresent);
     let mut shown: Option<DecodedFrame> = None;
+    // Decoded, waiting for the swapchain (newest wins); presenting never blocks (spec 0020).
+    let mut pending: Option<Pending> = None;
+    let mut redraw = false;
     let mut frame_id = 0u32;
     while !shared.stop.load(Ordering::Relaxed) {
-        let mut redraw = false;
         if shared.redraw.swap(false, Ordering::Acquire) {
             let packed = shared.size.load(Ordering::Relaxed);
             let (w, h) = ((packed >> 32) as u32, packed as u32);
@@ -165,21 +172,33 @@ fn run<W: HasWindowHandle + Send + Sync + 'static>(
             }
             None => None,
         };
-        if let Some((frame, mut stamps, info)) = newest {
+        if let Some(newest) = newest
+            && pending.replace(newest).is_some()
+        {
+            stats.dropped += 1;
+        }
+        if pending.is_none() && !redraw {
+            thread::park_timeout(IDLE_WAIT);
+            continue;
+        }
+        // Not ready: loop on, so AUs that arrive meanwhile are decoded (and replace the pending one).
+        if !presenter.wait_frame_ready(READY_WAIT) {
+            continue;
+        }
+        redraw = false;
+        if let Some((frame, mut stamps, info)) = pending.take() {
             present(&mut presenter, &frame)?;
             stamps.mark(Stage::Presented);
             stats.record_with(&stamps, &info);
             stats.presented += 1;
             shown = Some(frame);
-        } else if redraw {
+        } else {
             match &shown {
                 Some(frame) => present(&mut presenter, frame)?,
                 None => presenter
                     .clear_and_present(IDLE_COLOR)
                     .map_err(|e| e.to_string())?,
             }
-        } else {
-            thread::park_timeout(IDLE_WAIT);
         }
     }
     Ok(())

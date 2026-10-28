@@ -15,7 +15,8 @@
 
 ## Public API
 - `Presenter::new(Arc<W: HasWindowHandle>, w, h)`, `resize(w, h)`, `clear_and_present(rgba)`,
-  `device()` (for the decoder), `present_nv12(&VideoFrame)`, `wait_gpu()` (measuring only). Windows only.
+  `device()` (for the decoder), `present_nv12(&VideoFrame)`, `wait_frame_ready(timeout)` (frame-latency waitable, max
+  latency 1, spec 0020: present only after `true`), `wait_gpu()` (measuring only). Windows only.
   `set_cursor(Option<&CursorImage>)` (shape change only), `move_cursor(Option<CursorDraw>)`: drawn on each `present_nv12`.
 - `cursor` (spec 0020): `convert_shape(kind, w, h, hot, pitch, px) -> CursorImage` (premultiplied + invert mask for
   XOR), `CursorKind`, `CursorDraw { x, y, visible }` (hotspot, video px), `cursor_rect`, `CURSOR_MAX_SIDE`.
@@ -29,5 +30,5 @@
 - Device: hardware then WARP; video support asked first (dropped where it fails); debug builds try the debug
   layer first; multithread protection on (FFmpeg decodes on the same device). Size 0 = minimized, present skipped.
 - NV12 pass: BT.601 / BT.709 per frame (constant buffer), limited range, bilinear, black bars, crops decoder padding (`uv_max`); shaders compiled
-  at start with `D3DCompile` (vs/ps 4_0). `present_nv12` uses `Present(0, 0)`: no vblank wait.
+  at start with `D3DCompile` (vs/ps 4_0). `present_nv12` uses `Present(0, 0)`; the waitable keeps it from blocking.
 - Tests create a hidden `STATIC` window or draw offscreen; they run on CI (WARP).

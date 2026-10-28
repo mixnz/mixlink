@@ -2,6 +2,7 @@
 
 use std::fmt;
 use std::sync::Arc;
+use std::time::Duration;
 
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::Win32::Graphics::Direct3D11::ID3D11Device;
@@ -63,6 +64,12 @@ impl Presenter {
     // HOT PATH
     pub fn present_nv12(&mut self, frame: &VideoFrame) -> Result<(), RenderError> {
         self.swapchain.present_nv12(frame)
+    }
+
+    /// Waits up to `timeout` until a present will not block (frame-latency waitable, one frame queued).
+    /// After `true` the caller must present; minimized: always `true`.
+    pub fn wait_frame_ready(&self, timeout: Duration) -> bool {
+        self.swapchain.wait_frame_ready(timeout)
     }
 
     /// Waits until the GPU finished everything submitted so far. Only for measuring stages.

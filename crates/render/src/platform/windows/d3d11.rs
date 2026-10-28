@@ -2,7 +2,9 @@
 
 use std::num::NonZeroIsize;
 
-use windows::Win32::Foundation::HWND;
+use std::time::Duration;
+
+use windows::Win32::Foundation::{CloseHandle, HANDLE, HWND, WAIT_OBJECT_0};
 use windows::Win32::Graphics::Direct3D11::{
     ID3D11Device, ID3D11DeviceContext, ID3D11Query, ID3D11RenderTargetView, ID3D11Texture2D,
 };
@@ -12,9 +14,11 @@ use windows::Win32::Graphics::Dxgi::Common::{
 };
 use windows::Win32::Graphics::Dxgi::{
     DXGI_MWA_NO_ALT_ENTER, DXGI_PRESENT, DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1,
-    DXGI_SWAP_CHAIN_FLAG, DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT,
-    IDXGIDevice, IDXGIFactory2, IDXGISwapChain1,
+    DXGI_SWAP_CHAIN_FLAG, DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT,
+    DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIDevice, IDXGIFactory2,
+    IDXGISwapChain1, IDXGISwapChain2,
 };
+use windows::Win32::System::Threading::WaitForSingleObject;
 use windows::core::Interface;
 
 use super::cursor_pass::CursorPass;
@@ -25,6 +29,9 @@ use crate::{RenderError, VideoFrame};
 
 const BUFFER_COUNT: u32 = 2;
 const FORMAT: DXGI_FORMAT = DXGI_FORMAT_B8G8R8A8_UNORM;
+/// Spec 0020: `Present` must not block the video thread for a refresh; it waits on this object instead,
+/// one frame queued at most.
+const SWAP_FLAGS: DXGI_SWAP_CHAIN_FLAG = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
 pub(crate) struct D3d11Swapchain {
     device: ID3D11Device,
@@ -39,6 +46,8 @@ pub(crate) struct D3d11Swapchain {
     cursor_at: Option<CursorDraw>,
     /// Event query for `wait_gpu` (made once).
     gpu_done: ID3D11Query,
+    /// Signaled when the swapchain takes a new frame without blocking (frame-latency waitable).
+    ready: HANDLE,
 }
 
 fn win32(context: &'static str) -> impl FnOnce(windows::core::Error) -> RenderError {
@@ -62,6 +71,7 @@ impl D3d11Swapchain {
             Scaling: DXGI_SCALING_STRETCH,
             SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
             AlphaMode: DXGI_ALPHA_MODE_UNSPECIFIED,
+            Flags: SWAP_FLAGS.0 as u32,
             ..Default::default()
         };
         let dxgi_device: IDXGIDevice = device.cast().map_err(win32("IDXGIDevice cast"))?;
@@ -78,6 +88,14 @@ impl D3d11Swapchain {
                 .map_err(win32("MakeWindowAssociation"))?;
             swapchain
         };
+        let latency: IDXGISwapChain2 = swapchain.cast().map_err(win32("IDXGISwapChain2 cast"))?;
+        // SAFETY: live swapchain made with the waitable flag; the handle is owned and closed in `Drop`.
+        let ready = unsafe {
+            latency
+                .SetMaximumFrameLatency(1)
+                .map_err(win32("SetMaximumFrameLatency"))?;
+            latency.GetFrameLatencyWaitableObject()
+        };
         let minimized = width == 0 || height == 0;
         let nv12 = Nv12Pass::new(&device)?;
         let cursor = CursorPass::new(&device)?;
@@ -93,6 +111,7 @@ impl D3d11Swapchain {
             cursor,
             cursor_at: None,
             gpu_done,
+            ready,
         };
         if !minimized {
             this.rtv = Some(this.create_rtv()?);
@@ -111,13 +130,7 @@ impl D3d11Swapchain {
         unsafe {
             self.context.OMSetRenderTargets(None, None);
             self.swapchain
-                .ResizeBuffers(
-                    0,
-                    width,
-                    height,
-                    DXGI_FORMAT_UNKNOWN,
-                    DXGI_SWAP_CHAIN_FLAG(0),
-                )
+                .ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, SWAP_FLAGS)
                 .map_err(win32("ResizeBuffers"))?;
         }
         self.rtv = Some(self.create_rtv()?);
@@ -128,6 +141,17 @@ impl D3d11Swapchain {
 
     pub(crate) fn device(&self) -> ID3D11Device {
         self.device.clone()
+    }
+
+    /// Waits up to `timeout` until a present will not block; `true` = present now. Each `true` must be
+    /// followed by a present (the wait takes the slot). Minimized: always `true` without waiting.
+    pub(crate) fn wait_frame_ready(&self, timeout: Duration) -> bool {
+        if self.minimized {
+            return true;
+        }
+        let ms = u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX);
+        // SAFETY: `ready` is the swapchain's waitable object, open until `Drop`.
+        unsafe { WaitForSingleObject(self.ready, ms) == WAIT_OBJECT_0 }
     }
 
     pub(crate) fn set_cursor(&mut self, image: Option<&CursorImage>) -> Result<(), RenderError> {
@@ -216,6 +240,13 @@ impl D3d11Swapchain {
                 .map_err(win32("CreateRenderTargetView"))?;
         }
         rtv.ok_or_else(|| win32("CreateRenderTargetView")(windows::core::Error::empty()))
+    }
+}
+
+impl Drop for D3d11Swapchain {
+    fn drop(&mut self) {
+        // SAFETY: owned handle from `GetFrameLatencyWaitableObject`, closed once.
+        let _ = unsafe { CloseHandle(self.ready) };
     }
 }
 

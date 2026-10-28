@@ -21,6 +21,7 @@ latency for the session. No terminal on either PC.
   - Feedback body v1: keyframe request (lost frame) and cursor shape request (unknown `shape_id`).
   - Cursor channel: IddCx hardware cursor in `vdisplay`, cursor share to the service, cursor messages on the
     wire (`proto::cursor`), client draws the cursor over the video, shape recovery.
+  - Client present that never blocks (frame-latency waitable), so steady 60 fps video stays smooth on a 60 Hz client.
   - Client: launcher Connect → `mixlink-stream --connect`; the stream process owns the secure session,
     receive, reassembly, decode / present (spec 0013); IPC v2 with connect states and close reasons.
   - Per-stage latency: host stage times ride in each video frame; the client adds network and its own stages;
@@ -29,7 +30,7 @@ latency for the session. No terminal on either PC.
     before opening them (hidden switch, for the loss criteria below; no loss simulator exists yet).
 - Out:
   - Input (T10), audio (T11), gamepad (T12), FEC and bitrate from feedback (T13), DDA capture (T24).
-  - Pacing, frame-latency waitable object for 60 Hz clients, power settings: phase 3.
+  - Pacing, power settings: phase 3.
   - Fullscreen / pointer lock in the stream window: T10. The window keeps T1 behaviour (resizable, video
     letterboxed); the local Windows cursor stays visible.
   - More than one client at a time (the host answers `Busy`, spec 0018), HDR, AV1, QSV / AMF.
@@ -145,6 +146,9 @@ end: Bye / 10 s silence / error → svc-session: SessionEnded → stop threads �
     datagram → `ConnectionLost`; `connect_secure` timeout → `HostUnreachable`.
 - Video thread: as spec 0013, with the codec from `Welcome`. It also wakes on a cursor change and
   presents the last decoded frame again with the new cursor (hardware cursor moves make no new frames).
+- Present never blocks the video thread: the swapchain has a frame-latency waitable object (max latency 1);
+  the thread presents only when it is signaled and keeps decoding meanwhile (newest decoded frame wins).
+  A blocking `Present` on a 60 Hz client dropped ~5 frames / s of steady 60 fps video (testufo judder).
 - `mixlink-render`: `CursorOverlay` on the `Presenter`: shape → BGRA texture (created per shape, off
   the per-frame path); drawn after the video pass, scaled with the letterboxed video rect. `Color`:
   alpha blend. `MaskedColor`: mask 0 → opaque colour; mask 0xFF → black pixels skipped, others drawn with

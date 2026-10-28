@@ -35,7 +35,8 @@ with the host (spec 0020), D3D11VA decode and present with the host cursor on a 
 - Release builds use the GUI subsystem (no console); piped stdio still works.
 - The video thread owns the `Presenter` and `Decoder` (opened once the codec is known: `Welcome` or `--play`);
   the winit thread only passes sizes. It decodes every queued AU and presents the newest; a cursor change
-  re-presents the last frame. The cursor is drawn only while its shape is loaded.
+  re-presents the last frame. The cursor is drawn only while its shape is loaded. It presents only when the
+  swapchain's frame-latency waitable is signaled (never blocks in `Present`), decoding meanwhile.
 - Latency spans: host capture / encode / send (`FrameMeta`), network = RTT / 2, reassemble, queue, decode,
   present, total; no clock sync between the PCs.
 - The feeder starts after the first present (decoder open), else the first keyframe is lost.
