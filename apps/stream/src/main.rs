@@ -7,6 +7,7 @@ mod connect;
 mod ipc;
 mod platform;
 mod strings;
+mod window_input;
 
 use std::io;
 use std::process::ExitCode;

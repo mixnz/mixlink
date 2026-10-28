@@ -1,6 +1,6 @@
 # 0021 — Keyboard and mouse from the client to the host
 
-**Status:** in-progress
+**Status:** done
 **Date:** 2026-10-28
 **Roadmap:** T10
 **Plan:** [0021-keyboard-mouse](../plans/0021-keyboard-mouse.md) (local only, written by writing-plans skill)
@@ -79,14 +79,17 @@ on `Connected`. The lane has one owner on each end, as before (`net` CLAUDE.md).
   check makes them idempotent.
 
 ### Client (`apps/stream`, `crates/input`)
+- The packet type lives in `mixlink_core::input` (`mixlink-input` may depend on `core` only,
+  `scripts/check-deps.sh`); `proto::input` holds its wire form (`encode`, `decode`).
 - `crates/input`: `keymap.rs` (set-1 scan code + E0 → HID usage, pure, table test), `client/state.rs`
   (`InputState`: event ring, totals, mode, `release_all`, `packet()`; no heap), `platform/windows/kbd_hook.rs`
   (install / remove the hook on the calling thread; the callback swallows keys while captured and calls
-  a thread-local sink; `// SAFETY:` per block). Depends on `proto` for the packet type (allowed direction).
-- `apps/stream/src/input/`: `capture.rs` (winit events → `InputState`, letterbox math shared with the
-  presenter's rectangle), `mode.rs` (absolute ↔ relative from the cursor flag, with confine / hide /
-  show via `Window::set_cursor_grab(Confined)` and `set_cursor_visible`), `sender.rs` (`InputTx`, repeat
-  and keep-alive timers), `shortcuts.rs`.
+  a thread-local sink; `// SAFETY:` per block), `thread_msg.rs` (`Pump`: message wait with a
+  high-resolution timer, so the +4 ms repeat is not rounded to the 15.6 ms tick).
+- `apps/stream/src/input/`: `capture.rs` (window → stream pixels, letterbox from `viewport::fit`; a
+  pointer on a bar sits on the nearest edge), `sender.rs` (`InputTx`, repeat and keep-alive `Schedule`),
+  `shortcuts.rs`, `thread.rs` (`stream-input`). `window_input.rs` (binary): absolute ↔ relative from the
+  cursor flag, with `Window::set_cursor_grab(Confined)` and `set_cursor_visible`.
 - Cursor prediction: in absolute mode the video thread draws the shape at the local pointer position
   (an atomic written by the winit thread); host positions still drive visibility and shape.
 - Captured = focused and not released by the shortcut. Not captured → no hook, pointer free and visible,
@@ -97,8 +100,10 @@ on `Connected`. The lane has one owner on each end, as before (`net` CLAUDE.md).
   new events in order → keyboard / button reports, bitmap reconcile, relative totals → `mouse_rel_reports`
   (wheel notches from the 1/120 remainder), absolute → `mouse_abs_report` through `AbsMap`.
 - `AbsMap`: stream pixel → 0..=32767 over the virtual desktop, from the monitor's desktop rectangle and
-  the desktop bounds (read after `session::begin`; `virtual-only` = the whole range). First plan task
-  checks on the main PC that `vhid` absolute spans the virtual desktop (not only the main display).
+  the desktop bounds (read after `session::begin`; `virtual-only` = the whole range). That `vhid`
+  absolute spans the virtual desktop (not only the main display) is checked in the two-PC run (`extend`).
+- Buttons always go on the relative mouse collection (press and release reach one device across mode
+  switches); absolute reports only move the pointer.
 - `svc-input` thread (spawned by `stream_on` next to `svc-cursor`, `recv_timeout` on the lane):
   `// HOT PATH`; `Option<Arc<VHid>>` from `run.rs` (no driver → log once, drop input).
 - Release-all: session end, stop, and 500 ms without a packet while a key or button is held.
@@ -116,7 +121,7 @@ on `Connected`. The lane has one owner on each end, as before (`net` CLAUDE.md).
 - [ ] Typing in Notepad on the host from the laptop: every key, Shift / Ctrl / Alt combos, Win key opens
   Start on the host (not the laptop), Alt+Tab switches host windows; no key stuck after 5 minutes.
 - [ ] Desktop mouse: host cursor sits under the laptop pointer at every edge and corner (windowed and
-  F11 / `Ctrl+Alt+Shift+F` fullscreen, letterboxed), clicks, double-click, drag, right-click, wheel.
+  `Ctrl+Alt+Shift+F` fullscreen, letterboxed), clicks, double-click, drag, right-click, wheel.
 - [ ] Game with mouse-look (a spec 0006 game): pointer locked, no local cursor, camera turns smoothly,
   WASD + mouse buttons work; Esc to the game menu brings the absolute mode back.
 - [ ] Focus loss (Alt+Tab out via `Ctrl+Alt+Shift+Z`, clicking another window) with W held → host
@@ -127,6 +132,11 @@ on `Connected`. The lane has one owner on each end, as before (`net` CLAUDE.md).
 - [ ] UAC prompt and lock screen on the host are usable from the laptop.
 - [ ] `extend` topology: absolute mouse lands on the virtual monitor, not the physical one.
 - [ ] Results: input apply time p50 / p99 and repeats per session from the logs.
+
+## Results
+Unit and loopback tests pass (`proto::input`, `InputState`, `InputApplier`, `AbsMap`, `InputRecv`,
+`InputTx` / `Schedule`, shortcuts, window → stream mapping, `Pump` timer). The two-PC run (main PC host,
+laptop client, wired) is next; this section gets its findings and numbers.
 
 ## Open questions
 - (Answered 2026-10-28: `SendInput` fallback is row T25; fullscreen moves to `Ctrl+Alt+Shift+F`; a cursor

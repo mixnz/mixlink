@@ -14,7 +14,7 @@ use mixlink_proto::header::WIRE_VERSION;
 use mixlink_stream::args::ConnectArgs;
 use mixlink_stream::au_queue::{AU_CAPACITY, AU_SLOTS, channel};
 use mixlink_stream::input::sender::InputTx;
-use mixlink_stream::net::cursor_state::cursor_channel;
+use mixlink_stream::net::cursor_state::{LocalPointer, cursor_channel};
 use mixlink_stream::net::session::SILENCE;
 use mixlink_stream::net::{SessionEnd, SessionIo, SessionPlan, run};
 use mixlink_stream::video::VideoSource;
@@ -35,6 +35,8 @@ pub struct NetThread {
     handle: JoinHandle<SessionEnd>,
     /// The input sender, sent once the session is up (spec 0021).
     input: Receiver<InputTx>,
+    /// Where the window draws the host cursor in absolute mouse mode.
+    pub local: LocalPointer,
 }
 
 impl NetThread {
@@ -78,7 +80,13 @@ pub fn start(
         silence: SILENCE,
     };
     let (au, rx) = channel(AU_SLOTS, AU_CAPACITY);
-    let (cursor, cursor_rx) = cursor_channel();
+    let (mut cursor, cursor_rx) = cursor_channel();
+    let local = cursor_rx.local_pointer();
+    let shown = proxy.clone();
+    cursor.on_visibility(Box::new(move |visible| {
+        // Fails only after the loop has exited; nothing left to notify.
+        let _ = shown.send_event(StreamEvent::Net(NetEvent::HostCursor { visible }));
+    }));
     let codec = Arc::new(OnceLock::new());
     let want_keyframe = Arc::new(AtomicBool::new(false));
     let stop = Arc::new(AtomicBool::new(false));
@@ -124,6 +132,7 @@ pub fn start(
             stop,
             handle,
             input: input_rx,
+            local,
         },
         source,
     ))

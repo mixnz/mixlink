@@ -32,7 +32,7 @@ its spec; a failed spike switches to the fallback its ADR names before dependent
 | T7 | Capture from the IddCx shared texture (DDA fallback: T24) → NVENC encode via FFmpeg, GPU zero-copy | capture, codec | T2, T21, T23 | [0019](../specs/0019-capture-encode.md) | done |
 | T8 | D3D11VA decode via FFmpeg → present in the stream window | codec, render | T1, T2 | [0013](../specs/0013-d3d11va-decode-present.md) | done |
 | T9 | End-to-end video host→client, virtual monitor in client mode, cursor channel, per-stage latency report | svc, client, stream | T6, T7, T8 | [0020](../specs/0020-video-end-to-end.md) | done |
-| T10 | Keyboard/mouse: Raw Input + pointer lock on client, virtual HID on host (SendInput fallback), redundant packets | input, svc, stream | T9, T22 | [0021](../specs/0021-keyboard-mouse.md) | wip |
+| T10 | Keyboard/mouse: Raw Input + pointer lock on client, virtual HID on host (SendInput fallback), redundant packets | input, svc, stream | T9, T22 | [0021](../specs/0021-keyboard-mouse.md) | done |
 | T11 | Audio: WASAPI loopback in the service → Opus (5 ms) → playback | audio, svc, client | T6, T17 | — | todo |
 | T12 | Gamepad: XInput on client, virtual Xbox pads from T22 on host (ADR-0009), rumble back to the client | input, svc | T10, T22 | — | todo |
 | T13 | FEC + basic feedback channel so real LAN/Wi-Fi loss is survivable | proto, net | T9 | — | todo |
