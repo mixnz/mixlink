@@ -64,7 +64,7 @@ pub struct SessionEnd {
 
 /// The session port's lanes on this side.
 struct Link {
-    _transport: Transport,
+    transport: Transport,
     ctrl_tx: TxLane,
     ctrl_rx: RxLane,
     video: RxLane,
@@ -83,7 +83,7 @@ fn open_link() -> Result<Link, CloseReason> {
         video: lanes.take_rx(Channel::Video).ok_or_else(missing)?,
         cursor: lanes.take_rx(Channel::Cursor).ok_or_else(missing)?,
         feedback: lanes.take_tx(Channel::Feedback).ok_or_else(missing)?,
-        _transport: transport,
+        transport,
     })
 }
 
@@ -128,10 +128,18 @@ pub fn run(
         rtt: Rtt::default(),
     };
     let reason = streaming.run(&mut io, plan.silence, &stop);
-    SessionEnd {
-        reason,
-        counts: streaming.media.counts(),
-    }
+    let counts = streaming.media.counts();
+    drop(streaming);
+    let stats = link.transport.stats();
+    log::info!(
+        "transport: video received {:?}, receive errors {}, bad datagrams {}, socket buffers {} / {} B",
+        stats.rx(Channel::Video),
+        stats.recv_err,
+        stats.rx_bad,
+        stats.recv_buffer,
+        stats.send_buffer
+    );
+    SessionEnd { reason, counts }
 }
 
 /// The loop after the handshake.

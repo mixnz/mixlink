@@ -156,7 +156,7 @@ pub fn start(
         },
     });
     let worker = Worker {
-        _transport: transport,
+        transport,
         tx,
         rx,
         control,
@@ -196,7 +196,7 @@ fn launcher(display: DisplayHandle) -> Launch {
 }
 
 struct Worker {
-    _transport: Transport,
+    transport: Transport,
     tx: mixlink_net::TxLane,
     rx: mixlink_net::RxLane,
     control: HostControl,
@@ -301,6 +301,14 @@ impl Worker {
             }
             EndpointEvent::SessionEnded { session, device } => {
                 log::info!("session {} ended: {device}", session.get());
+                let stats = self.transport.stats();
+                log::info!(
+                    "session port since start: video sent {:?}, send errors {}, socket buffers {} / {} B",
+                    stats.tx(Channel::Video),
+                    stats.send_err,
+                    stats.send_buffer,
+                    stats.recv_buffer
+                );
                 if let Some(streams) = self.streams.as_mut() {
                     streams.ended(*device);
                 }
