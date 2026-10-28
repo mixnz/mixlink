@@ -3,5 +3,6 @@
 
 pub mod client;
 pub mod hid;
+pub mod host;
 pub mod keymap;
 pub mod platform;

@@ -68,3 +68,9 @@ pub fn neutral_reports() -> [Report; 2 + PAD_SLOTS as usize] {
     }
     all
 }
+
+/// Where reports go: the `vhid` feeder, or a fake in tests.
+pub trait ReportSink {
+    type Error;
+    fn feed(&mut self, report: &Report) -> Result<(), Self::Error>;
+}

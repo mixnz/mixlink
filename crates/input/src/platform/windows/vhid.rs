@@ -9,7 +9,7 @@ use windows::Win32::Foundation::{
 use windows::core::GUID;
 
 use super::vhid_wire::{self, IOCTL_FEED, IOCTL_QUERY, QUERY_SIZE, QueryReply, WireError};
-use crate::hid::report::Report;
+use crate::hid::report::{Report, ReportSink};
 
 /// `MIXLINK_VHID_INTERFACE` in `drivers/vhid/Control.h`.
 const INTERFACE: GUID = GUID::from_u128(0x1ad24e8a_2048_46bd_b35c_bfad0cfefa8d);
@@ -71,12 +71,18 @@ impl VHid {
     }
 }
 
-/// Where reports go: `VHid`, or a fake in tests.
-pub trait ReportSink {
-    fn feed(&mut self, report: &Report) -> Result<(), VHidError>;
+impl ReportSink for VHid {
+    type Error = VHidError;
+
+    fn feed(&mut self, report: &Report) -> Result<(), VHidError> {
+        VHid::feed(self, report)
+    }
 }
 
-impl ReportSink for VHid {
+/// A shared feeder (`Arc<VHid>` in the service): `feed` only needs `&self`.
+impl ReportSink for &VHid {
+    type Error = VHidError;
+
     fn feed(&mut self, report: &Report) -> Result<(), VHidError> {
         VHid::feed(self, report)
     }
