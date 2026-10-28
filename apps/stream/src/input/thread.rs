@@ -99,6 +99,8 @@ struct Worker {
     captured: bool,
     hook: Option<KeyHook>,
     on_shortcut: OnShortcut,
+    /// This thread's own wake: a key sent from the hook must make the wait take the new deadline.
+    waker: Waker,
 }
 
 thread_local! {
@@ -120,18 +122,7 @@ fn run(
         }
     };
     let _mmcss = Mmcss::enter(MmcssTask::Games);
-    WORKER.with(|w| {
-        *w.borrow_mut() = Some(Worker {
-            state: InputState::new(),
-            tx,
-            schedule: Schedule::default(),
-            shortcuts: Shortcuts::default(),
-            ring,
-            captured: false,
-            hook: None,
-            on_shortcut,
-        });
-    });
+    install_worker(tx, ring, on_shortcut, pump.waker());
     let _ = ready.send(Ok(pump.waker()));
     loop {
         let deadline = with_worker(|w| w.tick(Instant::now())).flatten();
@@ -142,6 +133,22 @@ fn run(
     let counts = with_worker(Worker::finish).unwrap_or_default();
     WORKER.with(|w| w.borrow_mut().take());
     counts
+}
+
+fn install_worker(tx: InputTx, ring: Consumer<MouseEvent>, on_shortcut: OnShortcut, waker: Waker) {
+    WORKER.with(|w| {
+        *w.borrow_mut() = Some(Worker {
+            state: InputState::new(),
+            tx,
+            schedule: Schedule::default(),
+            shortcuts: Shortcuts::default(),
+            ring,
+            captured: false,
+            hook: None,
+            on_shortcut,
+            waker,
+        });
+    });
 }
 
 fn with_worker<T>(f: impl FnOnce(&mut Worker) -> T) -> Option<T> {
@@ -218,12 +225,15 @@ impl Worker {
             KeyUse::Forward => {
                 if self.state.key(usage, key.down) {
                     self.send_new(Instant::now());
+                    // The wait runs with the deadline from before this key; take the new one.
+                    self.waker.wake();
                 }
             }
             KeyUse::Drop => {}
             KeyUse::Run(shortcut) => {
                 if shortcut != Shortcut::Fullscreen && self.state.release_all() {
                     self.send_new(Instant::now());
+                    self.waker.wake();
                 }
                 (self.on_shortcut)(shortcut);
             }
@@ -248,3 +258,7 @@ impl Worker {
         self.tx.counts()
     }
 }
+
+#[cfg(test)]
+#[path = "thread_tests.rs"]
+mod tests;
