@@ -26,8 +26,8 @@
   `RejectReason`, `ByeReason` (`HostError`), `CodecId` (`Hello.codecs`, `Welcome.codec`), `encode`, `decode`.
 - `video` (spec 0020): `FrameMeta` (`encode`, `split` -> meta + AU), `FRAME_META_LEN` (16).
 - `feedback` (spec 0020): `Feedback` (`KeyframeRequest`, `CursorShapeRequest`; `encode`, `decode`), `FEEDBACK_LEN`.
-- `input` (spec 0021): `InputPacket` (`encode`, `decode`), `InputEvent`, `MouseMode`, `INPUT_LEN` (80), `MAX_EVENTS` (8),
-  `BUTTON_CODE` (0xF0), `KEY_BYTES`.
+- `input` (spec 0021): `encode`, `decode`, `INPUT_LEN` (80); re-exports `core::input` (`InputPacket`, `InputEvent`, `MouseMode`,
+  `MAX_EVENTS`, `BUTTON_CODE`, `KEY_BYTES`).
 - `cursor`: `CursorPosition` (`encode`), `CursorShapeHeader` (`encode_into`), `ShapeKind`,
   `CursorMessage`, `decode`, `CURSOR_POSITION_LEN`, `CURSOR_SHAPE_HEADER_LEN`.
 - `crypto` (spec 0018): `SessionKeys` (`c2h`, `h2c`; `sealer`, `opener`), `Role`, `Sealer` (`seal`), `Opener`

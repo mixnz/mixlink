@@ -8,7 +8,9 @@ use mixlink_core::ids::FrameId;
 use mixlink_proto::channel::Channel;
 use mixlink_proto::crypto::{KEY_LEN, Role, SessionKeys, TAG_LEN};
 use mixlink_proto::header::{Flags, MAX_DATAGRAM, PacketHeader};
-use mixlink_proto::input::{INPUT_LEN, InputEvent, InputPacket, MAX_EVENTS, MouseMode};
+use mixlink_proto::input::{
+    INPUT_LEN, InputEvent, InputPacket, MAX_EVENTS, MouseMode, decode, encode,
+};
 use mixlink_proto::packetizer::Packetizer;
 use mixlink_proto::reassembler::{Push, Reassembler, ReassemblerConfig};
 
@@ -140,8 +142,8 @@ fn input_encode_and_decode_do_not_allocate() {
     let mut out = [0u8; INPUT_LEN];
     let mut decoded = None;
     let n = allocations_during(|| {
-        packet.encode(&mut out);
-        decoded = InputPacket::decode(&out).ok();
+        encode(&packet, &mut out);
+        decoded = decode(&out).ok();
     });
     assert!(decoded.is_some());
     assert_eq!(n, 0);

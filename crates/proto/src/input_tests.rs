@@ -2,7 +2,7 @@ use super::*;
 
 fn sample() -> InputPacket {
     let mut keys = [0u8; 32];
-    keys[0x04 / 8] |= 1 << (0x04 % 8);
+    keys[0] |= 1 << 4; // usage 0x04
     keys[0xE1 / 8] |= 1 << (0xE1 % 8);
     let mut events = [InputEvent::default(); MAX_EVENTS];
     events[0] = InputEvent {
@@ -36,8 +36,8 @@ fn sample() -> InputPacket {
 
 fn round_trip(packet: &InputPacket) -> InputPacket {
     let mut out = [0u8; INPUT_LEN];
-    packet.encode(&mut out);
-    InputPacket::decode(&out).unwrap()
+    encode(packet, &mut out);
+    decode(&out).unwrap()
 }
 
 #[test]
@@ -59,9 +59,9 @@ fn negative_totals_round_trip() {
 #[test]
 fn short_is_error() {
     let mut out = [0u8; INPUT_LEN];
-    sample().encode(&mut out);
+    encode(&sample(), &mut out);
     assert_eq!(
-        InputPacket::decode(&out[..INPUT_LEN - 1]),
+        decode(&out[..INPUT_LEN - 1]),
         Err(InputError::TooShort { len: INPUT_LEN - 1 })
     );
 }
@@ -69,28 +69,25 @@ fn short_is_error() {
 #[test]
 fn unknown_kind_is_error() {
     let mut out = [0u8; INPUT_LEN];
-    sample().encode(&mut out);
+    encode(&sample(), &mut out);
     out[0] = 2;
-    assert_eq!(InputPacket::decode(&out), Err(InputError::Kind { byte: 2 }));
+    assert_eq!(decode(&out), Err(InputError::Kind { byte: 2 }));
 }
 
 #[test]
 fn bad_mode_is_error() {
     let mut out = [0u8; INPUT_LEN];
-    sample().encode(&mut out);
+    encode(&sample(), &mut out);
     out[5] = 3;
-    assert_eq!(InputPacket::decode(&out), Err(InputError::Mode { byte: 3 }));
+    assert_eq!(decode(&out), Err(InputError::Mode { byte: 3 }));
 }
 
 #[test]
 fn count_over_eight_is_error() {
     let mut out = [0u8; INPUT_LEN];
-    sample().encode(&mut out);
+    encode(&sample(), &mut out);
     out[31] = 9;
-    assert_eq!(
-        InputPacket::decode(&out),
-        Err(InputError::Count { count: 9 })
-    );
+    assert_eq!(decode(&out), Err(InputError::Count { count: 9 }));
 }
 
 #[test]

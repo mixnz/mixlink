@@ -5,6 +5,7 @@ pub mod config;
 pub mod error;
 pub mod hex;
 pub mod ids;
+pub mod input;
 pub mod ipc;
 pub mod mmcss;
 pub mod stage;
