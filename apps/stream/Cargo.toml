@@ -10,6 +10,7 @@ mixlink-core.workspace = true
 mixlink-render.workspace = true
 mixlink-codec.workspace = true
 mixlink-proto.workspace = true
+mixlink-input.workspace = true
 mixlink-net.workspace = true
 rtrb.workspace = true
 thiserror.workspace = true

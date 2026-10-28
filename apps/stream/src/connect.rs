@@ -2,6 +2,7 @@
 //! the `stream-net` thread that feeds the video thread.
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 
@@ -12,6 +13,7 @@ use mixlink_proto::control::{CodecId, ControlMessage, DisplayInfo};
 use mixlink_proto::header::WIRE_VERSION;
 use mixlink_stream::args::ConnectArgs;
 use mixlink_stream::au_queue::{AU_CAPACITY, AU_SLOTS, channel};
+use mixlink_stream::input::sender::InputTx;
 use mixlink_stream::net::cursor_state::cursor_channel;
 use mixlink_stream::net::session::SILENCE;
 use mixlink_stream::net::{SessionEnd, SessionIo, SessionPlan, run};
@@ -31,9 +33,16 @@ const MAX_DISPLAYS: usize = 8;
 pub struct NetThread {
     stop: Arc<AtomicBool>,
     handle: JoinHandle<SessionEnd>,
+    /// The input sender, sent once the session is up (spec 0021).
+    input: Receiver<InputTx>,
 }
 
 impl NetThread {
+    /// The input sender once `Connected` came (it is sent just before).
+    pub fn take_input(&self) -> Option<InputTx> {
+        self.input.try_recv().ok()
+    }
+
     /// Stops it (it sends `Bye` when the session was up) and waits.
     pub fn stop(self) -> Option<SessionEnd> {
         self.stop.store(true, Ordering::Release);
@@ -73,12 +82,14 @@ pub fn start(
     let codec = Arc::new(OnceLock::new());
     let want_keyframe = Arc::new(AtomicBool::new(false));
     let stop = Arc::new(AtomicBool::new(false));
+    let (input, input_rx) = mpsc::sync_channel(1);
     let io = SessionIo {
         au,
         cursor,
         codec: Arc::clone(&codec),
         want_keyframe: Arc::clone(&want_keyframe),
         stop: Arc::clone(&stop),
+        input,
     };
     let host_id = args.host;
     let handle = thread::Builder::new()
@@ -108,7 +119,14 @@ pub fn start(
         cursor: Some(cursor_rx),
         want_keyframe,
     };
-    Ok((NetThread { stop, handle }, source))
+    Ok((
+        NetThread {
+            stop,
+            handle,
+            input: input_rx,
+        },
+        source,
+    ))
 }
 
 /// This PC's displays; `stream_display` = the one the window is on.

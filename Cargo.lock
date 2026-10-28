@@ -2704,6 +2704,7 @@ dependencies = [
  "log",
  "mixlink-codec",
  "mixlink-core",
+ "mixlink-input",
  "mixlink-net",
  "mixlink-proto",
  "mixlink-render",
