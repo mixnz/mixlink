@@ -24,6 +24,8 @@ pub struct StreamLanes {
     pub video: TxLane,
     pub cursor: TxLane,
     pub feedback: RxLane,
+    /// Client keyboard and mouse (spec 0021).
+    pub input: RxLane,
 }
 
 /// What a stream needs from `SessionStarted` and `host.json`.
@@ -60,18 +62,18 @@ impl MonitorPort for DisplayHandle {
     }
 }
 
-/// Monitor on, `capture` on its connector until it returns, monitor off. Lanes always come back.
+/// Monitor on, `capture` on its target until it returns, monitor off. Lanes always come back.
 pub fn run_session<M: MonitorPort>(
     monitor: &M,
     start: &StreamStart,
     lanes: StreamLanes,
-    capture: impl FnOnce(u32, StreamLanes) -> (StreamLanes, Result<(), SvcError>),
+    capture: impl FnOnce(&StreamTarget, StreamLanes) -> (StreamLanes, Result<(), SvcError>),
 ) -> (StreamLanes, StreamEnd) {
     let target = match monitor.begin(start.device, start.mode) {
         Ok(target) => target,
         Err(error) => return (lanes, StreamEnd::Failed(error)),
     };
-    let (lanes, captured) = capture(target.connector, lanes);
+    let (lanes, captured) = capture(&target, lanes);
     if let Err(error) = monitor.end(target.active) {
         log::warn!("client monitor not removed cleanly: {error}");
     }

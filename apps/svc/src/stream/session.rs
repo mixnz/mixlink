@@ -8,17 +8,21 @@ use std::time::{Duration, Instant};
 
 use mixlink_capture::{CursorSource, IddSource};
 use mixlink_codec::{EncoderConfig, VideoCodec};
+use mixlink_core::mmcss::{Mmcss, MmcssTask};
+use mixlink_input::host::abs_map::AbsMap;
+use mixlink_input::platform::windows::vhid::VHid;
 use mixlink_proto::control::CodecId;
 
 use super::cursor_send::{CursorSender, census};
 use super::feedback::FeedbackRx;
+use super::input_recv::{InputRecv, NoDriver};
 use super::net_sink::NetSink;
 use super::streamer::{StreamEnd, StreamLanes, StreamStart, run_session};
 use super::video_send::VideoSender;
 use crate::capture::flow::run_loop;
 use crate::capture::report::Stats;
 use crate::capture_args::Levers;
-use crate::display::requests::DisplayHandle;
+use crate::display::requests::{DisplayHandle, StreamTarget};
 use crate::error::SvcError;
 use crate::platform::windows::priority::apply_thread;
 
@@ -36,6 +40,7 @@ const SESSION_MAX: Duration = Duration::from_secs(365 * 24 * 3600);
 /// Runs one session's stream; the lanes always come back.
 pub fn run_stream(
     display: &DisplayHandle,
+    input: Option<&VHid>,
     start: &StreamStart,
     lanes: StreamLanes,
     stop: &AtomicBool,
@@ -49,13 +54,14 @@ pub fn run_stream(
         start.mode.refresh_mhz,
         start.codec
     );
-    run_session(display, start, lanes, |connector, lanes| {
-        stream_on(connector, start, lanes, stop)
+    run_session(display, start, lanes, |target, lanes| {
+        stream_on(target, input, start, lanes, stop)
     })
 }
 
 fn stream_on(
-    connector: u32,
+    target: &StreamTarget,
+    input: Option<&VHid>,
     start: &StreamStart,
     lanes: StreamLanes,
     stop: &AtomicBool,
@@ -64,7 +70,16 @@ fn stream_on(
         video,
         cursor,
         feedback,
+        input: input_lane,
     } = lanes;
+    let connector = target.connector;
+    let stream_size = (start.mode.width, start.mode.height);
+    let mut input_recv = InputRecv::new(
+        input_lane,
+        &start.keys,
+        start.peer,
+        AbsMap::new(stream_size, target.place),
+    );
     let shape_request = Arc::new(AtomicBool::new(false));
     let cursor_stop = AtomicBool::new(false);
     let mut cursor = CursorSender::new(cursor, &start.keys, start.peer);
@@ -83,6 +98,12 @@ fn stream_on(
         if let Err(error) = spawned {
             log::warn!("cursor thread not started, no cursor on the client: {error}");
         }
+        let spawned = thread::Builder::new()
+            .name("svc-input".into())
+            .spawn_scoped(scope, || input_loop(&mut input_recv, input, &cursor_stop));
+        if let Err(error) = spawned {
+            log::warn!("input thread not started, the client cannot type or click: {error}");
+        }
         let captured = capture(connector, &mut sink, stop);
         cursor_stop.store(true, Ordering::Release);
         captured
@@ -92,6 +113,7 @@ fn stream_on(
         video,
         cursor: cursor.into_lane(),
         feedback,
+        input: input_recv.into_lane(),
     };
     (lanes, captured)
 }
@@ -150,6 +172,21 @@ fn capture(connector: u32, sink: &mut NetSink, stop: &AtomicBool) -> Result<(), 
         gaps.stalls()
     );
     ran
+}
+
+/// `svc-input`: client keyboard and mouse to the virtual input driver until stop (spec 0021).
+fn input_loop(recv: &mut InputRecv, vhid: Option<&VHid>, stop: &AtomicBool) {
+    let _mmcss = Mmcss::enter(MmcssTask::Games);
+    match vhid {
+        Some(vhid) => {
+            let mut sink = vhid;
+            recv.run(&mut sink, stop);
+        }
+        None => {
+            log::warn!("virtual input unavailable, client keyboard and mouse are dropped");
+            recv.run(&mut NoDriver, stop);
+        }
+    }
 }
 
 /// `svc-cursor`: every cursor update to the client; a missing share leaves the cursor in the video.

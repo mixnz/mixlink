@@ -1,3 +1,5 @@
+use mixlink_input::host::abs_map::Rect;
+
 use super::*;
 
 fn target(path: &str, x: i32, y: i32) -> SavedTarget {
@@ -87,4 +89,55 @@ fn snapshot_json_roundtrip() {
     let saved = snapshot(vec![target(r"\?\DISPLAY#DEL1234#5&abc", -1920, 0)]);
     let text = serde_json::to_string(&saved).unwrap();
     assert_eq!(serde_json::from_str::<Snapshot>(&text).unwrap(), saved);
+}
+
+#[test]
+fn desktop_place_extend() {
+    let mut physical = target("phys", 1920, 0);
+    physical.width = 2560;
+    physical.height = 1440;
+    let snap = snapshot(vec![target("virt", 0, 0), physical]);
+    let place = desktop_place(&snap, "virt").unwrap();
+    assert_eq!(
+        place.monitor,
+        Rect {
+            x: 0,
+            y: 0,
+            w: 1920,
+            h: 1080
+        }
+    );
+    assert_eq!(
+        place.desktop,
+        Rect {
+            x: 0,
+            y: 0,
+            w: 4480,
+            h: 1440
+        }
+    );
+}
+
+#[test]
+fn desktop_place_negative_origin() {
+    let mut physical = target("phys", -2560, -360);
+    physical.width = 2560;
+    physical.height = 1440;
+    let snap = snapshot(vec![physical, target("virt", 0, 0)]);
+    let place = desktop_place(&snap, "virt").unwrap();
+    assert_eq!(
+        place.desktop,
+        Rect {
+            x: -2560,
+            y: -360,
+            w: 4480,
+            h: 1440
+        }
+    );
+}
+
+#[test]
+fn desktop_place_missing_monitor() {
+    let snap = snapshot(vec![target("phys", 0, 0)]);
+    assert_eq!(desktop_place(&snap, "virt"), None);
 }

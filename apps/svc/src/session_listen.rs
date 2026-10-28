@@ -13,6 +13,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use mixlink_core::config::{NetConfig, VideoConfig};
 use mixlink_core::ids::DeviceId;
 use mixlink_core::svc_ipc::{PairedInfo, PairingPrompt};
+use mixlink_input::platform::windows::vhid::VHid;
 use mixlink_net::endpoint::{EndpointEvent, HostControl, HostControlConfig};
 use mixlink_net::keys::StaticKeyPair;
 use mixlink_net::mode_policy::ModePolicy;
@@ -46,6 +47,8 @@ pub struct SessionSettings {
     pub keys: StaticKeyPair,
     /// `secrets` folder, already secured.
     pub secrets: PathBuf,
+    /// The virtual input feeder for client keyboard and mouse (spec 0021); `None` = driver missing.
+    pub input: Option<Arc<VHid>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -134,7 +137,7 @@ pub fn start(
     let streams = match settings.display.clone() {
         Some(display) => Some(StreamControl::new(
             media_lanes(&mut lanes)?,
-            launcher(display),
+            launcher(display, settings.input.clone()),
         )),
         None => None,
     };
@@ -183,14 +186,16 @@ fn media_lanes(lanes: &mut mixlink_net::Lanes) -> Result<StreamLanes, SvcError> 
         video: lanes.take_tx(Channel::Video).ok_or_else(missing)?,
         cursor: lanes.take_tx(Channel::Cursor).ok_or_else(missing)?,
         feedback: lanes.take_rx(Channel::Feedback).ok_or_else(missing)?,
+        input: lanes.take_rx(Channel::Input).ok_or_else(missing)?,
     })
 }
 
-fn launcher(display: DisplayHandle) -> Launch {
+fn launcher(display: DisplayHandle, input: Option<Arc<VHid>>) -> Launch {
     Box::new(move |start: StreamStart, lanes| {
         let display = display.clone();
+        let input = input.clone();
         Streamer::spawn(lanes, move |lanes, stop| {
-            run_stream(&display, &start, lanes, stop)
+            run_stream(&display, input.as_deref(), &start, lanes, stop)
         })
     })
 }
