@@ -16,13 +16,15 @@
 - `clock`: `Ticks` (`ZERO`, `from_raw`, `raw`, `duration_since`), `now()`, `ticks_per_sec()`.
 - `stage`: `Stage` (8 stages, `COUNT`, `ALL`, `index`), `StageStamps` (`new`, `frame`, `mark`, `mark_at`,
   `get`, `span`).
-- `config`: `CONFIG_VERSION`, `MAX_NAME_BYTES` (63, shared with `proto::control`), `HostConfig`,
-  `ClientConfig` (`from_json`, `to_json_pretty`, `validate`), `NetConfig`, `VideoConfig`.
+- `config`: `CONFIG_VERSION`, `MAX_NAME_BYTES` (63, shared with `proto::control`), `computer_name`, `fit_name`, `HostConfig`,
+  `ClientConfig` (`from_json`, `to_json_pretty`, `validate`), `NetConfig`, `VideoConfig` (`codec`: `CodecChoice`
+  `auto` / `h264` / `hevc`, spec 0020).
 - `hex`: `encode` (lowercase), `decode_into`, `decode_vec` (both cases accepted), `digit`.
 - `error`: `IdParseError`, `HexError`, `ConfigError`.
 - `mmcss`: `MmcssTask` (`ProAudio` critical, `Games` high), `Mmcss::enter(task) -> Option<Mmcss>` (reverts on drop,
   same thread; `None` + warning when refused).
-- `ipc`: launcher <-> stream JSON-lines contract — `IPC_VERSION`, `StreamToLauncher`, `LauncherToStream`,
+- `ipc`: launcher <-> stream JSON-lines contract — `IPC_VERSION` (2), `StreamToLauncher` (`Ready`, `Connecting`,
+  `Connected`, `Closed { reason, latency }`), `LatencySummary`, `SpanSummary`, `LauncherToStream`,
   `CloseReason`, `IpcError`, `encode_line`, `decode_line`.
 - `svc_ipc`: tray <-> service pipe contract (spec 0012, 0018) — `PIPE_VERSION` (2), `PIPE_NAME`, `SERVICE_NAME`, `MAX_LINE`, `TrayToSvc`,
   `SvcToTray` (`Status` has `network_public`, `pairing`; `Paired`, `Done`), `PairingPrompt`, `PairedInfo`,

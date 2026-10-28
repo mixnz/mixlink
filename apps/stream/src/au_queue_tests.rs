@@ -58,3 +58,31 @@ fn fifo_across_threads() {
     }
     producer.join().unwrap();
 }
+
+#[test]
+fn info_round_trips() {
+    use mixlink_core::clock::Ticks;
+
+    use super::AuInfo;
+    let (mut tx, mut rx) = channel(2, 64);
+    let info = AuInfo {
+        first: Ticks::from_raw(100),
+        last: Ticks::from_raw(250),
+        host_us: [410, 2780, 55],
+        network_us: 300,
+    };
+    tx.send_with(&[7], info).unwrap();
+    let au = rx.try_recv().unwrap();
+    assert_eq!(au.info(), info);
+    assert_eq!(au.received(), Ticks::from_raw(100));
+}
+
+#[test]
+fn plain_send_has_no_host_times() {
+    let (mut tx, mut rx) = channel(2, 64);
+    tx.send(&[1]).unwrap();
+    let au = rx.try_recv().unwrap();
+    let info = au.info();
+    assert_eq!(info.host_us, [0, 0, 0]);
+    assert_eq!(info.first, info.last);
+}

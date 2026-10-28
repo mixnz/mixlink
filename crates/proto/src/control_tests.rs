@@ -19,6 +19,7 @@ fn hello() -> ControlMessage {
         name: "Laptop".to_owned(),
         displays: vec![display(2560, 1440, 120_000), display(1920, 1080, 59_940)],
         stream_display: 1,
+        codecs: vec![CodecId::H264, CodecId::Hevc],
     }
 }
 
@@ -54,6 +55,7 @@ fn every_message_round_trips() {
         ControlMessage::Welcome {
             session: SessionId::new(42),
             mode: display(2560, 1440, 120_000),
+            codec: CodecId::Hevc,
         },
         ControlMessage::Reject {
             reason: RejectReason::Version,
@@ -198,6 +200,7 @@ fn welcome_mode_is_validated() {
     let msg = ControlMessage::Welcome {
         session: SessionId::new(1),
         mode: display(1920, 1080, 0),
+        codec: CodecId::H264,
     };
     assert!(matches!(
         encode(&msg),
@@ -315,4 +318,41 @@ fn blob_over_parse_limit_rejected() {
         decode(json.as_bytes()),
         Err(ControlError::Parse(_))
     ));
+}
+
+#[test]
+fn hello_without_codecs_defaults_to_h264() {
+    let json = format!(
+        r#"{{"type":"Hello","proto":1,"device":"{DEVICE}","name":"PC",
+        "displays":[{{"width":1920,"height":1080,"refresh_mhz":60000,"hdr":false,"dpi":96}}],
+        "stream_display":0}}"#
+    );
+    match decode(json.as_bytes()) {
+        Ok(ControlMessage::Hello { codecs, .. }) => assert_eq!(codecs, vec![CodecId::H264]),
+        other => panic!("not a hello: {other:?}"),
+    }
+}
+
+#[test]
+fn welcome_without_codec_is_h264() {
+    let json = r#"{"type":"Welcome","session":7,
+        "mode":{"width":1920,"height":1080,"refresh_mhz":60000,"hdr":false,"dpi":96}}"#;
+    match decode(json.as_bytes()) {
+        Ok(ControlMessage::Welcome { codec, .. }) => assert_eq!(codec, CodecId::H264),
+        other => panic!("not a welcome: {other:?}"),
+    }
+}
+
+#[test]
+fn codec_ids_are_lowercase_in_json() {
+    assert_eq!(serde_json::to_string(&CodecId::Hevc).unwrap(), r#""hevc""#);
+    assert_eq!(serde_json::to_string(&CodecId::H264).unwrap(), r#""h264""#);
+}
+
+#[test]
+fn bye_host_error_round_trip() {
+    let msg = ControlMessage::Bye {
+        reason: ByeReason::HostError,
+    };
+    assert_eq!(round_trip(&msg), msg);
 }

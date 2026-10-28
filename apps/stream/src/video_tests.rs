@@ -21,11 +21,7 @@ impl HasWindowHandle for NoWindow {
 fn video_failure_closes_cleanly() {
     let (events_tx, events_rx) = mpsc::channel();
     let (_au_tx, au_rx) = channel(2, 16);
-    let source = VideoSource {
-        rx: au_rx,
-        codec: VideoCodec::H264,
-        measure: false,
-    };
+    let source = VideoSource::play(au_rx, VideoCodec::H264, false);
     let video = VideoThread::start(Arc::new(NoWindow), (64, 64), Some(source), move |e| {
         let _ = events_tx.send(e);
     })

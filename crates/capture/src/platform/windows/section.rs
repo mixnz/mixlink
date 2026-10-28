@@ -215,7 +215,7 @@ impl Drop for Section {
     }
 }
 
-fn open_event(name: &str) -> Result<HANDLE, CaptureError> {
+pub(crate) fn open_event(name: &str) -> Result<HANDLE, CaptureError> {
     // SAFETY: plain Win32 call with an owned name.
     unsafe {
         OpenEventW(

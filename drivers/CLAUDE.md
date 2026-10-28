@@ -20,6 +20,8 @@
     (`RingFallbacks`). `WaitForRelease` holds the surface until `ReleasedSeq` (reader attached = `ReaderPid` +
     `ReaderSeq` moved in 500 ms; cap 2 frame periods from the committed refresh, `HoldTimeouts`). Seqs never restart.
     `Levers.{h,cpp}`: frame thread on MMCSS "Pro Audio" critical. The S2 spike tool reads v2: no longer matches.
+  - `CursorShare` (spec 0020): IddCx hardware cursor per swapchain → `Global\MixLinkCursor-<n>` (seqlock `CursorHeader`
+    = `crates/capture/src/cursor_header.rs`) + `MixLinkCursorReady-<n>`; setup failure = cursor stays in frames.
   - `RenderAdapter.{h,cpp}`: `PickRenderAdapter` (most VRAM; hybrid = >1 physical GPU by vendor/device/
     subsystem/revision, since DXGI can list one GPU twice). Not yet tested on an iGPU + dGPU machine.
 - `vhid/`: UMDF HID minidriver from `vhidmini2` (same samples commit, MS-PL, `vhid/LICENSE`), C, below inbox
@@ -32,9 +34,8 @@
 - `build.ps1 [-Driver vdisplay|vhid|all]`: restore + build + Inf2Cat → `target/drivers/<name>/pkg/` (catalog unsigned).
 
 ## Build
-- `powershell -NoProfile -ExecutionPolicy Bypass -File drivers/build.ps1 [-Driver vhid] [-Configuration Debug]`
-- Needs VS Build Tools with: C++ workload, "C++ Spectre-mitigated libraries for x64/x86 (Latest MSVC)",
-  "Windows Driver Kit" (MSBuild toolset `WindowsUserModeDriver10.0`). No system WDK install.
+- `powershell -NoProfile -ExecutionPolicy Bypass -File drivers/build.ps1 [-Driver vhid] [-Configuration Debug]`; needs VS
+  Build Tools: C++, "C++ Spectre-mitigated libraries (Latest MSVC)", "Windows Driver Kit" (no system WDK).
 
 ## Notes
 - Use the 64-bit MSBuild (`Bin\amd64`): WDK targets choose the NuGet `bin\x64` tools only when
@@ -42,8 +43,7 @@
 - `Inf2CatUseLocalTime=true` / `/uselocaltime`: stampinf writes a local-time `DriverVer`; east of UTC
   Inf2Cat otherwise rejects it as "postdated". `SignMode=Off`: the WDK build never creates a `WDKTestCert`.
 - Driver isolation: both INFs install the DLL to DIRID 13; `infverif /w` passes (`scripts/check-drivers.sh`).
-- Sign + install only with `mixlink-svc drivers install | uninstall | status` (spec 0014), never `s1-signing`.
-  New `.cpp` files include `Driver.h` first (UMDF_USING_NTSTATUS needs it before WRL).
+- Sign + install only with `mixlink-svc drivers install | uninstall | status` (spec 0014), never `s1-signing`. New `.cpp` files include `Driver.h` first (UMDF_USING_NTSTATUS needs it before WRL).
 - Build for IddCx 1.4 (`IDDCX_VERSION_MINOR` 4, define 6): a 1.11 build fails `IddCxAdapterInitAsync` with
   `STATUS_INVALID_PARAMETER` on 24H2 (IddCx 1.10), so no monitor arrives. Newer DDIs: runtime checks only.
 - Verdicts: S1 (spec 0003) per-machine signed catalog installs and loads, UMDF files checked at install only;

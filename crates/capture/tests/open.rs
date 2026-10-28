@@ -1,4 +1,4 @@
-//! `IddSource::open` without a frame share for the connector (CI, a dev box with fewer monitors).
+//! `IddSource::open` and `CursorSource::open` without a share for the connector (CI, a dev box with fewer monitors).
 
 #![cfg(windows)]
 
@@ -18,6 +18,19 @@ fn missing_connector_is_no_frame_share() {
 fn open_rejects_connector_out_of_range() {
     assert!(matches!(
         IddSource::open(4),
+        Err(CaptureError::NoFrameShare { connector: 4 })
+    ));
+}
+
+#[test]
+fn cursor_missing_connector_is_no_frame_share() {
+    match mixlink_capture::CursorSource::open(3) {
+        Err(CaptureError::NoFrameShare { connector: 3 }) => {}
+        Err(other) => panic!("expected NoFrameShare, got {other}"),
+        Ok(_) => eprintln!("skip: connector 3 has a cursor share on this machine"),
+    }
+    assert!(matches!(
+        mixlink_capture::CursorSource::open(4),
         Err(CaptureError::NoFrameShare { connector: 4 })
     ));
 }

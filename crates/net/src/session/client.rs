@@ -3,7 +3,7 @@
 use std::time::{Duration, Instant};
 
 use mixlink_core::ids::SessionId;
-use mixlink_proto::control::{self, Blob, ByeReason, ControlMessage, DisplayInfo};
+use mixlink_proto::control::{self, Blob, ByeReason, CodecId, ControlMessage, DisplayInfo};
 use mixlink_proto::crypto::{Role, SessionKeys};
 use mixlink_proto::header::WIRE_VERSION;
 use snow::HandshakeState;
@@ -45,7 +45,7 @@ pub fn init(
 pub fn finish(
     start: SessionStart,
     reply: &ControlMessage,
-) -> Result<(SessionKeys, SessionId, DisplayInfo), NetError> {
+) -> Result<(SessionKeys, SessionId, DisplayInfo, CodecId), NetError> {
     let noise_msg = match reply {
         ControlMessage::SessionAccept { noise } => noise,
         ControlMessage::Reject { reason } => return Err(NetError::Rejected(*reason)),
@@ -54,10 +54,15 @@ pub fn finish(
     let mut state = start.state;
     let payload = noise::read(&mut state, &noise_msg.0)?;
     match control::decode(&payload)? {
-        ControlMessage::Welcome { session, mode } => Ok((
+        ControlMessage::Welcome {
+            session,
+            mode,
+            codec,
+        } => Ok((
             noise::derive(state.dangerously_get_raw_split()),
             session,
             mode,
+            codec,
         )),
         ControlMessage::Reject { reason } => Err(NetError::Rejected(reason)),
         _ => Err(NetError::UnexpectedReply),
@@ -69,6 +74,7 @@ pub fn finish(
 pub struct SecureSession {
     pub id: SessionId,
     pub mode: DisplayInfo,
+    pub codec: CodecId,
     pub keys: SessionKeys,
     pub link: ControlLink,
     next_ping: u32,
@@ -90,11 +96,12 @@ pub fn connect_secure(
         );
         (!incoming.sealed && accept).then_some(incoming.msg)
     })?;
-    let (keys, id, mode) = finish(start, &reply)?;
+    let (keys, id, mode, codec) = finish(start, &reply)?;
     link.set_keys(&keys, Role::Client);
     let mut session = SecureSession {
         id,
         mode,
+        codec,
         keys,
         link,
         next_ping: 0,

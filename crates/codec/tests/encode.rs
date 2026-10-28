@@ -138,3 +138,33 @@ fn new_size_needs_new_encoder() {
         Err(CodecError::FrameSize { .. })
     ));
 }
+
+/// Streaming needs one frame out per AU in, at once: a picture held back would only show when the
+/// next AU arrives, and the host sends AUs only when the screen changes (spec 0020).
+fn every_au_decodes_at_once(codec: VideoCodec) -> TestResult {
+    let Some(device) = device_or_skip(codec) else {
+        return Ok(());
+    };
+    let mut encoder = Encoder::new(&device, &config(codec))?;
+    let mut decoder = Decoder::new(&device, codec)?;
+    let texture = bgra_texture(&device, W, H, [20, 100, 200, 255])?;
+    for i in 0..12u8 {
+        let au = encoder.encode(&texture, false)?.to_vec();
+        let frame = decoder.decode(&au)?;
+        assert!(
+            frame.is_some(),
+            "{codec:?} AU {i}: no picture until a later AU"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn every_au_decodes_at_once_h264() {
+    every_au_decodes_at_once(VideoCodec::H264).unwrap();
+}
+
+#[test]
+fn every_au_decodes_at_once_hevc() {
+    every_au_decodes_at_once(VideoCodec::Hevc).unwrap();
+}

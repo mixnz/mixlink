@@ -92,3 +92,23 @@ pub enum CursorError {
     #[error("output buffer is {have} bytes, cursor shape needs {need}")]
     BufferTooSmall { need: usize, have: usize },
 }
+
+/// A video message without a valid `FrameMeta` (spec 0020).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum VideoError {
+    #[error("video message is {len} bytes, shorter than the 16-byte frame meta")]
+    TooShort { len: usize },
+    #[error("frame meta version {found} is not supported")]
+    Version { found: u8 },
+    #[error("unknown frame meta flag bits {bits:#04x}")]
+    Flags { bits: u8 },
+}
+
+/// A feedback message that does not follow the fixed layout (spec 0020).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum FeedbackError {
+    #[error("feedback message is {len} bytes, too short")]
+    TooShort { len: usize },
+    #[error("unknown feedback kind {byte}")]
+    Kind { byte: u8 },
+}

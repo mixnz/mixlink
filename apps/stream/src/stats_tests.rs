@@ -5,6 +5,7 @@ use mixlink_core::ids::FrameId;
 use mixlink_core::stage::{Stage, StageStamps};
 
 use super::{FrameStats, SpanStats};
+use crate::au_queue::AuInfo;
 
 fn micros(us: u64) -> u64 {
     us * ticks_per_sec() / 1_000_000
@@ -72,4 +73,73 @@ fn summary_names_spans_and_counts() {
     assert!(text.contains("decode"), "{text}");
     assert!(text.contains("decoded 3"), "{text}");
     assert!(text.contains("dropped 1"), "{text}");
+}
+
+/// A network frame: first fragment at 1 ms, last at 1.2 ms, decode 1.5–3 ms, presented 3.5 ms.
+fn network_frame() -> (StageStamps, AuInfo) {
+    let mut s = StageStamps::new(FrameId::new(1));
+    s.mark_at(Stage::Received, Ticks::from_raw(micros(1_000)));
+    s.mark_at(Stage::DecodeStart, Ticks::from_raw(micros(1_500)));
+    s.mark_at(Stage::DecodeEnd, Ticks::from_raw(micros(3_000)));
+    s.mark_at(Stage::Presented, Ticks::from_raw(micros(3_500)));
+    let info = AuInfo {
+        first: Ticks::from_raw(micros(1_000)),
+        last: Ticks::from_raw(micros(1_200)),
+        host_us: [400, 2_800, 50],
+        network_us: 300,
+    };
+    (s, info)
+}
+
+#[test]
+fn summary_has_all_spans() {
+    let mut stats = FrameStats::new(10);
+    let (s, info) = network_frame();
+    stats.record_with(&s, &info);
+    stats.presented = 1;
+    let summary = stats.latency_summary();
+    let names: Vec<&str> = summary.spans.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "capture",
+            "encode",
+            "send",
+            "network",
+            "reassemble",
+            "queue",
+            "decode",
+            "present",
+            "total"
+        ]
+    );
+    let p50 = |name: &str| {
+        summary
+            .spans
+            .iter()
+            .find(|s| s.name == name)
+            .unwrap()
+            .p50_us
+    };
+    assert_eq!(p50("reassemble"), 200);
+    assert_eq!(p50("queue"), 300);
+    assert_eq!(p50("decode"), 1_500);
+    // Host 3250 + network 300 + client 2500.
+    assert_eq!(p50("total"), 6_050);
+    assert_eq!(summary.frames, 1);
+}
+
+#[test]
+fn play_mode_has_no_host_spans() {
+    let mut stats = FrameStats::new(10);
+    let mut s = frame(1, 5);
+    s.mark_at(Stage::Received, Ticks::from_raw(micros(900)));
+    stats.record(&s);
+    let names: Vec<String> = stats
+        .latency_summary()
+        .spans
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
+    assert_eq!(names, ["queue", "decode"]);
 }

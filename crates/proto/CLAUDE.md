@@ -8,7 +8,7 @@
 
 ## Layout
 - `header.rs`, `channel.rs`, `packetizer.rs`, `reassembler.rs` (+ private `slot.rs`), `control.rs` (+ `blob.rs`), private `replay.rs`,
-  `cursor.rs`, `crypto.rs`, `error.rs` (each + `<name>_tests.rs`; `reassembler_stress_tests.rs` fuzz + timing;
+  `cursor.rs`, `video.rs`, `feedback.rs`, `crypto.rs`, `error.rs` (each + `<name>_tests.rs`; `reassembler_stress_tests.rs` fuzz + timing;
   `test_util.rs` helpers);
   `tests/no_alloc.rs` (counting allocator, test-only `unsafe`), `tests/crypto_bench.rs` (ignored, by hand).
 - Planned: `fec.rs` (T13).
@@ -23,12 +23,14 @@
   `Push`, `Message`, `DropReason`, `ReassemblerStats`.
 - `control`: `ControlMessage` (`Hello`, `Welcome`, `Reject`, `Bye`, pairing `Pair*`, `SessionInit` / `Accept`, `Ping` / `Pong`;
   `validate`), `PublicKey` + `Blob` (hex in JSON, `blob::MAX_BLOB`), `SPAKE_LEN`, `MAC_LEN`, `MAX_NOISE`, `DisplayInfo`,
-  `RejectReason`, `ByeReason`, `encode`, `decode`.
+  `RejectReason`, `ByeReason` (`HostError`), `CodecId` (`Hello.codecs`, `Welcome.codec`), `encode`, `decode`.
+- `video` (spec 0020): `FrameMeta` (`encode`, `split` -> meta + AU), `FRAME_META_LEN` (16).
+- `feedback` (spec 0020): `Feedback` (`KeyframeRequest`, `CursorShapeRequest`; `encode`, `decode`), `FEEDBACK_LEN`.
 - `cursor`: `CursorPosition` (`encode`), `CursorShapeHeader` (`encode_into`), `ShapeKind`,
   `CursorMessage`, `decode`, `CURSOR_POSITION_LEN`, `CURSOR_SHAPE_HEADER_LEN`.
 - `crypto` (spec 0018): `SessionKeys` (`c2h`, `h2c`; `sealer`, `opener`), `Role`, `Sealer` (`seal`), `Opener`
   (`open`, `stats`), `OpenStats`, `TAG_LEN`, `KEY_LEN`, `WINDOW` (1024).
-- `error`: `DecodeError`, `PacketizeError`, `ControlError`, `CursorError`, `CryptoError`.
+- `error`: `DecodeError`, `PacketizeError`, `ControlError`, `CursorError`, `CryptoError`, `VideoError`, `FeedbackError`.
 
 ## Notes
 - Header layout is frozen by ADR-0008; any change bumps `WIRE_VERSION`.

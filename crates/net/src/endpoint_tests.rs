@@ -2,18 +2,21 @@
 
 use std::time::{Duration, Instant};
 
+use mixlink_core::config::CodecChoice;
 use mixlink_proto::channel::Channel;
-use mixlink_proto::control::{Blob, DisplayInfo};
+use mixlink_proto::control::{Blob, ByeReason, CodecId, DisplayInfo};
 use mixlink_proto::header::WIRE_VERSION;
 
 use super::*;
 use crate::control_link::{Incoming, Wire};
 use crate::keys::ClientIdentity;
 use crate::lane::RxLane;
+use crate::mode_policy::ModePolicy;
 use crate::pairing::KnownHost;
 use crate::pairing::client::{self as pair_client, PairContext};
 use crate::session::client as session_client;
 use crate::transport::{Transport, TransportConfig};
+use mixlink_proto::crypto::SessionKeys;
 
 const HOST: DeviceId = DeviceId::from_bytes([0xaa; 16]);
 
@@ -52,6 +55,10 @@ fn harness(paired: Vec<PairedDevice>) -> Harness {
             host: HOST,
             keys,
             paired,
+            policy: ModePolicy {
+                max_fps: 120,
+                codec: CodecChoice::Auto,
+            },
         }),
         host_side: side(),
         host_pub,
@@ -115,6 +122,7 @@ fn hello(me: &ClientIdentity) -> ControlMessage {
             dpi: 96,
         }],
         stream_display: 0,
+        codecs: vec![mixlink_proto::control::CodecId::H264],
     }
 }
 
@@ -125,6 +133,17 @@ fn handshake(
     me: &ClientIdentity,
     secs: u64,
 ) -> (ControlLink, Vec<EndpointEvent>) {
+    let (link, events, _) = handshake_keys(h, client, me, secs);
+    (link, events)
+}
+
+/// As `handshake`, also returning the client's session keys.
+fn handshake_keys(
+    h: &mut Harness,
+    client: &mut Side,
+    me: &ClientIdentity,
+    secs: u64,
+) -> (ControlLink, Vec<EndpointEvent>, SessionKeys) {
     let known = KnownHost {
         host: HOST,
         name: "Desk".to_owned(),
@@ -135,9 +154,9 @@ fn handshake(
     link.send(&mut client.tx, &init).unwrap();
     let events = pump(h, secs);
     let reply = client_recv(client, &mut link).unwrap();
-    let (keys, _, _) = session_client::finish(start, &reply.msg).unwrap();
+    let (keys, _, _, _) = session_client::finish(start, &reply.msg).unwrap();
     link.set_keys(&keys, Role::Client);
-    (link, events)
+    (link, events, keys)
 }
 
 fn ping(
@@ -365,4 +384,90 @@ fn prompt_peer_outlives_idle_time() {
     .unwrap();
     pump(&mut h, 91);
     assert!(client_recv(&mut client, &mut link).is_some());
+}
+
+#[test]
+fn session_started_carries_keys_mode_codec() {
+    let me = identity(1);
+    let mut h = harness(vec![paired(&me)]);
+    let mut client = side();
+    let (mut link, _, client_keys) = handshake_keys(&mut h, &mut client, &me, 0);
+    let events = ping(&mut h, &mut client, &mut link, 0, 1);
+    let [
+        EndpointEvent::SessionStarted {
+            keys, mode, codec, ..
+        },
+    ] = events.as_slice()
+    else {
+        panic!("no session start: {events:?}");
+    };
+    assert_eq!(
+        (mode.width, mode.height, mode.refresh_mhz),
+        (2560, 1440, 120_000)
+    );
+    assert_eq!(*codec, CodecId::H264, "the client offers H.264 only");
+    // The host's keys open what the client seals on the video channel.
+    let mut sealer = keys.sealer(Role::Host, Channel::Video);
+    let mut opener = client_keys.opener(Role::Client, Channel::Video);
+    let mut buf = [0u8; 64];
+    let header = mixlink_proto::header::PacketHeader {
+        channel: Channel::Video,
+        flags: mixlink_proto::header::Flags::empty(),
+        seq: mixlink_core::ids::Seq::new(1),
+        frame: mixlink_core::ids::FrameId::new(1),
+        frag_index: 0,
+        frag_count: 1,
+    };
+    header.encode(buf.first_chunk_mut().unwrap());
+    let sealed = sealer.seal(&mut buf, 20).unwrap();
+    assert_eq!(opener.open(&mut buf[..sealed]).unwrap(), 20);
+}
+
+#[test]
+fn end_session_sends_bye_and_ends() {
+    let me = identity(1);
+    let mut h = harness(vec![paired(&me)]);
+    let mut client = side();
+    let (mut link, _) = handshake(&mut h, &mut client, &me, 0);
+    ping(&mut h, &mut client, &mut link, 0, 1);
+    let ended = h
+        .host
+        .end_session(&mut h.host_side.tx, me.id, ByeReason::HostError);
+    assert!(matches!(ended, Some(EndpointEvent::SessionEnded { device, .. }) if device == me.id));
+    let bye = client_recv(&mut client, &mut link).unwrap();
+    assert_eq!(
+        bye,
+        Incoming {
+            msg: ControlMessage::Bye {
+                reason: ByeReason::HostError
+            },
+            sealed: true
+        }
+    );
+    assert!(
+        h.host
+            .end_session(&mut h.host_side.tx, me.id, ByeReason::HostError)
+            .is_none(),
+        "already ended"
+    );
+}
+
+#[test]
+fn end_all_ends_every_live_session() {
+    let me = identity(1);
+    let mut h = harness(vec![paired(&me)]);
+    let mut client = side();
+    let (mut link, _) = handshake(&mut h, &mut client, &me, 0);
+    ping(&mut h, &mut client, &mut link, 0, 1);
+    let ended = h.host.end_all(&mut h.host_side.tx, ByeReason::Shutdown);
+    assert!(matches!(
+        ended.as_slice(),
+        [EndpointEvent::SessionEnded { .. }]
+    ));
+    assert!(matches!(
+        client_recv(&mut client, &mut link).map(|i| i.msg),
+        Some(ControlMessage::Bye {
+            reason: ByeReason::Shutdown
+        })
+    ));
 }

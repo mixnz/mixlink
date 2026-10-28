@@ -1,5 +1,6 @@
 //! Reader of the `vdisplay` frame share (spec 0019).
 
+pub(crate) mod cursor_source;
 pub(crate) mod device;
 pub(crate) mod idd_source;
 pub(crate) mod section;

@@ -2,10 +2,12 @@
 
 use std::fmt;
 use std::sync::Arc;
+use std::time::Duration;
 
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::Win32::Graphics::Direct3D11::ID3D11Device;
 
+use crate::cursor::{CursorDraw, CursorImage};
 use crate::platform::windows::d3d11::D3d11Swapchain;
 use crate::{RenderError, VideoFrame};
 
@@ -47,11 +49,27 @@ impl Presenter {
         self.swapchain.device()
     }
 
-    /// Draws `frame` fitted into the window (black bars) and presents without waiting for
-    /// vblank. Minimized: does nothing.
+    /// The host cursor shape (spec 0020); `None` hides it. Creates textures: call on a shape change only.
+    pub fn set_cursor(&mut self, image: Option<&CursorImage>) -> Result<(), RenderError> {
+        self.swapchain.set_cursor(image)
+    }
+
+    /// Where the next `present_nv12` draws the cursor (hotspot in video pixels); `None`: no cursor.
+    pub fn move_cursor(&mut self, at: Option<CursorDraw>) {
+        self.swapchain.move_cursor(at);
+    }
+
+    /// Draws `frame` fitted into the window (black bars), then the cursor, and presents without
+    /// waiting for vblank. Minimized: does nothing.
     // HOT PATH
     pub fn present_nv12(&mut self, frame: &VideoFrame) -> Result<(), RenderError> {
         self.swapchain.present_nv12(frame)
+    }
+
+    /// Waits up to `timeout` until a present will not block (frame-latency waitable, one frame queued).
+    /// After `true` the caller must present; minimized: always `true`.
+    pub fn wait_frame_ready(&self, timeout: Duration) -> bool {
+        self.swapchain.wait_frame_ready(timeout)
     }
 
     /// Waits until the GPU finished everything submitted so far. Only for measuring stages.

@@ -69,6 +69,10 @@ fn start_host() -> Host {
                 host: HOST,
                 keys: StaticKeyPair::generate().unwrap(),
                 paired: Vec::new(),
+                policy: mixlink_net::mode_policy::ModePolicy {
+                    max_fps: 120,
+                    codec: mixlink_core::config::CodecChoice::Auto,
+                },
             });
             while !stop.load(Ordering::Acquire) {
                 let mut found = Vec::new();
@@ -144,6 +148,7 @@ fn hello(ctx: &PairContext) -> ControlMessage {
             dpi: 96,
         }],
         stream_display: 0,
+        codecs: vec![mixlink_proto::control::CodecId::H264],
     }
 }
 

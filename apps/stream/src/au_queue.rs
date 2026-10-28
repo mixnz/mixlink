@@ -1,4 +1,4 @@
-//! SPSC queue of access units, feeder (file now, network later) → video thread.
+//! SPSC queue of access units, feeder (file) or network (spec 0020) → video thread.
 //!
 //! Buffers are allocated once by `channel` and then only move between two `rtrb` rings: **filled**
 //! (sender → receiver) and **free** (receiver → sender). Sending copies the AU into a free buffer
@@ -16,11 +16,24 @@ pub const AU_CAPACITY: usize = 4 * 1024 * 1024;
 /// Buffers in flight: about 66 ms of video at 120 fps.
 pub const AU_SLOTS: usize = 8;
 
+/// Where an AU came from (spec 0020): fragment arrival times and the host's stage times.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AuInfo {
+    /// First fragment received (play mode: queued).
+    pub first: Ticks,
+    /// Last fragment received, the message complete.
+    pub last: Ticks,
+    /// Host capture, encode, send in µs (`FrameMeta`); 0 in play mode.
+    pub host_us: [u32; 3],
+    /// Half the session's median RTT when the AU arrived.
+    pub network_us: u32,
+}
+
 #[derive(Debug)]
 struct AuBuf {
     data: Box<[u8]>,
     len: usize,
-    received: Ticks,
+    info: AuInfo,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,7 +82,7 @@ pub fn channel(slots: usize, capacity: usize) -> (AuSender, AuReceiver) {
         let buf = Box::new(AuBuf {
             data: vec![0; capacity].into_boxed_slice(),
             len: 0,
-            received: Ticks::ZERO,
+            info: AuInfo::default(),
         });
         // Cannot fail: the ring holds exactly `slots`.
         let _ = free_tx.push(buf);
@@ -91,9 +104,21 @@ pub fn channel(slots: usize, capacity: usize) -> (AuSender, AuReceiver) {
 }
 
 impl AuSender {
-    /// Copies `au` into a free buffer, stamps it and wakes the receiver.
+    /// Copies `au` into a free buffer, stamps it now and wakes the receiver.
     // HOT PATH
     pub fn send(&mut self, au: &[u8]) -> Result<(), SendError> {
+        let now = clock::now();
+        let info = AuInfo {
+            first: now,
+            last: now,
+            ..AuInfo::default()
+        };
+        self.send_with(au, info)
+    }
+
+    /// As `send`, with the network's times.
+    // HOT PATH
+    pub fn send_with(&mut self, au: &[u8], info: AuInfo) -> Result<(), SendError> {
         if au.len() > self.capacity {
             self.shared.oversize.fetch_add(1, Ordering::Relaxed);
             return Err(SendError::Oversize);
@@ -104,7 +129,7 @@ impl AuSender {
         };
         buf.data[..au.len()].copy_from_slice(au);
         buf.len = au.len();
-        buf.received = clock::now();
+        buf.info = info;
         // Cannot fail: as many buffers as ring slots.
         let _ = self.filled.push(buf);
         if let Some(thread) = self.shared.wake.get() {
@@ -149,9 +174,13 @@ impl Au<'_> {
         self.buf.as_ref().map_or(&[], |b| &b.data[..b.len])
     }
 
-    /// When the sender queued it (`clock::now`).
+    /// When its first fragment arrived (play mode: when it was queued).
     pub fn received(&self) -> Ticks {
-        self.buf.as_ref().map_or(Ticks::ZERO, |b| b.received)
+        self.info().first
+    }
+
+    pub fn info(&self) -> AuInfo {
+        self.buf.as_ref().map_or_else(AuInfo::default, |b| b.info)
     }
 }
 

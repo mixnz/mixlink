@@ -2,6 +2,7 @@
 //! One supervisor thread per stream reads the child's stdout until EOF, then reports the result.
 
 use std::io::{self, BufRead, BufReader};
+use std::net::{IpAddr, SocketAddrV4};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -9,7 +10,9 @@ use std::sync::{Mutex, PoisonError};
 use std::time::Instant;
 use std::{env, thread};
 
-use mixlink_core::ipc::{CloseReason, IPC_VERSION, StreamToLauncher, decode_line};
+use mixlink_core::ids::DeviceId;
+use mixlink_core::ipc::{CloseReason, IPC_VERSION, LatencySummary, StreamToLauncher, decode_line};
+use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::stream_result::{StreamResult, classify};
@@ -19,10 +22,47 @@ const STREAM_EXE: &str = "mixlink-stream.exe";
 /// Event sent to a launcher window that is still open when the stream ends (it died before `Ready`).
 pub const STREAM_RESULT_EVENT: &str = "stream-result";
 
+/// The host a stream connects to (spec 0020).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectTarget {
+    pub host: DeviceId,
+    pub addr: SocketAddrV4,
+}
+
+/// The session port of a discovered host; `None` for IPv6 (the session is IPv4 only).
+pub fn target_of(host: DeviceId, address: IpAddr, port: u16) -> Option<ConnectTarget> {
+    match address {
+        IpAddr::V4(ip) => Some(ConnectTarget {
+            host,
+            addr: SocketAddrV4::new(ip, port),
+        }),
+        IpAddr::V6(_) => None,
+    }
+}
+
+/// `mixlink-stream` arguments for a target.
+pub fn connect_args(target: &ConnectTarget) -> Vec<String> {
+    vec![
+        "--connect".to_owned(),
+        target.host.to_string(),
+        "--addr".to_owned(),
+        target.addr.to_string(),
+    ]
+}
+
+/// The last session's per-stage latency, shown under its host row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastLatency {
+    pub host_id: String,
+    pub latency: LatencySummary,
+}
+
 #[derive(Debug, Default)]
 pub struct StreamState {
     pub(crate) running: AtomicBool,
     last_result: Mutex<Option<StreamResult>>,
+    last_latency: Mutex<Option<LastLatency>>,
 }
 
 impl StreamState {
@@ -35,6 +75,23 @@ impl StreamState {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
+    }
+
+    pub fn last_latency(&self) -> Option<LastLatency> {
+        self.last_latency
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    pub fn keep_latency(&self, host_id: &str, latency: LatencySummary) {
+        *self
+            .last_latency
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(LastLatency {
+            host_id: host_id.to_owned(),
+            latency,
+        });
     }
 
     fn finish(&self, result: StreamResult) {
@@ -72,8 +129,9 @@ pub fn stream_exe_path() -> io::Result<PathBuf> {
     Ok(dir.join(STREAM_EXE))
 }
 
-pub fn spawn_at(path: &Path) -> Result<Child, StartError> {
+pub fn spawn_at(path: &Path, args: &[String]) -> Result<Child, StartError> {
     Command::new(path)
+        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -81,8 +139,8 @@ pub fn spawn_at(path: &Path) -> Result<Child, StartError> {
         .map_err(StartError::Spawn)
 }
 
-/// Starts one stream. On failure the returned result is also stored as the last result.
-pub fn start(app: &AppHandle) -> Result<(), StreamResult> {
+/// Starts one stream to `target`. On failure the returned result is also stored as the last result.
+pub fn start(app: &AppHandle, target: &ConnectTarget) -> Result<(), StreamResult> {
     let state = app.state::<StreamState>();
     try_begin(&state).map_err(|error| StreamResult::StreamError {
         message: error.to_string(),
@@ -90,7 +148,7 @@ pub fn start(app: &AppHandle) -> Result<(), StreamResult> {
     let started = Instant::now();
     let child = stream_exe_path()
         .map_err(StartError::Spawn)
-        .and_then(|path| spawn_at(&path));
+        .and_then(|path| spawn_at(&path, &connect_args(target)));
     let child = match child {
         Ok(child) => child,
         Err(error) => {
@@ -103,9 +161,10 @@ pub fn start(app: &AppHandle) -> Result<(), StreamResult> {
     };
     let pid = child.id();
     let handle = app.clone();
+    let host_id = target.host.to_string();
     let supervisor = thread::Builder::new()
         .name("stream-supervisor".into())
-        .spawn(move || supervise(&handle, child, started));
+        .spawn(move || supervise(&handle, child, started, &host_id));
     if let Err(error) = supervisor {
         log::error!("stream supervisor thread: {error}");
         let result = StreamResult::StreamError {
@@ -118,7 +177,7 @@ pub fn start(app: &AppHandle) -> Result<(), StreamResult> {
     Ok(())
 }
 
-fn supervise(app: &AppHandle, mut child: Child, started: Instant) {
+fn supervise(app: &AppHandle, mut child: Child, started: Instant, host_id: &str) {
     // Held until the child exits: dropping it is the "launcher gone" signal (stdin EOF).
     let _stdin = child.stdin.take();
     let mut ready = None;
@@ -131,7 +190,21 @@ fn supervise(app: &AppHandle, mut child: Child, started: Instant) {
                     ready = Some(ipc_version);
                     on_ready(app, &mut child, ipc_version, started);
                 }
-                Ok(StreamToLauncher::Closed { reason }) => closed = Some(reason),
+                Ok(StreamToLauncher::Closed { reason, latency }) => {
+                    if let Some(latency) = latency {
+                        app.state::<StreamState>().keep_latency(host_id, latency);
+                    }
+                    closed = Some(reason);
+                }
+                Ok(StreamToLauncher::Connecting) => log::info!("stream connecting"),
+                Ok(StreamToLauncher::Connected {
+                    width,
+                    height,
+                    codec,
+                    ..
+                }) => {
+                    log::info!("stream connected: {width}x{height} {codec}");
+                }
                 Err(error) => log::warn!("ignoring stream line: {error}"),
             }
         }

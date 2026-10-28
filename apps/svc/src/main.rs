@@ -24,6 +24,7 @@ mod secrets;
 #[cfg(windows)]
 mod session_listen;
 mod stop;
+mod stream;
 mod strings;
 
 use std::process::ExitCode;
@@ -176,6 +177,8 @@ fn session_settings(
     match key {
         Ok(keys) => Some(session_listen::SessionSettings {
             net: config.net.clone(),
+            video: config.video.clone(),
+            display: None,
             host,
             keys,
             secrets: dir,

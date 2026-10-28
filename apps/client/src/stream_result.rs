@@ -12,10 +12,30 @@ use serde::Serialize;
 pub enum StreamResult {
     ClosedByUser,
     Stopped,
-    StreamError { message: String },
-    Crashed { code: Option<i32> },
-    VersionMismatch { stream: u32, launcher: u32 },
-    SpawnFailed { message: String },
+    StreamError {
+        message: String,
+    },
+    Crashed {
+        code: Option<i32>,
+    },
+    VersionMismatch {
+        stream: u32,
+        launcher: u32,
+    },
+    SpawnFailed {
+        message: String,
+    },
+    /// The host refused: `busy`, `badDisplay`, `version` (spec 0020).
+    Rejected {
+        reason: String,
+    },
+    /// The host closed the session: `userClosed`, `shutdown`, `hostError`, `timeout`.
+    HostEnded {
+        reason: String,
+    },
+    ConnectionLost,
+    HostUnreachable,
+    NotPaired,
 }
 
 /// `ready`: version from the stream's `Ready`, if any; `closed`: reason from its `Closed`, if any.
@@ -34,6 +54,11 @@ pub fn classify(
         Some(CloseReason::User) => StreamResult::ClosedByUser,
         Some(CloseReason::Stopped) => StreamResult::Stopped,
         Some(CloseReason::Error { message }) => StreamResult::StreamError { message },
+        Some(CloseReason::Rejected { reason }) => StreamResult::Rejected { reason },
+        Some(CloseReason::HostEnded { reason }) => StreamResult::HostEnded { reason },
+        Some(CloseReason::ConnectionLost) => StreamResult::ConnectionLost,
+        Some(CloseReason::HostUnreachable) => StreamResult::HostUnreachable,
+        Some(CloseReason::NotPaired) => StreamResult::NotPaired,
         None => StreamResult::Crashed { code: exit_code },
     }
 }

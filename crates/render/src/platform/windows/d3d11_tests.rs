@@ -135,3 +135,35 @@ fn wait_gpu_returns() {
     white_frame_test(&mut presenter, (64, 64));
     presenter.wait_gpu();
 }
+
+#[test]
+fn ready_for_a_frame_at_start_and_after_each_present() {
+    let mut presenter = Presenter::new(TestWindow::new(), 64, 64).unwrap();
+    let wait = std::time::Duration::from_millis(200);
+    assert!(
+        presenter.wait_frame_ready(wait),
+        "a new swapchain takes a frame"
+    );
+    let device = presenter.device();
+    let texture = nv12_bands(&device, 64, 64, &[(235, 128, 128)]);
+    let frame = VideoFrame {
+        texture: &texture,
+        array_index: 0,
+        width: 64,
+        height: 64,
+        matrix: ColorMatrix::Bt709,
+    };
+    for _ in 0..3 {
+        presenter.present_nv12(&frame).unwrap();
+        assert!(
+            presenter.wait_frame_ready(wait),
+            "ready again within a refresh"
+        );
+    }
+    presenter.resize(96, 64).unwrap();
+    presenter.present_nv12(&frame).unwrap();
+    assert!(
+        presenter.wait_frame_ready(wait),
+        "still waitable after a resize"
+    );
+}

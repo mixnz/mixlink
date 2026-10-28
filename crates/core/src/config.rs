@@ -11,6 +11,20 @@ pub const CONFIG_VERSION: u32 = 1;
 
 /// Device name limit in UTF-8 bytes (mDNS label); config and the control handshake share it.
 pub const MAX_NAME_BYTES: usize = 63;
+
+/// This PC's name for the other side (`COMPUTERNAME`), else `fallback`; cut to `MAX_NAME_BYTES`.
+pub fn computer_name(fallback: &str) -> String {
+    fit_name(&std::env::var("COMPUTERNAME").unwrap_or_else(|_| fallback.to_owned()))
+}
+
+/// `name` cut to at most `MAX_NAME_BYTES` on a char boundary.
+pub fn fit_name(name: &str) -> String {
+    let mut end = name.len().min(MAX_NAME_BYTES);
+    while !name.is_char_boundary(end) {
+        end -= 1;
+    }
+    name[..end].to_owned()
+}
 const FPS_RANGE: std::ops::RangeInclusive<u32> = 1..=240;
 const BITRATE_KBPS_RANGE: std::ops::RangeInclusive<u32> = 1_000..=500_000;
 
@@ -74,6 +88,7 @@ impl NetConfig {
 pub struct VideoConfig {
     pub max_fps: u32,
     pub bitrate_kbps: u32,
+    pub codec: CodecChoice,
 }
 
 impl Default for VideoConfig {
@@ -81,8 +96,19 @@ impl Default for VideoConfig {
         Self {
             max_fps: 120,
             bitrate_kbps: 50_000,
+            codec: CodecChoice::Auto,
         }
     }
+}
+
+/// Which codec the host streams (spec 0020). `Auto`: HEVC when the client decodes it, else H.264.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CodecChoice {
+    #[default]
+    Auto,
+    H264,
+    Hevc,
 }
 
 impl VideoConfig {
