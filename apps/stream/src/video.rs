@@ -183,7 +183,9 @@ fn run<W: HasWindowHandle + Send + Sync + 'static>(
             continue;
         }
         redraw = false;
-        if let Some((frame, mut stamps, info)) = pending.pop() {
+        let (next, skipped) = pending.pop_paced();
+        stats.dropped += u64::from(skipped.is_some());
+        if let Some((frame, mut stamps, info)) = next {
             present(&mut presenter, &frame)?;
             stamps.mark(Stage::Presented);
             stats.record_with(&stamps, &info);

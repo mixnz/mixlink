@@ -38,7 +38,7 @@ with the host (spec 0020), D3D11VA decode and present with the host cursor on a 
   the winit thread only passes sizes. It decodes every queued AU and presents the newest; a cursor change
   re-presents the last frame. The cursor is drawn only while its shape is loaded. It presents only when the
   swapchain's frame-latency waitable is signaled (never blocks in `Present`), decoding meanwhile; decoded
-  frames wait in `FrameQueue` (2, oldest first, a third drops the oldest).
+  frames wait in `FrameQueue` (3, oldest first; half a second of backlog skips one: `pop_paced`).
 - Latency spans: host capture / encode / send (`FrameMeta`), network = RTT / 2, reassemble, queue, decode,
   present, total; no clock sync between the PCs.
 - The feeder starts after the first present (decoder open), else the first keyframe is lost.
