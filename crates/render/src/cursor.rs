@@ -12,8 +12,7 @@ pub const CURSOR_MAX_SIDE: u32 = 256;
 pub enum CursorKind {
     /// Straight alpha.
     Alpha,
-    /// Alpha byte is a mask: 0xFF = opaque colour, 0 = XOR with the screen (IddCx; the reverse of DXGI
-    /// duplication, seen on the text cursor in spec 0020 Results).
+    /// Alpha byte is a mask: 0 = opaque colour, 0xFF = XOR with the screen.
     MaskedColor,
 }
 
@@ -60,6 +59,12 @@ pub fn convert_shape(
         });
     }
     let row_bytes = width as usize * 4;
+    let kind = match kind {
+        CursorKind::Alpha if looks_masked(pixels, pitch as usize, row_bytes, height as usize) => {
+            CursorKind::MaskedColor
+        }
+        other => other,
+    };
     let mut normal = Vec::with_capacity(row_bytes * height as usize);
     let mut invert = vec![0u8; row_bytes * height as usize];
     let mut inverts = false;
@@ -68,7 +73,7 @@ pub fn convert_shape(
             let (b, g, r, a) = (px[0], px[1], px[2], px[3]);
             let out = match kind {
                 CursorKind::Alpha => [mul(b, a), mul(g, a), mul(r, a), a],
-                CursorKind::MaskedColor if a == 0xFF => [b, g, r, 255],
+                CursorKind::MaskedColor if a == 0 => [b, g, r, 255],
                 CursorKind::MaskedColor if (b, g, r) == (0, 0, 0) => [0; 4],
                 CursorKind::MaskedColor => {
                     let at = normal.len();
@@ -86,6 +91,18 @@ pub fn convert_shape(
         hot,
         normal,
         invert: inverts.then_some(invert),
+    })
+}
+
+/// IddCx with XOR emulation tags the text cursor as alpha but sends masked-colour data (spec 0020
+/// Results). A real alpha shape never has colour where alpha is 0; a masked one does.
+fn looks_masked(pixels: &[u8], pitch: usize, row_bytes: usize, height: usize) -> bool {
+    pixels.chunks(pitch).take(height).any(|row| {
+        row[..row_bytes]
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|px| px[3] == 0 && px[..3] != [0, 0, 0])
     })
 }
 

@@ -141,10 +141,12 @@ fn capture(connector: u32, sink: &mut NetSink, stop: &AtomicBool) -> Result<(), 
         src.hold_timeouts(),
         src.ring_fallbacks()
     );
+    let gaps = sink.gaps();
     log::info!(
-        "longest gap between frames {} ms, gaps over 250 ms: {}",
-        sink.longest_gap().as_millis(),
-        sink.long_gaps()
+        "longest gap between frames {} ms; stalls while playing: {} (ms into the stream, length ms): {:?}",
+        gaps.longest().as_millis(),
+        gaps.stall_count(),
+        gaps.stalls()
     );
     ran
 }

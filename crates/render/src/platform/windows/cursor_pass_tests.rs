@@ -55,7 +55,7 @@ fn transparent_pixels_keep_the_video() {
 
 #[test]
 fn invert_mask_over_white_is_black() {
-    let pixel = render(CursorKind::MaskedColor, [255, 255, 255, 0], WHITE, true);
+    let pixel = render(CursorKind::MaskedColor, [255, 255, 255, 0xFF], WHITE, true);
     assert_eq!(pixel(11, 11), (0, 0, 0));
     assert_eq!(pixel(20, 20), (255, 255, 255));
 }

@@ -33,7 +33,7 @@ const TYPE_ALPHA: u32 = 2;
 pub enum ShapeType {
     /// Straight alpha.
     Alpha,
-    /// Alpha byte is a mask: 0xFF = opaque colour, 0 = XOR with the screen (IddCx).
+    /// Alpha byte is a mask: 0 = opaque colour, 0xFF = XOR with the screen.
     MaskedColor,
 }
 

@@ -7,11 +7,12 @@ use std::time::{Duration, Instant};
 
 use mixlink_capture::{CaptureError, CapturedFrame, Frame, IddSource};
 use mixlink_codec::{Encoder, EncoderConfig};
-use mixlink_core::clock::{self, Ticks};
+use mixlink_core::clock;
 use mixlink_net::{RxLane, TxLane};
 use mixlink_proto::video::FrameMeta;
 
 use super::feedback::FeedbackRx;
+use super::gaps::GapStats;
 use super::video_send::VideoSender;
 use crate::capture::flow::{Delivery, EncodeSink};
 use crate::error::SvcError;
@@ -24,14 +25,9 @@ pub struct NetSink {
     feedback: FeedbackRx,
     /// Set when the client asked for a cursor shape; `svc-cursor` takes it.
     shape_request: Arc<AtomicBool>,
-    /// Frame gaps (driver acquire to acquire): DWM sends frames only on change; long ones show a stall.
-    last_acquire: Option<Ticks>,
-    longest_gap: Duration,
-    long_gaps: u32,
+    /// Gaps between frames (driver acquire to acquire), for the session log.
+    gaps: GapStats,
 }
-
-/// A gap this long between frames counts as a stall in the session log.
-const LONG_GAP: Duration = Duration::from_millis(250);
 
 impl NetSink {
     /// `config.width` / `height` are replaced by each reopen's size.
@@ -47,18 +43,12 @@ impl NetSink {
             video,
             feedback,
             shape_request,
-            last_acquire: None,
-            longest_gap: Duration::ZERO,
-            long_gaps: 0,
+            gaps: GapStats::default(),
         }
     }
 
-    pub fn longest_gap(&self) -> Duration {
-        self.longest_gap
-    }
-
-    pub fn long_gaps(&self) -> u32 {
-        self.long_gaps
+    pub fn gaps(&self) -> &GapStats {
+        &self.gaps
     }
 
     pub fn into_lanes(self) -> (TxLane, RxLane) {
@@ -82,12 +72,7 @@ impl EncodeSink<IddSource> for NetSink {
 
     // HOT PATH
     fn encode(&mut self, frame: &CapturedFrame<'_>, force_idr: bool) -> Result<Delivery, SvcError> {
-        let acquired = frame.acquire_qpc();
-        if let Some(last) = self.last_acquire.replace(acquired) {
-            let gap = acquired.duration_since(last);
-            self.longest_gap = self.longest_gap.max(gap);
-            self.long_gaps += u32::from(gap >= LONG_GAP);
-        }
+        self.gaps.frame(frame.acquire_qpc());
         let asked = self.feedback.poll(Instant::now());
         if asked.shape_request {
             self.shape_request.store(true, Ordering::Release);

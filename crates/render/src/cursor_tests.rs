@@ -30,15 +30,14 @@ fn color_shape_premultiplied() {
 
 #[test]
 fn masked_opaque_colour() {
-    // IddCx masked colour: mask 0xFF = this colour, opaque (spec 0020 Results).
-    let img = image(CursorKind::MaskedColor, 1, 1, 4, &[bgra(1, 2, 3, 0xFF)]);
+    let img = image(CursorKind::MaskedColor, 1, 1, 4, &[bgra(1, 2, 3, 0)]);
     assert_eq!(img.normal, vec![1, 2, 3, 255]);
     assert!(img.invert.is_none());
 }
 
 #[test]
 fn masked_black_xor_is_transparent() {
-    let img = image(CursorKind::MaskedColor, 1, 1, 4, &[bgra(0, 0, 0, 0)]);
+    let img = image(CursorKind::MaskedColor, 1, 1, 4, &[bgra(0, 0, 0, 0xFF)]);
     assert_eq!(img.normal, vec![0, 0, 0, 0]);
     assert!(img.invert.is_none());
 }
@@ -50,7 +49,7 @@ fn masked_white_xor_goes_to_invert() {
         2,
         1,
         8,
-        &[bgra(255, 255, 255, 0), bgra(9, 9, 9, 0xFF)],
+        &[bgra(255, 255, 255, 0xFF), bgra(9, 9, 9, 0)],
     );
     assert_eq!(&img.normal[..4], &[0, 0, 0, 0]);
     assert_eq!(&img.normal[4..], &[9, 9, 9, 255]);
@@ -127,15 +126,36 @@ fn rect_empty_without_video() {
 }
 
 #[test]
-fn masked_i_beam_is_a_beam_not_a_box() {
-    // What the host sent for the text cursor: a black beam (mask 0xFF) in a clear box (mask 0, black).
+fn alpha_label_with_masked_data_is_read_as_masked() {
+    // The text cursor as IddCx sent it with XOR emulation (spec 0020 Results): tagged alpha, but a
+    // black box at alpha 0xFF (XOR with black = clear), a white beam and a black rim at alpha 0.
     let img = image(
-        CursorKind::MaskedColor,
+        CursorKind::Alpha,
+        3,
+        1,
+        12,
+        &[
+            bgra(0, 0, 0, 0xFF),
+            bgra(255, 255, 255, 0),
+            bgra(0, 0, 0, 0),
+        ],
+    );
+    assert_eq!(
+        img.normal,
+        vec![0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 255]
+    );
+    assert!(img.invert.is_none());
+}
+
+#[test]
+fn true_alpha_shape_is_unchanged() {
+    // Arrow-like: clear pixels are all zero, the body is opaque.
+    let img = image(
+        CursorKind::Alpha,
         2,
         1,
         8,
-        &[bgra(0, 0, 0, 0xFF), bgra(0, 0, 0, 0)],
+        &[bgra(0, 0, 0, 0), bgra(255, 255, 255, 255)],
     );
-    assert_eq!(img.normal, vec![0, 0, 0, 255, 0, 0, 0, 0]);
-    assert!(img.invert.is_none());
+    assert_eq!(img.normal, vec![0, 0, 0, 0, 255, 255, 255, 255]);
 }
