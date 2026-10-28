@@ -1,4 +1,4 @@
-//! Hot-path check: `Fragments::next_into`, `Reassembler::push`, `Sealer::seal` and `Opener::open` never allocate.
+//! Hot-path check: `Fragments::next_into`, `Reassembler::push`, `Sealer::seal`, `Opener::open` and the input packet never allocate.
 //! Test-only counting allocator (spec 0010); it delegates every call to `System`.
 
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -8,6 +8,7 @@ use mixlink_core::ids::FrameId;
 use mixlink_proto::channel::Channel;
 use mixlink_proto::crypto::{KEY_LEN, Role, SessionKeys, TAG_LEN};
 use mixlink_proto::header::{Flags, MAX_DATAGRAM, PacketHeader};
+use mixlink_proto::input::{INPUT_LEN, InputEvent, InputPacket, MAX_EVENTS, MouseMode};
 use mixlink_proto::packetizer::Packetizer;
 use mixlink_proto::reassembler::{Push, Reassembler, ReassemblerConfig};
 
@@ -113,5 +114,35 @@ fn seal_and_open_do_not_allocate() {
     });
 
     assert_eq!(opened, 55);
+    assert_eq!(n, 0);
+}
+
+#[test]
+fn input_encode_and_decode_do_not_allocate() {
+    let packet = InputPacket {
+        seq: 9,
+        mode: MouseMode::Relative,
+        buttons: 1,
+        abs_x: 0,
+        abs_y: 0,
+        rel_x: -3,
+        rel_y: 4,
+        wheel: 120,
+        hwheel: 0,
+        first_event: 1,
+        count: 1,
+        events: [InputEvent {
+            code: 0x04,
+            down: true,
+        }; MAX_EVENTS],
+        keys: [0; 32],
+    };
+    let mut out = [0u8; INPUT_LEN];
+    let mut decoded = None;
+    let n = allocations_during(|| {
+        packet.encode(&mut out);
+        decoded = InputPacket::decode(&out).ok();
+    });
+    assert!(decoded.is_some());
     assert_eq!(n, 0);
 }

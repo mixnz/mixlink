@@ -76,3 +76,11 @@ Spec 0017; code `crates/net/src/discovery/`.
   `send_us`), then the Annex-B access unit. Host stage times let the client report latency without clock sync.
 - Feedback, one packet, byte 0 kind + u32 LE: 1 `KeyframeRequest { last_good }`, 2 `CursorShapeRequest
   { shape_id }`. Unknown kinds are dropped. Video, cursor and feedback are sealed with the session keys.
+
+## Input (`crates/proto/src/input.rs`; spec 0021)
+- One packet, 80 B LE, client → host, sealed: kind 1, `seq` u32, mouse `mode` (0 none, 1 absolute, 2 relative),
+  `buttons`, `abs_x` / `abs_y` u16 (stream pixels), `rel_x` / `rel_y` / `wheel` / `hwheel` i32 running totals
+  (wheel 120 = one notch), `first_event` u32, `count` ≤ 8, 8 × (`code`, `down`) events (key = HID usage,
+  button n = `0xF0 + n`), 32 B bitmap of the keys held.
+- Loss: totals carry lost motion, the last 8 events replay lost taps and clicks, the bitmap fixes the rest.
+  Repeats keep the `seq`; the host ignores a `seq` it has applied.

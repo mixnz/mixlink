@@ -112,3 +112,16 @@ pub enum FeedbackError {
     #[error("unknown feedback kind {byte}")]
     Kind { byte: u8 },
 }
+
+/// An input packet that does not follow the fixed layout (spec 0021).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum InputError {
+    #[error("input packet is {len} bytes, too short")]
+    TooShort { len: usize },
+    #[error("unknown input kind {byte}")]
+    Kind { byte: u8 },
+    #[error("unknown mouse mode {byte}")]
+    Mode { byte: u8 },
+    #[error("input packet says {count} events, at most 8 fit")]
+    Count { count: u8 },
+}
