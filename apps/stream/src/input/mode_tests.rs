@@ -54,3 +54,25 @@ fn relative_stays_while_shooting() {
     p.host_cursor(true, t0 + ms(500));
     assert_eq!(p.update(t0 + ms(500)), MouseMode::Absolute);
 }
+
+#[test]
+fn typing_keeps_absolute_until_a_quiet_second() {
+    let t0 = Instant::now();
+    let mut p = ModePicker::default();
+    let typed = Some(t0 + ms(100));
+    p.host_cursor(false, t0 + ms(120));
+    assert_eq!(p.update_after(t0 + ms(300), typed), MouseMode::Absolute);
+    assert_eq!(p.next_check_after(typed), Some(t0 + ms(100) + TYPING_QUIET));
+    assert_eq!(p.update_after(t0 + ms(1100), typed), MouseMode::Relative);
+}
+
+#[test]
+fn key_activity_is_shared() {
+    let a = KeyActivity::new();
+    let b = a.clone();
+    assert_eq!(b.last(), None);
+    let now = Instant::now();
+    a.note(now);
+    let seen = b.last().unwrap();
+    assert!(seen <= now && now - seen < ms(2));
+}

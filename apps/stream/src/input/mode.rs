@@ -1,14 +1,56 @@
 //! Absolute or relative mouse (spec 0021) from the host cursor. A game that takes the mouse hides the
 //! cursor for good; Windows also hides the hardware cursor for a moment while a window is dragged or
 //! resized (it draws it in the picture instead). So relative needs the cursor hidden for `HIDE_HOLD`
-//! with no button held here, and stays until the cursor shows again.
+//! with no button held here and no key typed for `TYPING_QUIET`, and stays until the cursor shows again.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use mixlink_core::input::MouseMode;
 
 /// How long the host cursor must stay hidden (no button held) before relative mode.
 pub const HIDE_HOLD: Duration = Duration::from_millis(150);
+/// Windows hides the cursor while typing ("hide pointer while typing"): no relative mode until the keys
+/// have been quiet this long.
+pub const TYPING_QUIET: Duration = Duration::from_secs(1);
+
+/// When a key last changed, shared by `stream-input` (writes) and the window (reads).
+#[derive(Debug, Clone)]
+pub struct KeyActivity {
+    base: Instant,
+    /// Microseconds after `base`, plus one; 0 = no key yet.
+    last_us: Arc<AtomicU64>,
+}
+
+impl Default for KeyActivity {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl KeyActivity {
+    pub fn new() -> Self {
+        Self {
+            base: Instant::now(),
+            last_us: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    // HOT PATH
+    pub fn note(&self, now: Instant) {
+        let us = u64::try_from(now.saturating_duration_since(self.base).as_micros())
+            .unwrap_or(u64::MAX - 1);
+        self.last_us.store(us + 1, Ordering::Relaxed);
+    }
+
+    pub fn last(&self) -> Option<Instant> {
+        match self.last_us.load(Ordering::Relaxed) {
+            0 => None,
+            us => Some(self.base + Duration::from_micros(us - 1)),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct ModePicker {
@@ -59,10 +101,12 @@ impl ModePicker {
 
     /// The mode at `now` (moves to relative once the hold is over).
     pub fn update(&mut self, now: Instant) -> MouseMode {
-        if !self.relative
-            && self.buttons == 0
-            && self.hidden_since.is_some_and(|at| now >= at + HIDE_HOLD)
-        {
+        self.update_after(now, None)
+    }
+
+    /// As `update`, with the last key change: relative waits for `TYPING_QUIET` after it.
+    pub fn update_after(&mut self, now: Instant, last_key: Option<Instant>) -> MouseMode {
+        if !self.relative && self.next_check_after(last_key).is_some_and(|at| now >= at) {
             self.relative = true;
         }
         self.mode()
@@ -78,10 +122,15 @@ impl ModePicker {
 
     /// When `update` may switch to relative, if it can.
     pub fn next_check(&self) -> Option<Instant> {
+        self.next_check_after(None)
+    }
+
+    pub fn next_check_after(&self, last_key: Option<Instant>) -> Option<Instant> {
         if self.relative || self.buttons != 0 {
             return None;
         }
-        self.hidden_since.map(|at| at + HIDE_HOLD)
+        let held = self.hidden_since? + HIDE_HOLD;
+        Some(last_key.map_or(held, |key| held.max(key + TYPING_QUIET)))
     }
 }
 

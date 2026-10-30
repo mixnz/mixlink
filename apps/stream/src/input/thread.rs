@@ -19,6 +19,7 @@ use mixlink_input::platform::windows::kbd_hook::RawKey;
 use mixlink_input::platform::windows::thread_msg::{Pump, Pumped, Waker};
 use rtrb::{Consumer, Producer, RingBuffer};
 
+use super::mode::KeyActivity;
 use super::sender::{InputTx, Schedule, SendCounts};
 use super::shortcuts::{KeyUse, Shortcut, Shortcuts};
 
@@ -43,6 +44,8 @@ pub enum MouseEvent {
     Mode(MouseMode),
     /// Window focused and not released: keys and mouse go to the host.
     Capture(bool),
+    /// A key the window got (the hook did not take it).
+    Key(RawKey),
 }
 
 /// The winit thread's end.
@@ -71,6 +74,7 @@ type OnShortcut = Box<dyn Fn(Shortcut) + Send>;
 impl InputThread {
     pub fn start(
         tx: InputTx,
+        activity: KeyActivity,
         on_shortcut: impl Fn(Shortcut) + Send + 'static,
     ) -> io::Result<(InputThread, MouseFeed)> {
         let (ring_tx, ring_rx) = RingBuffer::new(RING);
@@ -78,7 +82,7 @@ impl InputThread {
         let on_shortcut: OnShortcut = Box::new(on_shortcut);
         let handle = thread::Builder::new()
             .name("stream-input".into())
-            .spawn(move || run(tx, ring_rx, on_shortcut, &ready))?;
+            .spawn(move || run(tx, ring_rx, activity, on_shortcut, &ready))?;
         let waker = waker_rx
             .recv()
             .map_err(|_| io::Error::other("input thread did not start"))?
@@ -123,11 +127,13 @@ struct Worker {
     on_shortcut: OnShortcut,
     waker: Waker,
     keys_sent: u64,
+    activity: KeyActivity,
 }
 
 fn run(
     tx: InputTx,
     ring: Consumer<MouseEvent>,
+    activity: KeyActivity,
     on_shortcut: OnShortcut,
     ready: &mpsc::SyncSender<Result<Waker, String>>,
 ) -> SendCounts {
@@ -140,6 +146,7 @@ fn run(
     };
     let _mmcss = Mmcss::enter(MmcssTask::Games);
     let mut worker = Worker::new(tx, ring, on_shortcut, pump.waker());
+    worker.activity = activity;
     let _ = ready.send(Ok(pump.waker()));
     let mut stats = LoopStats::default();
     let mut beat = Instant::now();
@@ -176,6 +183,7 @@ impl Worker {
             on_shortcut,
             waker,
             keys_sent: 0,
+            activity: KeyActivity::new(),
         }
     }
 
@@ -212,6 +220,7 @@ impl Worker {
             MouseEvent::Wheel(v, h) => self.state.wheel(v, h),
             MouseEvent::Mode(mode) => self.state.set_mode(mode),
             MouseEvent::Button(n, down) => return self.state.button(n, down),
+            MouseEvent::Key(key) => return self.key(key),
             MouseEvent::Capture(_) => {}
         }
         true
@@ -270,7 +279,10 @@ impl Worker {
         match self.shortcuts.key(usage, key.down) {
             KeyUse::Forward => {
                 let changed = self.state.key(usage, key.down);
-                self.keys_sent += u64::from(changed);
+                if changed {
+                    self.keys_sent += 1;
+                    self.activity.note(Instant::now());
+                }
                 changed
             }
             KeyUse::Drop => false,

@@ -19,6 +19,7 @@ leaves a key or button stuck, and never loses a click.
   - Client keyboard: a low-level keyboard hook (`WH_KEYBOARD_LL`) while the window is focused and input is
     captured, so Win, Alt+Tab, Alt+F4, Ctrl+Esc reach the host. Scan codes → HID usages (layout-free:
     the host's layout decides the character). Ctrl+Alt+Del and Win+L stay local (Windows reserves them).
+    Keys the hook does not take reach the window and go to the host from there (winit scan code).
   - Client mouse, two modes chosen from the host cursor's `visible` flag (cursor channel, spec 0020):
     - **Absolute** (host cursor visible: desktop, menus): position in stream pixels from the window
       (letterbox removed); the client draws the host cursor shape at the local pointer (no round trip).
@@ -151,10 +152,18 @@ First run (2026-10-30), hook on `stream-input` (`Pump`: `MsgWaitForMultipleObjec
   with the stream window in front and no MixLink hook (`--play`), the other process saw every key. A
   newest hook that does not answer makes Windows skip the older ones for that key (main PC test,
   ~600 ms). On the main PC (no window of ours in front) the same thread saw physical keys. Fix: the hook
-  on its own thread in `GetMessageW` (`HookThread`).
+  on its own thread in `GetMessageW` (`HookThread`): no change, still 0 calls.
+- Second run: with another program's hook installed after ours, both hooks got every key (27 swallowed,
+  typing reached the host). Pattern over every run: when the MixLink hook is the newest on the desktop and
+  its window is in front, Windows calls no keyboard hook at all; why is not known. Fix: keys the hook does
+  not take reach the window (winit `KeyboardInput`, scan code) and go to the host from there; the hook
+  still takes Win, Alt+Tab and the rest when it is called. The host hid its cursor while typing (Windows
+  "hide pointer while typing") → relative mode: no relative until keys are quiet for 1 s.
 
 ## Open questions
 - (Answered 2026-10-28: `SendInput` fallback is row T25; fullscreen moves to `Ctrl+Alt+Shift+F`; a cursor
   warped by a host program in absolute mode stays at the local pointer until the mouse moves.)
+- Why the newest keyboard hook in the foreground process gets no calls on the laptop (not on the main
+  PC): unknown. Without it Win and Alt+Tab act on the client.
 - (Answered 2026-10-30: a 150 ms hold with no button held before relative mode; window drags hid the
   host cursor for ~1 s each in the first run.)

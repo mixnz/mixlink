@@ -5,6 +5,7 @@ use mixlink_proto::channel::Channel;
 use mixlink_proto::crypto::{KEY_LEN, SessionKeys};
 
 use super::*;
+use crate::input::mode::KeyActivity;
 use crate::net::drop_knob::DropKnob;
 fn worker() -> (Transport, Worker) {
     let (host, _host_lanes) = Transport::start(TransportConfig::loopback()).unwrap();
@@ -80,7 +81,7 @@ fn thread_hook_sees_injected() {
         host.local_addr(),
         DropKnob::default(),
     );
-    let (thread, mut feed) = InputThread::start(tx, |_| {}).unwrap();
+    let (thread, mut feed) = InputThread::start(tx, KeyActivity::new(), |_| {}).unwrap();
     assert!(feed.push(MouseEvent::Capture(true)));
     std::thread::sleep(Duration::from_millis(100));
     let key = |flags| INPUT {
@@ -127,11 +128,23 @@ fn thread_hook_physical() {
         host.local_addr(),
         DropKnob::default(),
     );
-    let (thread, mut feed) = InputThread::start(tx, |_| {}).unwrap();
+    let (thread, mut feed) = InputThread::start(tx, KeyActivity::new(), |_| {}).unwrap();
     assert!(feed.push(MouseEvent::Capture(true)));
     log::info!("captured: type for 30 s");
     std::thread::sleep(Duration::from_secs(30));
     assert!(feed.push(MouseEvent::Capture(false)));
     std::thread::sleep(Duration::from_millis(200));
     thread.stop();
+}
+
+#[test]
+fn window_key_counts_only_while_captured() {
+    let (_host, mut w) = worker();
+    assert!(!w.mouse(MouseEvent::Key(raw(0x1E, 0, true))));
+    w.captured = true;
+    assert!(w.mouse(MouseEvent::Key(raw(0x1E, 0, true))));
+    assert!(
+        w.activity.last().is_some(),
+        "typing is noted for the mouse mode"
+    );
 }

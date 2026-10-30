@@ -7,7 +7,8 @@ use mixlink_core::input::MouseMode;
 use std::time::Instant;
 
 use mixlink_stream::input::capture::to_stream;
-use mixlink_stream::input::mode::ModePicker;
+use mixlink_stream::input::keys::raw_key;
+use mixlink_stream::input::mode::{KeyActivity, ModePicker};
 use mixlink_stream::input::sender::{InputTx, SendCounts};
 use mixlink_stream::input::shortcuts::Shortcut;
 use mixlink_stream::input::thread::{InputThread, MouseEvent, MouseFeed};
@@ -16,6 +17,7 @@ use winit::dpi::PhysicalPosition;
 use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::EventLoopProxy;
 use winit::keyboard::{KeyCode, ModifiersState, PhysicalKey};
+use winit::platform::scancode::PhysicalKeyExtScancode;
 use winit::window::{CursorGrabMode, Window};
 
 use crate::ipc::StreamEvent;
@@ -35,6 +37,8 @@ pub struct WindowInput {
     released: bool,
     captured: bool,
     picker: ModePicker,
+    /// Last key change on the host side of things (`stream-input` writes it).
+    activity: KeyActivity,
     modifiers: ModifiersState,
     pointer: Option<PhysicalPosition<f64>>,
     /// Last (captured, mode) written to the log, so only changes are logged.
@@ -52,6 +56,7 @@ impl WindowInput {
             released: false,
             captured: false,
             picker: ModePicker::default(),
+            activity: KeyActivity::new(),
             modifiers: ModifiersState::empty(),
             pointer: None,
             logged: None,
@@ -67,7 +72,7 @@ impl WindowInput {
         local: LocalPointer,
         proxy: EventLoopProxy<StreamEvent>,
     ) {
-        let started = InputThread::start(tx, move |shortcut| {
+        let started = InputThread::start(tx, self.activity.clone(), move |shortcut| {
             // Fails only after the loop has exited; nothing left to do.
             let _ = proxy.send_event(StreamEvent::Shortcut(shortcut));
         });
@@ -100,10 +105,11 @@ impl WindowInput {
     /// host cursor must stay hidden for a while before relative mode).
     pub fn poll(&mut self, window: &Window, now: Instant) -> Option<Instant> {
         let before = self.picker.mode();
-        if self.picker.update(now) != before {
+        let last_key = self.activity.last();
+        if self.picker.update_after(now, last_key) != before {
             self.captured_mode_changed(window);
         }
-        self.picker.next_check()
+        self.picker.next_check_after(last_key)
     }
 
     /// The release shortcut (typed while captured).
@@ -120,6 +126,16 @@ impl WindowInput {
                 self.update(window);
             }
             WindowEvent::ModifiersChanged(modifiers) => self.modifiers = modifiers.state(),
+            // Captured: a key the hook did not take goes to the host from here (spec 0021 Results: the hook
+            // is not always called). Shortcuts are then read by `stream-input`.
+            WindowEvent::KeyboardInput { event, .. } if self.captured => {
+                if let PhysicalKey::Code(code) = event.physical_key
+                    && let Some(scancode) = event.physical_key.to_scancode()
+                {
+                    let down = event.state == ElementState::Pressed;
+                    self.push(MouseEvent::Key(raw_key(code, scancode, down)));
+                }
+            }
             WindowEvent::KeyboardInput { event, .. }
                 if event.state == ElementState::Pressed && !event.repeat =>
             {
