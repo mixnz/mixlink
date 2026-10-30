@@ -3,6 +3,7 @@
 
 use std::io;
 use std::sync::Arc;
+use std::time::Instant;
 
 use mixlink_core::ipc::{CloseReason, IPC_VERSION, LatencySummary, StreamToLauncher};
 use mixlink_proto::control::CodecId;
@@ -15,7 +16,7 @@ use mixlink_stream::video::{VideoEvent, VideoSource, VideoThread};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoopProxy};
 use winit::window::{Fullscreen, Window, WindowId};
 
 use crate::connect::{self, NetThread};
@@ -285,6 +286,15 @@ impl ApplicationHandler<StreamEvent> for StreamApp {
             StreamEvent::Net(net) => self.on_net(event_loop, net),
             StreamEvent::Shortcut(shortcut) => self.shortcut(event_loop, shortcut),
         }
+    }
+
+    /// Wakes the loop when the mouse mode may change (spec 0021); otherwise waits for events.
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let next = self
+            .window
+            .clone()
+            .and_then(|window| self.input.poll(&window, Instant::now()));
+        event_loop.set_control_flow(next.map_or(ControlFlow::Wait, ControlFlow::WaitUntil));
     }
 
     // HOT PATH

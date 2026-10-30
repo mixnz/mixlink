@@ -22,8 +22,10 @@ leaves a key or button stuck, and never loses a click.
   - Client mouse, two modes chosen from the host cursor's `visible` flag (cursor channel, spec 0020):
     - **Absolute** (host cursor visible: desktop, menus): position in stream pixels from the window
       (letterbox removed); the client draws the host cursor shape at the local pointer (no round trip).
-    - **Relative** (host cursor hidden: a game took the mouse): pointer confined and hidden, raw deltas
-      (winit `DeviceEvent::MouseMotion` = Raw Input), sent as running totals.
+    - **Relative** (host cursor hidden for 150 ms with no button held: a game took the mouse): pointer
+      confined and hidden, raw deltas (winit `DeviceEvent::MouseMotion` = Raw Input), sent as running
+      totals; stays until the host cursor shows. Windows hides the hardware cursor while a window is
+      dragged or resized (it draws it in the picture), hence the hold and the button rule.
     - Buttons 1–5, vertical + horizontal wheel (120 units = one notch).
   - Local Windows cursor hidden over the window in both modes; shown again outside it / when released.
   - Local shortcuts, never sent: `Ctrl+Alt+Shift+Z` releases / recaptures input (hook off, pointer free),
@@ -46,7 +48,8 @@ leaves a key or button stuck, and never loses a click.
 ### Data flow
 ```
 client winit thread: WindowEvent (abs, buttons, wheel) / DeviceEvent (raw dx, dy) → SPSC ring + wake
-client stream-input thread: LL hook (keys, on this thread) + ring → InputState (crates/input, pure)
+client input-hook thread: LL hook in a GetMessageW loop → mapped keys swallowed → SPSC ring + wake
+client stream-input thread: key ring + mouse ring → InputState (crates/input, pure)
   → InputPacket → seal → Input lane                                       // HOT PATH
   timers: repeat at +4 ms and +16 ms, keep-alive 100 ms while anything is held
 host svc-input: Input lane → open → InputApplier (pure) → Report(s) → VHid::feed
@@ -54,8 +57,11 @@ host svc-cursor: cursor visible flag → client picks absolute / relative
 ```
 The `Input` `TxLane` is taken in `stream-net`'s `open_link`; after `Welcome` an `InputTx` (lane, sealer,
 packetizer, host address) goes over a one-shot channel to `stream-input`, which the winit thread starts
-on `Connected`. The lane has one owner on each end, as before (`net` CLAUDE.md). The hook lives on
-`stream-input` (its own message loop), so a busy or modal winit thread (window drag) never delays keys.
+on `Connected`. The lane has one owner on each end, as before (`net` CLAUDE.md). The hook lives on its
+own thread (`input-hook`, started while captured) waiting in `GetMessageW`, so a busy or modal winit
+thread (window drag) never delays keys. First built on `stream-input` waiting in
+`MsgWaitForMultipleObjectsEx`: on the laptop the hook was then never called while the stream window was in
+front, and every other keyboard hook on the desktop was starved with it (Results).
 
 ### Wire: `proto::input` (client → host, fixed little-endian, ≤ 96 B)
 | Field | Size | Meaning |
@@ -83,13 +89,13 @@ on `Connected`. The lane has one owner on each end, as before (`net` CLAUDE.md).
   `scripts/check-deps.sh`); `proto::input` holds its wire form (`encode`, `decode`).
 - `crates/input`: `keymap.rs` (set-1 scan code + E0 → HID usage, pure, table test), `client/state.rs`
   (`InputState`: event ring, totals, mode, `release_all`, `packet()`; no heap), `platform/windows/kbd_hook.rs`
-  (install / remove the hook on the calling thread; the callback swallows keys while captured and calls
-  a thread-local sink; `// SAFETY:` per block), `thread_msg.rs` (`Pump`: message wait with a
+  (install / remove the hook on the calling thread; `// SAFETY:` per block), `hook_thread.rs` (`HookThread`:
+  the hook in a `GetMessageW` loop, a boxed sink decides each key), `thread_msg.rs` (`Pump`: message wait with a
   high-resolution timer, so the +4 ms repeat is not rounded to the 15.6 ms tick).
 - `apps/stream/src/input/`: `capture.rs` (window → stream pixels, letterbox from `viewport::fit`; a
   pointer on a bar sits on the nearest edge), `sender.rs` (`InputTx`, repeat and keep-alive `Schedule`),
-  `shortcuts.rs`, `thread.rs` (`stream-input`). `window_input.rs` (binary): absolute ↔ relative from the
-  cursor flag, with `Window::set_cursor_grab(Confined)` and `set_cursor_visible`.
+  `shortcuts.rs`, `mode.rs` (`ModePicker`), `thread.rs` (`stream-input`). `window_input.rs` (binary): absolute ↔
+  relative from `ModePicker`, with `Window::set_cursor_grab(Confined)` and `set_cursor_visible`.
 - Cursor prediction: in absolute mode the video thread draws the shape at the local pointer position
   (an atomic written by the winit thread); host positions still drive visibility and shape.
 - Captured = focused and not released by the shortcut. Not captured → no hook, pointer free and visible,
@@ -109,9 +115,8 @@ on `Connected`. The lane has one owner on each end, as before (`net` CLAUDE.md).
 - Release-all: session end, stop, and 500 ms without a packet while a key or button is held.
 
 ## Latency impact
-- Client: event → (mouse: ring + thread wake, ~10–30 µs) → seal → lane; keys skip the hop (the hook
-  runs on `stream-input`). No allocation. Raw mouse at
-  1 kHz = 1000 datagrams/s of ~110 B: negligible next to video.
+- Client: event → ring + thread wake (~10–30 µs, keys from the hook thread and mouse from winit) → seal
+  → lane. No allocation. Raw mouse at 1 kHz = 1000 datagrams/s of ~110 B: negligible next to video.
 - Network: RTT / 2 (spec 0020: 0.65 / 0.75 ms p50 / p99).
 - Host: open + apply + feed; spec 0016 feed p99 kbd 0.69, abs 0.43, rel 2.38 ms (Windows' tail).
 - Measured: host log per session (receive → feed done, p50 / p99), client log (send cost, repeats).
@@ -136,10 +141,20 @@ on `Connected`. The lane has one owner on each end, as before (`net` CLAUDE.md).
 ## Results
 Unit and loopback tests pass (`proto::input`, `InputState`, `InputApplier`, `AbsMap`, `InputRecv`,
 `InputTx` / `Schedule`, shortcuts, window → stream mapping, `Pump` timer). The two-PC run (main PC host,
-laptop client, wired) is next; this section gets its findings and numbers.
+laptop client, wired) is in progress.
+
+First run (2026-10-30), hook on `stream-input` (`Pump`: `MsgWaitForMultipleObjectsEx`):
+- Mouse: absolute and relative worked, 0 lost, host receive → fed p50 40 µs. Window drags on the host
+  hid the host cursor ~1 s each → relative mode → the cursor jumped on release: `ModePicker` rule.
+- Keys never reached the host. With the stream window in front and the hook on, the hook was never called
+  (`stream-input` alive: woken each second, ticks ≤ 170 µs) and a hook in another process saw 0 keys too;
+  with the stream window in front and no MixLink hook (`--play`), the other process saw every key. A
+  newest hook that does not answer makes Windows skip the older ones for that key (main PC test,
+  ~600 ms). On the main PC (no window of ours in front) the same thread saw physical keys. Fix: the hook
+  on its own thread in `GetMessageW` (`HookThread`).
 
 ## Open questions
 - (Answered 2026-10-28: `SendInput` fallback is row T25; fullscreen moves to `Ctrl+Alt+Shift+F`; a cursor
   warped by a host program in absolute mode stays at the local pointer until the mouse moves.)
-- Windows "hide pointer while typing" on the host flips to relative while typing; a short hold
-  (e.g. 150 ms hidden before switching) may be needed. Decide after the first run.
+- (Answered 2026-10-30: a 150 ms hold with no button held before relative mode; window drags hid the
+  host cursor for ~1 s each in the first run.)

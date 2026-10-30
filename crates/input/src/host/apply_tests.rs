@@ -176,3 +176,27 @@ fn release_all_neutral() {
     assert_eq!(rel(&sink.reports[1]), (0, 0, 0, 0, 0));
     assert!(!a.held());
 }
+
+#[test]
+fn mouse_counts_track_reports_and_releases() {
+    let (mut a, mut sink, mut s) = (applier(), FakeSink::default(), InputState::new());
+    s.set_mode(MouseMode::Absolute);
+    s.mouse_abs(10, 20);
+    a.apply(&s.packet(), &mut sink).unwrap();
+    s.button(0, true);
+    a.apply(&s.packet(), &mut sink).unwrap();
+    s.mouse_abs(30, 40);
+    s.button(0, false);
+    a.apply(&s.packet(), &mut sink).unwrap();
+    s.set_mode(MouseMode::Relative);
+    s.mouse_rel(5, 0);
+    a.apply(&s.packet(), &mut sink).unwrap();
+    let c = a.counts();
+    assert_eq!((c.abs_reports, c.button_downs, c.button_ups), (2, 1, 1));
+    assert_eq!(c.mode_changes, 2);
+    assert_eq!(c.ups_at[0], Some((30, 40)));
+    // The first relative packet sets the baseline, the move comes next.
+    s.mouse_rel(5, 0);
+    a.apply(&s.packet(), &mut sink).unwrap();
+    assert!(a.counts().rel_reports >= 3);
+}

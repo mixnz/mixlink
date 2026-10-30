@@ -4,7 +4,10 @@
 //! relative while a game hides it (pointer confined and hidden, raw motion).
 
 use mixlink_core::input::MouseMode;
+use std::time::Instant;
+
 use mixlink_stream::input::capture::to_stream;
+use mixlink_stream::input::mode::ModePicker;
 use mixlink_stream::input::sender::{InputTx, SendCounts};
 use mixlink_stream::input::shortcuts::Shortcut;
 use mixlink_stream::input::thread::{InputThread, MouseEvent, MouseFeed};
@@ -31,9 +34,11 @@ pub struct WindowInput {
     /// Released with the shortcut; a click in the window or the shortcut again takes input back.
     released: bool,
     captured: bool,
-    host_visible: bool,
+    picker: ModePicker,
     modifiers: ModifiersState,
     pointer: Option<PhysicalPosition<f64>>,
+    /// Last (captured, mode) written to the log, so only changes are logged.
+    logged: Option<(bool, MouseMode)>,
 }
 
 impl WindowInput {
@@ -46,9 +51,10 @@ impl WindowInput {
             focused: false,
             released: false,
             captured: false,
-            host_visible: true,
+            picker: ModePicker::default(),
             modifiers: ModifiersState::empty(),
             pointer: None,
+            logged: None,
         }
     }
 
@@ -85,10 +91,19 @@ impl WindowInput {
     }
 
     pub fn host_cursor(&mut self, window: &Window, visible: bool) {
-        if self.host_visible != visible {
-            self.host_visible = visible;
+        log::info!("host cursor {}", if visible { "shown" } else { "hidden" });
+        self.picker.host_cursor(visible, Instant::now());
+        self.poll(window, Instant::now());
+    }
+
+    /// Switches the mouse mode when the picker says so; returns when to look again (spec 0021: the
+    /// host cursor must stay hidden for a while before relative mode).
+    pub fn poll(&mut self, window: &Window, now: Instant) -> Option<Instant> {
+        let before = self.picker.mode();
+        if self.picker.update(now) != before {
             self.captured_mode_changed(window);
         }
+        self.picker.next_check()
     }
 
     /// The release shortcut (typed while captured).
@@ -146,11 +161,7 @@ impl WindowInput {
     }
 
     fn mode(&self) -> MouseMode {
-        if self.host_visible {
-            MouseMode::Absolute
-        } else {
-            MouseMode::Relative
-        }
+        self.picker.mode()
     }
 
     fn local_shortcut(&mut self, window: &Window, key: PhysicalKey) -> Option<Shortcut> {
@@ -188,6 +199,7 @@ impl WindowInput {
             MouseButton::Forward => 4,
             MouseButton::Other(_) => return,
         };
+        self.picker.button(n, down, Instant::now());
         self.push(MouseEvent::Button(n, down));
     }
 
@@ -228,6 +240,10 @@ impl WindowInput {
         let mode = self.mode();
         if self.captured {
             self.push(MouseEvent::Mode(mode));
+        }
+        if self.logged != Some((self.captured, mode)) {
+            self.logged = Some((self.captured, mode));
+            log::info!("input captured: {}, mouse mode: {mode:?}", self.captured);
         }
         let grab = match (self.captured, mode) {
             (true, MouseMode::Relative) => CursorGrabMode::Confined,

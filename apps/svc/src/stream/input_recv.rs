@@ -140,6 +140,15 @@ impl InputRecv {
             self.apply_us.percentile(99.0),
             self.apply_us.max()
         );
+        log::info!(
+            "input mouse: {} absolute and {} relative reports, {} presses, {} releases, {} mode changes; \n             position at the last releases {:?}",
+            counts.abs_reports,
+            counts.rel_reports,
+            counts.button_downs,
+            counts.button_ups,
+            counts.mode_changes,
+            counts.ups_at
+        );
     }
 
     pub fn into_lane(self) -> RxLane {

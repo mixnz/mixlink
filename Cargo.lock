@@ -2710,6 +2710,7 @@ dependencies = [
  "mixlink-render",
  "rtrb",
  "thiserror 2.0.21",
+ "windows",
  "winit",
 ]
 

@@ -2,6 +2,7 @@
 //! shortcuts, and (Windows) the `stream-input` thread with the keyboard hook.
 
 pub mod capture;
+pub mod mode;
 pub mod sender;
 pub mod shortcuts;
 #[cfg(windows)]

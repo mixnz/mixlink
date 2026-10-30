@@ -1,18 +1,21 @@
-//! Thread `stream-input` (spec 0021): owns the input state and the sealed sender. Keys come from a
-//! low-level hook installed on this thread while input is captured (so a busy or modal winit thread
-//! never delays them); mouse events come from the winit thread over an SPSC ring plus a wake.
+//! Thread `stream-input` (spec 0021): owns the input state and the sealed sender. While input is
+//! captured, keys come from the keyboard hook thread (`hook_thread`, its own `GetMessageW` loop, so a
+//! busy or modal winit thread never delays them) over an SPSC ring plus a wake; mouse events come
+//! from the winit thread the same way.
 
-use std::cell::RefCell;
 use std::io;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use mixlink_core::input::MouseMode;
 use mixlink_core::mmcss::{Mmcss, MmcssTask};
 use mixlink_input::client::state::InputState;
 use mixlink_input::keymap;
-use mixlink_input::platform::windows::kbd_hook::{KeyHook, RawKey};
+use mixlink_input::platform::windows::hook_thread::HookThread;
+use mixlink_input::platform::windows::kbd_hook::RawKey;
 use mixlink_input::platform::windows::thread_msg::{Pump, Pumped, Waker};
 use rtrb::{Consumer, Producer, RingBuffer};
 
@@ -21,6 +24,10 @@ use super::shortcuts::{KeyUse, Shortcut, Shortcuts};
 
 /// Mouse events in flight from the winit thread (1 kHz mice, a slow wake: still far from full).
 const RING: usize = 1024;
+/// Keys in flight from the hook thread.
+const KEY_RING: usize = 256;
+/// How often the loop logs its numbers while the hook is on (diagnostics).
+const HEARTBEAT: Duration = Duration::from_secs(2);
 
 /// What the winit thread tells `stream-input`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,6 +97,21 @@ impl InputThread {
     }
 }
 
+/// The hook while input is captured: its thread, the keys it hands over, and how many it saw.
+struct Hooked {
+    thread: HookThread,
+    keys: Consumer<RawKey>,
+    seen: Arc<AtomicU64>,
+}
+
+/// The loop since the last heartbeat.
+#[derive(Debug, Default)]
+struct LoopStats {
+    woken: u64,
+    timeouts: u64,
+    longest_tick: Duration,
+}
+
 struct Worker {
     state: InputState,
     tx: InputTx,
@@ -97,15 +119,10 @@ struct Worker {
     shortcuts: Shortcuts,
     ring: Consumer<MouseEvent>,
     captured: bool,
-    hook: Option<KeyHook>,
+    hook: Option<Hooked>,
     on_shortcut: OnShortcut,
-    /// This thread's own wake: a key sent from the hook must make the wait take the new deadline.
     waker: Waker,
-}
-
-thread_local! {
-    // Set for the thread's life; the hook borrows it only inside `Pump::wait`, never while `run` does.
-    static WORKER: RefCell<Option<Worker>> = const { RefCell::new(None) };
+    keys_sent: u64,
 }
 
 fn run(
@@ -122,22 +139,33 @@ fn run(
         }
     };
     let _mmcss = Mmcss::enter(MmcssTask::Games);
-    install_worker(tx, ring, on_shortcut, pump.waker());
+    let mut worker = Worker::new(tx, ring, on_shortcut, pump.waker());
     let _ = ready.send(Ok(pump.waker()));
+    let mut stats = LoopStats::default();
+    let mut beat = Instant::now();
     loop {
-        let deadline = with_worker(|w| w.tick(Instant::now())).flatten();
-        if pump.wait(deadline) == Pumped::Quit {
-            break;
+        let started = Instant::now();
+        let deadline = worker.tick(started);
+        stats.longest_tick = stats.longest_tick.max(started.elapsed());
+        // Diagnostics (spec 0021 run): wake at least every second, for the heartbeat.
+        let cap = started + HEARTBEAT / 2;
+        match pump.wait(Some(deadline.map_or(cap, |at| at.min(cap)))) {
+            Pumped::Quit => break,
+            Pumped::Woken => stats.woken += 1,
+            Pumped::Timeout => stats.timeouts += 1,
+        }
+        if beat.elapsed() >= HEARTBEAT {
+            worker.heartbeat(&stats);
+            stats = LoopStats::default();
+            beat = Instant::now();
         }
     }
-    let counts = with_worker(Worker::finish).unwrap_or_default();
-    WORKER.with(|w| w.borrow_mut().take());
-    counts
+    worker.finish()
 }
 
-fn install_worker(tx: InputTx, ring: Consumer<MouseEvent>, on_shortcut: OnShortcut, waker: Waker) {
-    WORKER.with(|w| {
-        *w.borrow_mut() = Some(Worker {
+impl Worker {
+    fn new(tx: InputTx, ring: Consumer<MouseEvent>, on_shortcut: OnShortcut, waker: Waker) -> Self {
+        Self {
             state: InputState::new(),
             tx,
             schedule: Schedule::default(),
@@ -147,25 +175,18 @@ fn install_worker(tx: InputTx, ring: Consumer<MouseEvent>, on_shortcut: OnShortc
             hook: None,
             on_shortcut,
             waker,
-        });
-    });
-}
+            keys_sent: 0,
+        }
+    }
 
-fn with_worker<T>(f: impl FnOnce(&mut Worker) -> T) -> Option<T> {
-    WORKER.with(|w| w.try_borrow_mut().ok()?.as_mut().map(f))
-}
-
-/// The hook: `true` swallows the key (it went to the host, or was a shortcut).
-// HOT PATH
-fn on_key(key: RawKey) -> bool {
-    with_worker(|w| w.key(key)).unwrap_or(false)
-}
-
-impl Worker {
-    /// Takes the winit thread's events, sends a new state or a due repeat; returns the next wake time.
+    /// Takes the hook's keys and the winit thread's events, sends a new state or a due repeat;
+    /// returns the next wake time.
     // HOT PATH
     fn tick(&mut self, now: Instant) -> Option<Instant> {
         let mut changed = false;
+        while let Some(key) = self.hook.as_mut().and_then(|h| h.keys.pop().ok()) {
+            changed |= self.key(key);
+        }
         while let Ok(event) = self.ring.pop() {
             changed |= self.mouse(event);
         }
@@ -203,19 +224,44 @@ impl Worker {
         }
         self.captured = on;
         if on {
-            match KeyHook::install(on_key) {
-                Ok(hook) => self.hook = Some(hook),
-                Err(error) => {
-                    log::warn!("keyboard hook not installed, keys stay on this PC: {error}")
-                }
-            }
+            self.hook = self.start_hook();
             return false;
         }
-        self.hook = None;
+        self.unhook();
         self.shortcuts.reset();
         self.state.release_all()
     }
 
+    /// The hook thread swallows every key with a HID usage and hands it over; a full ring lets the
+    /// key through here rather than lose it.
+    fn start_hook(&self) -> Option<Hooked> {
+        let (mut keys_tx, keys) = RingBuffer::new(KEY_RING);
+        let seen = Arc::new(AtomicU64::new(0));
+        let counter = Arc::clone(&seen);
+        let waker = self.waker.clone();
+        let sink = Box::new(move |key: RawKey| {
+            // HOT PATH (hook thread)
+            counter.fetch_add(1, Ordering::Relaxed);
+            if keymap::usage(key.scan, key.extended, key.vk).is_none() {
+                return false;
+            }
+            let taken = keys_tx.push(key).is_ok();
+            waker.wake();
+            taken
+        });
+        match HookThread::start(sink) {
+            Ok(thread) => {
+                log::info!("keyboard hook on");
+                Some(Hooked { thread, keys, seen })
+            }
+            Err(error) => {
+                log::warn!("keyboard hook not installed, keys stay on this PC: {error}");
+                None
+            }
+        }
+    }
+
+    /// One key from the hook (already swallowed there).
     // HOT PATH
     fn key(&mut self, key: RawKey) -> bool {
         let Some(usage) = keymap::usage(key.scan, key.extended, key.vk) else {
@@ -223,22 +269,17 @@ impl Worker {
         };
         match self.shortcuts.key(usage, key.down) {
             KeyUse::Forward => {
-                if self.state.key(usage, key.down) {
-                    self.send_new(Instant::now());
-                    // The wait runs with the deadline from before this key; take the new one.
-                    self.waker.wake();
-                }
+                let changed = self.state.key(usage, key.down);
+                self.keys_sent += u64::from(changed);
+                changed
             }
-            KeyUse::Drop => {}
+            KeyUse::Drop => false,
             KeyUse::Run(shortcut) => {
-                if shortcut != Shortcut::Fullscreen && self.state.release_all() {
-                    self.send_new(Instant::now());
-                    self.waker.wake();
-                }
+                let released = shortcut != Shortcut::Fullscreen && self.state.release_all();
                 (self.on_shortcut)(shortcut);
+                released
             }
         }
-        true
     }
 
     fn send_new(&mut self, now: Instant) {
@@ -247,8 +288,36 @@ impl Worker {
         self.schedule.on_send(now);
     }
 
+    /// Diagnostics: is the thread alive and is the hook being called?
+    fn heartbeat(&self, stats: &LoopStats) {
+        if let Some(hook) = &self.hook {
+            log::info!(
+                "stream-input: {} wakes, {} timer ends, longest tick {} us; hook calls so far {}",
+                stats.woken,
+                stats.timeouts,
+                stats.longest_tick.as_micros(),
+                hook.seen.load(Ordering::Relaxed)
+            );
+        }
+    }
+
+    /// Removes the hook and logs what it saw.
+    fn unhook(&mut self) {
+        if let Some(hook) = self.hook.take() {
+            let seen = hook.thread.stop();
+            log::info!(
+                "keyboard hook off: {} keys seen, {} injected (passed on), {} swallowed, {} key changes sent",
+                seen.calls,
+                seen.injected,
+                seen.swallowed,
+                self.keys_sent
+            );
+            self.keys_sent = 0;
+        }
+    }
+
     fn finish(&mut self) -> SendCounts {
-        self.hook = None;
+        self.unhook();
         self.captured = false;
         self.state.release_all();
         // Sent even when nothing was held: the host then knows this state is final.

@@ -11,7 +11,7 @@ with the host (spec 0020), D3D11VA decode and present with the host cursor on a 
 - Library (`lib.rs`, used by the binary and `tests/no_alloc.rs`): `args.rs` (`Mode`: `--connect` / `--play`),
   `au_queue.rs` (SPSC AU queue, `AuInfo`), `frame_queue.rs`, `feeder.rs` (file → queue at `--fps`), `stats.rs` (`LATENCY_SPANS`,
   `latency_summary`), `video.rs` (video thread); each with `<name>_tests.rs`. `input/` (0021): `sender.rs` (`InputTx`,
-  `Schedule`: +4 / +16 ms, 100 ms while held), `shortcuts.rs`, `capture.rs` (`to_stream`), Windows `thread.rs` (`stream-input`).
+  `Schedule`: +4 / +16 ms, 100 ms while held), `shortcuts.rs`, `capture.rs`, `mode.rs`, Windows `thread.rs` (`stream-input`).
 - `net/` (spec 0020): `session.rs` (`run`: `connect_secure`, then one loop over control / video / cursor lanes,
   ping 1 s, 10 s silence = lost), `lanes.rs` (`Media`: open, reassemble, AU queue, cursor, keyframe requests),
   `receive.rs` (`VideoReceiver`: drop non-key frames after a loss), `cursor_state.rs` (net → video thread,
@@ -47,4 +47,4 @@ with the host (spec 0020), D3D11VA decode and present with the host cursor on a 
 - The feeder starts after the first present (decoder open), else the first keyframe is lost.
 - Needs the FFmpeg DLLs next to the exe (`build.sh release` copies them into `dist/`).
 - Input (0021): captured = focused and not released. Host cursor shown → absolute (drawn at the local pointer,
-  `LocalPointer`); hidden → relative (pointer confined + hidden, raw `MouseMotion`). Keys only through the hook.
+  `LocalPointer`); hidden 150 ms, no button held → relative (`ModePicker`). Keys: hook thread `input-hook`.

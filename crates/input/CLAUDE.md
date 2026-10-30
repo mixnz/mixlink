@@ -14,7 +14,7 @@ HID reports for `drivers/vhid` (ADR-0007, ADR-0009, spec 0016). SendInput fallba
   `host/abs_map.rs` (`AbsMap`): pure, each with `<name>_tests.rs`.
 - `platform/windows/vhid_wire.rs` (+ tests): IOCTL bytes = `drivers/vhid/Control.h`.
 - `platform/windows/vhid.rs`: `VHid` feeder. FFI lives in `core::device_io`, so this file has no `unsafe`.
-- `platform/windows/kbd_hook.rs` (+ ignored hand test), `thread_msg.rs` (+ tests): the crate's only `unsafe`.
+- `platform/windows/kbd_hook.rs`, `hook_thread.rs`, `thread_msg.rs` (+ tests, hand probes `#[ignore]`): the only `unsafe`.
 
 ## Public API
 - `hid::report`: `PAYLOAD_MAX` (16), `Target` (`Keyboard`, `MouseRel`, `MouseAbs`, `Pad(slot)`; `wire_id` 1 / 2 / 3 /
@@ -32,7 +32,8 @@ HID reports for `drivers/vhid` (ADR-0007, ADR-0009, spec 0016). SendInput fallba
   `Applied` (`Stale`, `Fresh`), `ApplyCounts` (`packets`, `stale`, `recovered_events`, `bitmap_fixes`).
 - `platform::windows::vhid_wire` (wire v2): `IOCTL_FEED`, `IOCTL_QUERY`, `WIRE_VERSION`, `QueryReply`
   (`pads_present`), `encode_feed`, `encode_query`, `decode_query`, `WireError`.
-- `platform::windows::kbd_hook` (client): `KeyHook::install(OnKey)` (drop = remove; injected keys pass), `RawKey`, `OnKey`.
+- `platform::windows::kbd_hook` (client): `KeyHook::install(OnKey)` (drop = remove; injected keys pass), `RawKey`, `OnKey`, `HookCounts`.
+- `platform::windows::hook_thread` (client): `HookThread::start(KeySink)` (`GetMessageW` loop), `stop -> HookCounts`.
 - `platform::windows::thread_msg`: `Pump` (`new`, `waker`, `wait(deadline) -> Pumped`; high-res timer), `Waker` (`wake`,
   `quit`), `Pumped` (`Woken`, `Timeout`, `Quit`).
 - `platform::windows::vhid`: `VHid::open` / `query` / `feed` (`ReportSink` for `VHid` and `&VHid`), `VHidError`

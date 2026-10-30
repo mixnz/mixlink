@@ -29,6 +29,14 @@ pub struct ApplyCounts {
     pub recovered_events: u64,
     /// Times the keyboard was set from the bitmap (more events lost than a packet repeats).
     pub bitmap_fixes: u64,
+    /// Mouse diagnostics: reports fed per collection, button presses and releases, mode switches.
+    pub abs_reports: u64,
+    pub rel_reports: u64,
+    pub button_downs: u64,
+    pub button_ups: u64,
+    pub mode_changes: u64,
+    /// Absolute position (stream pixels) at the last button releases, newest first.
+    pub ups_at: [Option<(u16, u16)>; 4],
 }
 
 /// Totals of the last packet: rel x, rel y, wheel, hwheel.
@@ -46,6 +54,7 @@ pub struct InputApplier {
     /// Wheel units not yet a whole notch (v, h).
     wheel_rest: (i32, i32),
     last_abs: Option<(u16, u16)>,
+    last_mode: MouseMode,
     counts: ApplyCounts,
 }
 
@@ -60,6 +69,7 @@ impl InputApplier {
             totals: None,
             wheel_rest: (0, 0),
             last_abs: None,
+            last_mode: MouseMode::None,
             counts: ApplyCounts::default(),
         }
     }
@@ -76,10 +86,15 @@ impl InputApplier {
         }
         self.last_seq = Some(p.seq);
         self.counts.packets += 1;
+        if p.mode != self.last_mode {
+            self.last_mode = p.mode;
+            self.counts.mode_changes += 1;
+        }
         if p.mode == MouseMode::Absolute && self.last_abs != Some((p.abs_x, p.abs_y)) {
             self.last_abs = Some((p.abs_x, p.abs_y));
             let (x, y) = self.map.map(p.abs_x, p.abs_y);
             sink.feed(&mouse_abs_report(0, x, y))?;
+            self.counts.abs_reports += 1;
         }
         self.replay_events(p, sink)?;
         self.reconcile(p, sink)?;
@@ -120,6 +135,7 @@ impl InputApplier {
                 let n = event.code - BUTTON_CODE;
                 if n < BUTTONS {
                     set_bit(&mut self.buttons, n, event.down);
+                    self.count_button(event.down);
                     self.feed_buttons(sink)?;
                 }
             } else if self.keyboard.set(event.code, event.down) {
@@ -169,12 +185,24 @@ impl InputApplier {
         }
         for report in mouse_rel_reports(self.buttons, dx, dy, notches.0, notches.1).as_slice() {
             sink.feed(report)?;
+            self.counts.rel_reports += 1;
         }
         Ok(())
     }
 
-    fn feed_buttons<S: ReportSink>(&self, sink: &mut S) -> Result<(), S::Error> {
+    fn feed_buttons<S: ReportSink>(&mut self, sink: &mut S) -> Result<(), S::Error> {
+        self.counts.rel_reports += 1;
         sink.feed(&mouse_rel_reports(self.buttons, 0, 0, 0, 0).as_slice()[0])
+    }
+
+    fn count_button(&mut self, down: bool) {
+        if down {
+            self.counts.button_downs += 1;
+        } else {
+            self.counts.button_ups += 1;
+            self.counts.ups_at.rotate_right(1);
+            self.counts.ups_at[0] = self.last_abs;
+        }
     }
 }
 
