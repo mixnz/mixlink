@@ -60,6 +60,8 @@ pub struct ModePicker {
     /// Buttons held on this PC, bit per button.
     buttons: u8,
     relative: bool,
+    /// The mode the window and the host were last switched to (`take_change`).
+    applied: MouseMode,
 }
 
 impl Default for ModePicker {
@@ -69,6 +71,7 @@ impl Default for ModePicker {
             hidden_since: None,
             buttons: 0,
             relative: false,
+            applied: MouseMode::Absolute,
         }
     }
 }
@@ -110,6 +113,22 @@ impl ModePicker {
             self.relative = true;
         }
         self.mode()
+    }
+
+    /// The mode at `now` when it differs from the one applied (which it then becomes); the window
+    /// switches grab, cursor and host mode on `Some`.
+    pub fn take_change(&mut self, now: Instant, last_key: Option<Instant>) -> Option<MouseMode> {
+        let mode = self.update_after(now, last_key);
+        if mode == self.applied {
+            return None;
+        }
+        self.applied = mode;
+        Some(mode)
+    }
+
+    /// The mode the window and the host use now.
+    pub fn applied(&self) -> MouseMode {
+        self.applied
     }
 
     pub fn mode(&self) -> MouseMode {

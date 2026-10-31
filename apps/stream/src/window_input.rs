@@ -115,9 +115,8 @@ impl WindowInput {
     /// Switches the mouse mode when the picker says so; returns when to look again (spec 0021: the
     /// host cursor must stay hidden for a while before relative mode).
     pub fn poll(&mut self, window: &Window, now: Instant) -> Option<Instant> {
-        let before = self.picker.mode();
         let last_key = self.activity.last();
-        if self.picker.update_after(now, last_key) != before {
+        if self.picker.take_change(now, last_key).is_some() {
             self.captured_mode_changed(window);
         }
         self.picker.next_check_after(last_key)
@@ -192,8 +191,9 @@ impl WindowInput {
         }
     }
 
+    /// The mode in use (window grab, local cursor, host).
     fn mode(&self) -> MouseMode {
-        self.picker.mode()
+        self.picker.applied()
     }
 
     fn local_shortcut(&mut self, window: &Window, key: PhysicalKey) -> Option<Shortcut> {

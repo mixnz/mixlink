@@ -76,3 +76,19 @@ fn key_activity_is_shared() {
     let seen = b.last().unwrap();
     assert!(seen <= now && now - seen < ms(2));
 }
+
+/// The window and the host follow `take_change`: a cursor that shows again after relative mode must
+/// come back as a change, even though `host_cursor` already left relative mode.
+#[test]
+fn shown_again_after_relative_is_a_change() {
+    let t0 = Instant::now();
+    let mut p = ModePicker::default();
+    assert_eq!(p.take_change(t0, None), None);
+    p.host_cursor(false, t0);
+    assert_eq!(p.take_change(t0 + ms(200), None), Some(MouseMode::Relative));
+    assert_eq!(p.applied(), MouseMode::Relative);
+    p.host_cursor(true, t0 + ms(300));
+    assert_eq!(p.take_change(t0 + ms(300), None), Some(MouseMode::Absolute));
+    assert_eq!(p.take_change(t0 + ms(400), None), None);
+    assert_eq!(p.applied(), MouseMode::Absolute);
+}
