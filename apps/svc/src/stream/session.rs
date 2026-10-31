@@ -76,7 +76,7 @@ fn stream_on(
     input.start(InputRecv::new(
         &start.keys,
         start.peer,
-        AbsMap::new(stream_size, target.place),
+        AbsMap::new(stream_size),
     ));
     let shape_request = Arc::new(AtomicBool::new(false));
     let cursor_stop = AtomicBool::new(false);

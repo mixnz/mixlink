@@ -159,7 +159,6 @@ fn fake_display(connector: u32) -> DisplayHandle {
                     let _ = reply.send(Ok(StreamTarget {
                         active: Active { monitor: 9, client },
                         connector,
-                        place: None,
                     }));
                 }
                 DisplayRequest::End { reply, .. } => {

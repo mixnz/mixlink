@@ -83,7 +83,6 @@ impl MonitorPort for FakeMonitor {
                 client: DeviceId::from_bytes([1; 16]),
             },
             connector: 1,
-            place: None,
         })
     }
 

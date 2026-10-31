@@ -44,11 +44,7 @@ struct Pair {
 fn pair() -> Pair {
     let (host, mut host_lanes) = Transport::start(TransportConfig::loopback()).unwrap();
     let (client, mut client_lanes) = Transport::start(TransportConfig::loopback()).unwrap();
-    let recv = InputRecv::new(
-        &keys(),
-        client.local_addr(),
-        AbsMap::new((1920, 1080), None),
-    );
+    let recv = InputRecv::new(&keys(), client.local_addr(), AbsMap::new((1920, 1080)));
     Pair {
         rx: host_lanes.take_rx(Channel::Input).unwrap(),
         host_addr: host.local_addr(),
@@ -108,7 +104,7 @@ fn other_peer_ignored() {
     let (host, mut host_lanes) = Transport::start(TransportConfig::loopback()).unwrap();
     let mut p = pair();
     // The receiver expects a peer that is not `p.client`.
-    p.recv = InputRecv::new(&keys(), host.local_addr(), AbsMap::new((1920, 1080), None));
+    p.recv = InputRecv::new(&keys(), host.local_addr(), AbsMap::new((1920, 1080)));
     p.rx = host_lanes.take_rx(Channel::Input).unwrap();
     p.host_addr = host.local_addr();
     let mut sink = FakeSink::default();

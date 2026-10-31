@@ -1,7 +1,6 @@
 //! Screen layout snapshot and layout planning (spec 0015). Targets are keyed by monitor device path,
 //! never by LUID (it changes per boot).
 
-use mixlink_input::host::abs_map::{DesktopPlace, Rect};
 use serde::{Deserialize, Serialize};
 
 pub const SNAPSHOT_VERSION: u32 = 1;
@@ -79,37 +78,6 @@ pub fn plan_extend(virtual_width: u32, others: &[SavedTarget]) -> Vec<Placed> {
             y: t.y - top,
         })
         .collect()
-}
-/// Where `monitor_path` sits on the desktop and the bounds of every display in `snapshot` (spec 0021:
-/// the absolute mouse spans the bounds). `None` when the monitor is not in the snapshot.
-pub fn desktop_place(snapshot: &Snapshot, monitor_path: &str) -> Option<DesktopPlace> {
-    let rect = |t: &SavedTarget| Rect {
-        x: t.x,
-        y: t.y,
-        w: t.width,
-        h: t.height,
-    };
-    let monitor = rect(
-        snapshot
-            .targets
-            .iter()
-            .find(|t| t.monitor_path == monitor_path)?,
-    );
-    let far = |at: i32, len: u32| i64::from(at) + i64::from(len);
-    let left = snapshot.targets.iter().map(|t| t.x).min()?;
-    let top = snapshot.targets.iter().map(|t| t.y).min()?;
-    let right = snapshot.targets.iter().map(|t| far(t.x, t.width)).max()?;
-    let bottom = snapshot.targets.iter().map(|t| far(t.y, t.height)).max()?;
-    let span = |end: i64, start: i32| u32::try_from(end - i64::from(start)).unwrap_or(u32::MAX);
-    Some(DesktopPlace {
-        monitor,
-        desktop: Rect {
-            x: left,
-            y: top,
-            w: span(right, left),
-            h: span(bottom, top),
-        },
-    })
 }
 
 #[cfg(test)]

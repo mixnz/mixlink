@@ -20,7 +20,7 @@ impl ReportSink for FakeSink {
 }
 
 fn applier() -> InputApplier {
-    InputApplier::new(AbsMap::new((1920, 1080), None))
+    InputApplier::new(AbsMap::new((1920, 1080)))
 }
 
 fn keyboard(usages: &[u8]) -> Report {

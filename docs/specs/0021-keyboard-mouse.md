@@ -37,7 +37,7 @@ leaves a key or button stuck, and never loses a click.
     Released input comes back on the shortcut or a click in the window; focus gained = captured.
   - Focus lost, release shortcut, window closed: the client sends an all-released state first.
   - Host: thread `svc-input` per session (Input lane → open → apply → `vhid` feed), abs mapping to the
-    virtual monitor's place on the host desktop, release-all at session end and after 500 ms of silence
+    main display (the virtual monitor while streaming), release-all at session end and after 500 ms of silence
     while something is held. The feeder `VHid` moves from `run.rs` into a shared `Arc` for the session.
   - Dev knob `--drop input=<percent>`: the client drops input datagrams before sending (spec 0020 knob).
   - Per-session input stats in both logs (packets, repeats, recovered events, apply time p50 / p99).
@@ -109,9 +109,9 @@ front, and every other keyboard hook on the desktop was starved with it (Results
 - `crates/input/src/host/apply.rs`: `InputApplier` (pure, tests with a fake `ReportSink`): seq check,
   new events in order → keyboard / button reports, bitmap reconcile, relative totals → `mouse_rel_reports`
   (wheel notches from the 1/120 remainder), absolute → `mouse_abs_report` through `AbsMap`.
-- `AbsMap`: stream pixel → 0..=32767 over the virtual desktop, from the monitor's desktop rectangle and
-  the desktop bounds (read after `session::begin`; `virtual-only` = the whole range). That `vhid`
-  absolute spans the virtual desktop (not only the main display) is checked in the two-PC run (`extend`).
+- `AbsMap`: stream pixel → 0..=32767 on each axis. Windows maps the `vhid` absolute mouse to the main
+  display, which is the virtual monitor in both topologies (measured with `extend`, Results); an earlier
+  version also placed the monitor inside the desktop bounds, which would have shrunk the pointer's range.
 - Buttons always go on the relative mouse collection (press and release reach one device across mode
   switches); absolute reports only move the pointer.
 - `svc-input` thread (spawned by `stream_on` next to `svc-cursor`, `recv_timeout` on the lane):
@@ -127,25 +127,32 @@ front, and every other keyboard hook on the desktop was starved with it (Results
   Absolute cursor is drawn locally, so pointer feel does not wait for capture + encode + decode.
 
 ## Acceptance criteria
-- [ ] Typing in Notepad on the host from the laptop: every key, Shift / Ctrl / Alt combos, Win key opens
+- [x] Typing in Notepad on the host from the laptop: every key, Shift / Ctrl / Alt combos, Win key opens
   Start on the host (not the laptop), Alt+Tab switches host windows; no key stuck after 5 minutes.
-- [ ] Desktop mouse: host cursor sits under the laptop pointer at every edge and corner (windowed and
+- [x] Desktop mouse: host cursor sits under the laptop pointer at every edge and corner (windowed and
   `Ctrl+Alt+Shift+F` fullscreen, letterboxed), clicks, double-click, drag, right-click, wheel.
 - [ ] Game with mouse-look (a spec 0006 game): pointer locked, no local cursor, camera turns smoothly,
   WASD + mouse buttons work; Esc to the game menu brings the absolute mode back.
-- [ ] Focus loss (Alt+Tab out via `Ctrl+Alt+Shift+Z`, clicking another window) with W held → host
+- [x] Focus loss (Alt+Tab out via `Ctrl+Alt+Shift+Z`, clicking another window) with W held → host
   releases W at once; window close with keys held → released.
-- [ ] Loss: `--drop input=5` → no stuck key or button after 1 minute of typing and clicking, every
+- [x] Loss: `--drop input=5` → no stuck key or button after 1 minute of typing and clicking, every
   click lands (counted on the host: recovered events in the log).
-- [ ] Cable pulled while holding a key → host releases within 0.5 s.
-- [ ] UAC prompt and lock screen on the host are usable from the laptop.
-- [ ] `extend` topology: absolute mouse lands on the virtual monitor, not the physical one.
+- [x] Cable pulled while holding a key → host releases within 0.5 s.
+- [x] UAC prompt and lock screen on the host are usable from the laptop.
+- [x] `extend` topology: absolute mouse lands on the virtual monitor, not the physical one.
 - [ ] Results: input apply time p50 / p99 and repeats per session from the logs.
 
 ## Results
 Unit and loopback tests pass (`proto::input`, `InputState`, `InputApplier`, `AbsMap`, `InputRecv`,
 `InputTx` / `Schedule`, shortcuts, window → stream mapping, `Pump` timer). The two-PC run (main PC host,
 laptop client, wired) is in progress.
+
+Passed on 2026-10-31: typing (Win, Alt+Tab on the host), desktop mouse, `--drop input=5` (519 packets dropped, 26
+events recovered, 9 presses / 9 releases), cable pulled with `a` held (released at once), UAC and lock
+screen by mouse and keys, Win+L locks the client only, `Ctrl+Alt+Shift+L` locks the host, `extend` with a 4K
+monitor to the right (pointer stays on the virtual monitor, no offset: absolute = main display). Host
+receive → fed p50 18–24 µs, p99 0.7–0.9 ms. Vietnamese typing slips with Unikey on the host happen with the
+host's own keyboard too (not MixLink).
 
 First run (2026-10-30), hook on `stream-input` (`Pump`: `MsgWaitForMultipleObjectsEx`):
 - Mouse: absolute and relative worked, 0 lost, host receive → fed p50 40 µs. Window drags on the host

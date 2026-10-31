@@ -77,13 +77,7 @@ fn second_session_is_woken_at_once() {
         });
     });
     let control = InputControl::new(commands, worker.thread().clone());
-    let session = || {
-        InputRecv::new(
-            &keys(),
-            client.local_addr(),
-            AbsMap::new((1920, 1080), None),
-        )
-    };
+    let session = || InputRecv::new(&keys(), client.local_addr(), AbsMap::new((1920, 1080)));
     for round in 0..2 {
         control.start(session());
         std::thread::sleep(Duration::from_millis(80));

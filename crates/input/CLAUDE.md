@@ -27,7 +27,7 @@ HID reports for `drivers/vhid` (ADR-0007, ADR-0009, spec 0016). SendInput fallba
 - `keymap::usage(scan, extended, vk) -> Option<u8>` (set-1 scan code; Pause / NumLock by vk; AltGr's fake Ctrl dropped).
 - `client::state::InputState` (`key`, `button`, `mouse_abs`, `mouse_rel`, `wheel`, `set_mode`, `release_all`, `held`,
   `packet` (next seq), `current` (same seq, repeats)).
-- `host::abs_map`: `Rect`, `DesktopPlace { monitor, desktop }`, `AbsMap` (`new(stream, place)`, `map(x, y)`).
+- `host::abs_map`: `AbsMap` (`new(stream)`, `map(x, y)`: stream pixels → 0..=32767 on the main display).
 - `host::apply`: `InputApplier` (`new(map)`, `apply(packet, sink) -> Applied`, `release_all`, `held`, `counts`),
   `Applied` (`Stale`, `Fresh`), `ApplyCounts` (`packets`, `stale`, `recovered_events`, `bitmap_fixes`).
 - `platform::windows::vhid_wire` (wire v2): `IOCTL_FEED`, `IOCTL_QUERY`, `WIRE_VERSION`, `QueryReply`

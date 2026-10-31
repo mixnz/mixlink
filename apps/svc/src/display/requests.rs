@@ -9,12 +9,8 @@ use mixlink_core::config::Topology;
 use mixlink_core::ids::DeviceId;
 use mixlink_proto::control::DisplayInfo;
 
-use mixlink_input::host::abs_map::DesktopPlace;
-
-use super::edid::PRODUCT_CLIENT;
 use super::ports::{DisplayConfig, DisplayDriver};
 use super::session::{self, Active, Ports};
-use super::topology::desktop_place;
 use crate::error::SvcError;
 use crate::stop::StopSignal;
 
@@ -26,8 +22,6 @@ const POLL: Duration = Duration::from_millis(100);
 pub struct StreamTarget {
     pub active: Active,
     pub connector: u32,
-    /// Where the monitor sits on the desktop, for the absolute mouse (spec 0021); `None` = unknown.
-    pub place: Option<DesktopPlace>,
 }
 
 #[derive(Debug)]
@@ -129,44 +123,12 @@ fn begin<D: DisplayDriver, C: DisplayConfig>(
 ) -> Result<StreamTarget, SvcError> {
     let active = session::begin(ports, client, mode, topology, headless, sleep)?;
     match connector_of(ports.driver, active.monitor) {
-        Ok(connector) => {
-            let place = place_of(ports.config);
-            Ok(StreamTarget {
-                active,
-                connector,
-                place,
-            })
-        }
+        Ok(connector) => Ok(StreamTarget { active, connector }),
         Err(error) => {
             if let Err(undo) = session::end(ports, active, headless) {
                 log::warn!("client monitor not removed after an error: {undo}");
             }
             Err(error)
-        }
-    }
-}
-
-/// The client monitor's place on the desktop, read after the switch; `None` (with a warning) when Windows
-/// does not list it yet: the absolute mouse then spans the whole desktop.
-fn place_of<C: DisplayConfig>(config: &mut C) -> Option<DesktopPlace> {
-    let found = config
-        .find_mixlink(PRODUCT_CLIENT)
-        .and_then(|path| Ok((path, config.snapshot()?)));
-    match found {
-        Ok((Some(path), snapshot)) => {
-            let place = desktop_place(&snapshot, &path);
-            if place.is_none() {
-                log::warn!("client monitor not in the layout; the mouse spans the whole desktop");
-            }
-            place
-        }
-        Ok((None, _)) => {
-            log::warn!("client monitor not listed yet; the mouse spans the whole desktop");
-            None
-        }
-        Err(error) => {
-            log::warn!("desktop layout not read ({error}); the mouse spans the whole desktop");
-            None
         }
     }
 }
