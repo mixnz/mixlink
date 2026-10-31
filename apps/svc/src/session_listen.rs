@@ -27,6 +27,8 @@ use crate::error::SvcError;
 use crate::pipe::session::PairingPort;
 use crate::secrets;
 use crate::stop::StopSignal;
+use crate::stream::input_service::InputControl;
+use crate::stream::input_thread;
 use crate::stream::session::run_stream;
 use crate::stream::streamer::{StreamControl, StreamEnd, StreamLanes, StreamStart, Streamer};
 
@@ -119,6 +121,8 @@ fn infos(devices: &[PairedDevice]) -> Vec<PairedInfo> {
 #[derive(Debug)]
 pub struct SessionListener {
     pub thread: JoinHandle<()>,
+    /// `svc-input` (spec 0021), ends with the stop signal.
+    pub input_thread: Option<JoinHandle<()>>,
     pub shared: Arc<PairingShared>,
     pub addr: SocketAddrV4,
 }
@@ -134,12 +138,15 @@ pub fn start(
     let missing = || SvcError::Session("control lane missing".to_owned());
     let tx = lanes.take_tx(Channel::Control).ok_or_else(missing)?;
     let rx = lanes.take_rx(Channel::Control).ok_or_else(missing)?;
-    let streams = match settings.display.clone() {
-        Some(display) => Some(StreamControl::new(
-            media_lanes(&mut lanes)?,
-            launcher(display, settings.input.clone()),
-        )),
-        None => None,
+    let (streams, input_thread) = match settings.display.clone() {
+        Some(display) => {
+            let input_lane = lanes.take_rx(Channel::Input).ok_or_else(missing)?;
+            let (input, input_thread) =
+                input_thread::spawn(input_lane, settings.input.clone(), Arc::clone(&stop))?;
+            let streams = StreamControl::new(media_lanes(&mut lanes)?, launcher(display, input));
+            (Some(streams), Some(input_thread))
+        }
+        None => (None, None),
     };
     let paired = secrets::load_paired(&settings.secrets);
     let (commands, inbox) = mpsc::channel();
@@ -174,6 +181,7 @@ pub fn start(
         .spawn(move || worker.run(&stop))?;
     Ok(SessionListener {
         thread,
+        input_thread,
         shared,
         addr,
     })
@@ -186,16 +194,15 @@ fn media_lanes(lanes: &mut mixlink_net::Lanes) -> Result<StreamLanes, SvcError> 
         video: lanes.take_tx(Channel::Video).ok_or_else(missing)?,
         cursor: lanes.take_tx(Channel::Cursor).ok_or_else(missing)?,
         feedback: lanes.take_rx(Channel::Feedback).ok_or_else(missing)?,
-        input: lanes.take_rx(Channel::Input).ok_or_else(missing)?,
     })
 }
 
-fn launcher(display: DisplayHandle, input: Option<Arc<VHid>>) -> Launch {
+fn launcher(display: DisplayHandle, input: InputControl) -> Launch {
     Box::new(move |start: StreamStart, lanes| {
         let display = display.clone();
         let input = input.clone();
         Streamer::spawn(lanes, move |lanes, stop| {
-            run_stream(&display, input.as_deref(), &start, lanes, stop)
+            run_stream(&display, &input, &start, lanes, stop)
         })
     })
 }

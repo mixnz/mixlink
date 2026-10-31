@@ -15,7 +15,6 @@ fn lanes() -> (Transport, StreamLanes) {
         video: lanes.take_tx(Channel::Video).unwrap(),
         cursor: lanes.take_tx(Channel::Cursor).unwrap(),
         feedback: lanes.take_rx(Channel::Feedback).unwrap(),
-        input: lanes.take_rx(Channel::Input).unwrap(),
     };
     (transport, lanes)
 }

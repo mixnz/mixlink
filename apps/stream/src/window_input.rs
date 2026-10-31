@@ -43,6 +43,15 @@ pub struct WindowInput {
     pointer: Option<PhysicalPosition<f64>>,
     /// Last (captured, mode) written to the log, so only changes are logged.
     logged: Option<(bool, MouseMode)>,
+    motion: MotionCounts,
+}
+
+/// Diagnostics (spec 0021 run): raw motion events, those sent as relative, window moves in relative mode.
+#[derive(Debug, Default, Clone, Copy)]
+struct MotionCounts {
+    raw: u64,
+    sent: u64,
+    window_moves: u64,
 }
 
 impl WindowInput {
@@ -60,6 +69,7 @@ impl WindowInput {
             modifiers: ModifiersState::empty(),
             pointer: None,
             logged: None,
+            motion: MotionCounts::default(),
         }
     }
 
@@ -91,6 +101,7 @@ impl WindowInput {
 
     /// Sends the all-released state and stops the thread.
     pub fn stop(&mut self) -> Option<SendCounts> {
+        log::info!("mouse at close: {:?}", self.motion);
         self.feed = None;
         self.thread.take().map(InputThread::stop)
     }
@@ -142,6 +153,9 @@ impl WindowInput {
                 return self.local_shortcut(window, event.physical_key);
             }
             WindowEvent::CursorMoved { position, .. } => {
+                if self.mode() == MouseMode::Relative {
+                    self.motion.window_moves += 1;
+                }
                 self.pointer = Some(*position);
                 self.absolute_move(window);
             }
@@ -165,10 +179,12 @@ impl WindowInput {
     /// Raw motion: sent only in relative mode.
     // HOT PATH
     pub fn device_event(&mut self, event: &DeviceEvent) {
-        if let DeviceEvent::MouseMotion { delta } = event
-            && self.captured
-            && self.mode() == MouseMode::Relative
-        {
+        let DeviceEvent::MouseMotion { delta } = event else {
+            return;
+        };
+        self.motion.raw += 1;
+        if self.captured && self.mode() == MouseMode::Relative {
+            self.motion.sent += 1;
             self.push(MouseEvent::Rel(
                 delta.0.round() as i32,
                 delta.1.round() as i32,
@@ -259,7 +275,12 @@ impl WindowInput {
         }
         if self.logged != Some((self.captured, mode)) {
             self.logged = Some((self.captured, mode));
-            log::info!("input captured: {}, mouse mode: {mode:?}", self.captured);
+            log::info!(
+                "input captured: {}, mouse mode: {mode:?} (since the last line: {:?})",
+                self.captured,
+                self.motion
+            );
+            self.motion = MotionCounts::default();
         }
         let grab = match (self.captured, mode) {
             (true, MouseMode::Relative) => CursorGrabMode::Confined,

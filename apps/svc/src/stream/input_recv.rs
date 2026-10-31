@@ -1,10 +1,10 @@
-//! `svc-input` (spec 0021): the session client's keyboard and mouse on the sealed Input lane, applied
-//! to the virtual HID driver. Keys held when the client goes quiet, or when the session stops, are
-//! released, so nothing stays down on the host.
+//! One input session (spec 0021), run by `svc-input` (`input_service`): the client's keyboard and mouse
+//! on the sealed Input lane, applied to the virtual HID driver. Keys held when the client goes quiet, or
+//! when the session stops, are released, so nothing stays down on the host.
 
 use std::fmt::Display;
 use std::net::SocketAddrV4;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use mixlink_core::clock;
@@ -22,14 +22,13 @@ use crate::capture::report::Samples;
 /// Held keys are released after this long without a packet (the client sends every 100 ms while
 /// anything is held).
 pub const SILENCE: Duration = Duration::from_millis(500);
-/// One wait on the lane; also how often stop and silence are checked.
-const WAIT: Duration = Duration::from_millis(50);
+/// One wait on the lane; also how often stop, commands and silence are checked.
+pub const WAIT: Duration = Duration::from_millis(50);
 /// Apply times kept for the session log; later ones are only counted.
 const SAMPLES: usize = 72_000;
 
 #[derive(Debug)]
 pub struct InputRecv {
-    rx: RxLane,
     opener: Opener,
     peer: SocketAddrV4,
     applier: InputApplier,
@@ -40,22 +39,9 @@ pub struct InputRecv {
     feed_failed: bool,
 }
 
-/// Where client input goes when the driver is missing: nowhere (logged once by the caller).
-#[derive(Debug)]
-pub struct NoDriver;
-
-impl ReportSink for NoDriver {
-    type Error = std::convert::Infallible;
-
-    fn feed(&mut self, _report: &mixlink_input::hid::report::Report) -> Result<(), Self::Error> {
-        Ok(())
-    }
-}
-
 impl InputRecv {
-    pub fn new(rx: RxLane, keys: &SessionKeys, peer: SocketAddrV4, map: AbsMap) -> InputRecv {
+    pub fn new(keys: &SessionKeys, peer: SocketAddrV4, map: AbsMap) -> InputRecv {
         InputRecv {
-            rx,
             opener: keys.opener(Role::Host, Channel::Input),
             peer,
             applier: InputApplier::new(map),
@@ -66,27 +52,40 @@ impl InputRecv {
         }
     }
 
-    /// Until `stop`, then releases everything and logs the session's numbers.
-    pub fn run<S: ReportSink>(&mut self, sink: &mut S, stop: &AtomicBool)
-    where
+    /// Applies the packets on `rx`; with none, parks up to `wait` (the lane, or a command, unparks this
+    /// thread) and looks again. Then the silence check at `now`.
+    // HOT PATH
+    pub fn poll<S: ReportSink>(
+        &mut self,
+        rx: &mut RxLane,
+        sink: &mut S,
+        wait: Duration,
+        now: Instant,
+    ) where
         S::Error: Display,
     {
-        self.rx.attach_current_thread();
-        while !stop.load(Ordering::Acquire) {
-            self.poll(sink, WAIT, Instant::now());
+        if !self.drain(rx, sink, now) {
+            thread::park_timeout(wait);
+            self.drain(rx, sink, now);
         }
-        self.finish(sink);
+        let quiet = self
+            .last_packet
+            .is_none_or(|last| now.saturating_duration_since(last) >= SILENCE);
+        if quiet && self.applier.held() {
+            let released = self.applier.release_all(sink);
+            self.note(released);
+        }
     }
 
-    /// Waits up to `wait` for packets and applies them; then the silence check at `now`.
+    /// Applies every queued packet; `false` when there was none.
     // HOT PATH
-    pub fn poll<S: ReportSink>(&mut self, sink: &mut S, wait: Duration, now: Instant)
+    fn drain<S: ReportSink>(&mut self, rx: &mut RxLane, sink: &mut S, now: Instant) -> bool
     where
         S::Error: Display,
     {
-        let mut timeout = wait;
-        while let Some(mut dg) = self.rx.recv_timeout(timeout) {
-            timeout = Duration::ZERO;
+        let mut any = false;
+        while let Some(mut dg) = rx.try_recv() {
+            any = true;
             if dg.peer() != self.peer {
                 self.dropped += 1;
                 continue;
@@ -111,13 +110,7 @@ impl InputRecv {
             self.apply_us
                 .push(u64::try_from(took.as_micros()).unwrap_or(u64::MAX));
         }
-        let quiet = self
-            .last_packet
-            .is_none_or(|last| now.saturating_duration_since(last) >= SILENCE);
-        if quiet && self.applier.held() {
-            let released = self.applier.release_all(sink);
-            self.note(released);
-        }
+        any
     }
 
     /// Releases every key and button and logs the session's input numbers.
@@ -141,7 +134,8 @@ impl InputRecv {
             self.apply_us.max()
         );
         log::info!(
-            "input mouse: {} absolute and {} relative reports, {} presses, {} releases, {} mode changes; \n             position at the last releases {:?}",
+            "input mouse: {} absolute and {} relative reports, {} presses, {} releases, {} mode changes; \
+             position at the last releases {:?}",
             counts.abs_reports,
             counts.rel_reports,
             counts.button_downs,
@@ -149,10 +143,6 @@ impl InputRecv {
             counts.mode_changes,
             counts.ups_at
         );
-    }
-
-    pub fn into_lane(self) -> RxLane {
-        self.rx
     }
 
     /// The first feed error is logged; the session keeps going (the driver may come back).

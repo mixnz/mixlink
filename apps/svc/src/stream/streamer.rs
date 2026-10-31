@@ -24,8 +24,6 @@ pub struct StreamLanes {
     pub video: TxLane,
     pub cursor: TxLane,
     pub feedback: RxLane,
-    /// Client keyboard and mouse (spec 0021).
-    pub input: RxLane,
 }
 
 /// What a stream needs from `SessionStarted` and `host.json`.

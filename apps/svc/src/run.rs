@@ -101,10 +101,15 @@ pub fn run(
     {
         log::error!("display thread panicked");
     }
-    if let Some(sessions) = session
-        && sessions.thread.join().is_err()
-    {
-        log::error!("session thread panicked");
+    if let Some(sessions) = session {
+        if sessions.thread.join().is_err() {
+            log::error!("session thread panicked");
+        }
+        if let Some(input) = sessions.input_thread
+            && input.join().is_err()
+        {
+            log::error!("input thread panicked");
+        }
     }
     log::info!("stopped");
     Ok(())

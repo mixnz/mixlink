@@ -36,6 +36,7 @@ struct Pair {
     packetizer: Packetizer,
     frame: FrameId,
     host_addr: SocketAddrV4,
+    rx: RxLane,
     recv: InputRecv,
     state: InputState,
 }
@@ -44,12 +45,12 @@ fn pair() -> Pair {
     let (host, mut host_lanes) = Transport::start(TransportConfig::loopback()).unwrap();
     let (client, mut client_lanes) = Transport::start(TransportConfig::loopback()).unwrap();
     let recv = InputRecv::new(
-        host_lanes.take_rx(Channel::Input).unwrap(),
         &keys(),
         client.local_addr(),
         AbsMap::new((1920, 1080), None),
     );
     Pair {
+        rx: host_lanes.take_rx(Channel::Input).unwrap(),
         host_addr: host.local_addr(),
         _host: host,
         client_tx: client_lanes.take_tx(Channel::Input).unwrap(),
@@ -88,7 +89,7 @@ fn keyboard(usages: &[u8]) -> Report {
 fn poll_until_report(p: &mut Pair, sink: &mut FakeSink, now: Instant) {
     let deadline = Instant::now() + Duration::from_secs(2);
     while sink.reports.is_empty() && Instant::now() < deadline {
-        p.recv.poll(sink, Duration::from_millis(20), now);
+        p.recv.poll(&mut p.rx, sink, Duration::from_millis(20), now);
     }
 }
 
@@ -107,19 +108,19 @@ fn other_peer_ignored() {
     let (host, mut host_lanes) = Transport::start(TransportConfig::loopback()).unwrap();
     let mut p = pair();
     // The receiver expects a peer that is not `p.client`.
-    p.recv = InputRecv::new(
-        host_lanes.take_rx(Channel::Input).unwrap(),
-        &keys(),
-        host.local_addr(),
-        AbsMap::new((1920, 1080), None),
-    );
+    p.recv = InputRecv::new(&keys(), host.local_addr(), AbsMap::new((1920, 1080), None));
+    p.rx = host_lanes.take_rx(Channel::Input).unwrap();
     p.host_addr = host.local_addr();
     let mut sink = FakeSink::default();
     p.state.key(0x04, true);
     send(&mut p);
     thread::sleep(Duration::from_millis(50));
-    p.recv
-        .poll(&mut sink, Duration::from_millis(50), Instant::now());
+    p.recv.poll(
+        &mut p.rx,
+        &mut sink,
+        Duration::from_millis(50),
+        Instant::now(),
+    );
     assert!(sink.reports.is_empty());
     drop(p.client);
 }
@@ -133,12 +134,14 @@ fn silence_releases_held_keys() {
     send(&mut p);
     poll_until_report(&mut p, &mut sink, t0);
     p.recv.poll(
+        &mut p.rx,
         &mut sink,
         Duration::from_millis(1),
         t0 + Duration::from_millis(400),
     );
     assert_eq!(sink.reports.len(), 1);
     p.recv.poll(
+        &mut p.rx,
         &mut sink,
         Duration::from_millis(1),
         t0 + Duration::from_millis(600),
@@ -147,6 +150,7 @@ fn silence_releases_held_keys() {
     assert_eq!(sink.reports[2].target(), Target::MouseRel);
     assert_eq!(sink.reports.len(), 3);
     p.recv.poll(
+        &mut p.rx,
         &mut sink,
         Duration::from_millis(1),
         t0 + Duration::from_millis(900),
@@ -163,13 +167,4 @@ fn finish_releases_all() {
     poll_until_report(&mut p, &mut sink, Instant::now());
     p.recv.finish(&mut sink);
     assert_eq!(sink.reports[1], keyboard(&[]));
-}
-
-#[test]
-fn run_stops_and_lane_comes_back() {
-    let mut p = pair();
-    let mut sink = FakeSink::default();
-    let stop = AtomicBool::new(true);
-    p.recv.run(&mut sink, &stop);
-    let _lane: RxLane = p.recv.into_lane();
 }

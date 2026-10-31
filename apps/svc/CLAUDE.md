@@ -5,7 +5,7 @@
 **Purpose:** Host Windows service (ADR-0005, 0012), Session 0: tray pipe, drivers (0014), virtual display (0015), input
 (0016), discovery (0017), pairing + sessions (0018), a stream per session (0020).
 **Depends on:** mixlink-core, -proto, -input, -net, -capture, -codec (FFmpeg DLLs next to the exe).
-**Hot path:** `svc-video` / `svc-cursor` / `svc-input` per session (0020, 0021), `capture try`'s `cap-frames` (0019); `svc-session` is not.
+**Hot path:** `svc-video` / `svc-cursor` per session (0020), `svc-input` (0021), `capture try`'s `cap-frames` (0019); `svc-session` is not.
 
 ## Layout
 - `main.rs` (mode dispatch, exit codes, `host_run_options`), `args.rs`, `stop.rs`, `error.rs` (`SvcError`),
@@ -23,8 +23,8 @@
   `host_key.json`, `paired.json`), `session_listen.rs` (thread `svc-session`, `PairingShared` for the pipe).
 - Capture (0019): `capture_args.rs`, `capture/flow.rs` (`EncodeSink`, `run_loop`, fakes in tests), `report.rs`
   (`Samples`, `Stats`), `writer.rs` (thread `cap-writer`, rtrb buffers), `sink.rs` (`NvencSink`), `mod.rs` (`run`).
-- Stream (0020) `stream/`: `streamer.rs` (`StreamControl`: lanes back before the next; `run_session`), `video_send.rs`,
-  `cursor_send.rs`, `feedback.rs` (IDR ≥ 50 ms apart), `input_recv.rs` (`svc-input`, 0021), Windows `net_sink.rs`, `session.rs`.
+- Stream (0020) `stream/`: `streamer.rs` (`StreamControl`, `run_session`), `video_send.rs`, `cursor_send.rs`, `feedback.rs`,
+  0021 `input_recv.rs` + `input_service.rs` + `input_thread.rs` (`svc-input`: one thread owns the Input lane), `net_sink.rs`, `session.rs`.
 - `platform/windows/` (all `unsafe`, one file per Win32 area): service, `install.rs`, pipe, security, `console.rs`;
   driver signing, store, `devices.rs`, `drivers_host.rs`; `vdisplay.rs`, CCD, `display_agent.rs` (helper as SYSTEM in the
   console session); pads, XInput, Raw Input; firewall, network category, `com.rs`; `priority.rs`. `strings.rs`, `input_args.rs`.
