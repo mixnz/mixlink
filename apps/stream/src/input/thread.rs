@@ -27,6 +27,10 @@ use super::shortcuts::{KeyUse, Shortcut, Shortcuts};
 const RING: usize = 1024;
 /// Keys in flight from the hook thread.
 const KEY_RING: usize = 256;
+/// HID usages of left Win and L (`Shortcut::LockHost`).
+const WIN: u8 = 0xE3;
+const LETTER_L: u8 = 0x0F;
+const CTRL: u8 = 0xE0;
 /// How often the loop logs its numbers while the hook is on (diagnostics).
 const HEARTBEAT: Duration = Duration::from_secs(2);
 
@@ -286,6 +290,25 @@ impl Worker {
                 changed
             }
             KeyUse::Drop => false,
+            KeyUse::MaskWin => {
+                for down in [true, false] {
+                    self.state.key(CTRL, down);
+                }
+                true
+            }
+            KeyUse::Run(Shortcut::LockHost) => {
+                // The combo up first, then Win+L as a keyboard would send it.
+                self.state.release_all();
+                for (code, down) in [
+                    (WIN, true),
+                    (LETTER_L, true),
+                    (LETTER_L, false),
+                    (WIN, false),
+                ] {
+                    self.state.key(code, down);
+                }
+                true
+            }
             KeyUse::Run(shortcut) => {
                 let released = shortcut != Shortcut::Fullscreen && self.state.release_all();
                 (self.on_shortcut)(shortcut);

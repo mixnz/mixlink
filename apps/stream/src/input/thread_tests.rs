@@ -148,3 +148,45 @@ fn window_key_counts_only_while_captured() {
         "typing is noted for the mouse mode"
     );
 }
+
+#[test]
+fn lock_host_sends_win_l_after_releasing_the_combo() {
+    let (_host, mut w) = worker();
+    w.captured = true;
+    for (scan, vk) in [(0x1D, 0xA2), (0x38, 0xA4), (0x2A, 0xA0)] {
+        w.key(raw(scan, vk, true));
+    }
+    assert!(w.key(raw(0x26, 0x4C, true)), "Ctrl+Alt+Shift+L");
+    assert!(!w.state.held());
+    let p = w.state.packet();
+    let tail: Vec<(u8, bool)> = p.events[..usize::from(p.count)]
+        .iter()
+        .rev()
+        .take(4)
+        .rev()
+        .map(|e| (e.code, e.down))
+        .collect();
+    assert_eq!(
+        tail,
+        vec![(0xE3, true), (0x0F, true), (0x0F, false), (0xE3, false)]
+    );
+}
+
+#[test]
+fn win_l_taps_ctrl_on_the_host() {
+    let (_host, mut w) = worker();
+    w.captured = true;
+    w.key(RawKey {
+        scan: 0x5B,
+        extended: true,
+        vk: 0x5B,
+        down: true,
+    });
+    assert!(w.key(raw(0x26, 0x4C, true)), "Win+L");
+    let p = w.state.packet();
+    let codes: Vec<(u8, bool)> = p.events[..usize::from(p.count)]
+        .iter()
+        .map(|e| (e.code, e.down))
+        .collect();
+    assert_eq!(codes, vec![(0xE3, true), (0xE0, true), (0xE0, false)]);
+}

@@ -222,6 +222,8 @@ impl StreamApp {
             }
             Shortcut::Fullscreen => self.toggle_fullscreen(),
             Shortcut::Close => self.close(event_loop, CloseReason::User),
+            // Sent to the host by `stream-input`.
+            Shortcut::LockHost => {}
         }
     }
 

@@ -18,7 +18,9 @@ leaves a key or button stuck, and never loses a click.
     datagram each, sent on every input event plus timed repeats ("redundant packets" in the row).
   - Client keyboard: a low-level keyboard hook (`WH_KEYBOARD_LL`) while the window is focused and input is
     captured, so Win, Alt+Tab, Alt+F4, Ctrl+Esc reach the host. Scan codes → HID usages (layout-free:
-    the host's layout decides the character). Ctrl+Alt+Del and Win+L stay local (Windows reserves them).
+    the host's layout decides the character). Ctrl+Alt+Del and Win+L stay local (Windows acts on them before
+    any hook): Win+L locks this PC, its L is kept and the host gets a Ctrl tap so the held Win does not open
+    Start; `Ctrl+Alt+Shift+L` locks the host.
     Keys the hook does not take reach the window and go to the host from there (winit scan code).
   - Client mouse, two modes chosen from the host cursor's `visible` flag (cursor channel, spec 0020):
     - **Absolute** (host cursor visible: desktop, menus): position in stream pixels from the window
@@ -30,7 +32,8 @@ leaves a key or button stuck, and never loses a click.
     - Buttons 1–5, vertical + horizontal wheel (120 units = one notch).
   - Local Windows cursor hidden over the window in both modes; shown again outside it / when released.
   - Local shortcuts, never sent: `Ctrl+Alt+Shift+Z` releases / recaptures input (hook off, pointer free),
-    `Ctrl+Alt+Shift+F` fullscreen (replaces F11, which now goes to the host), `Ctrl+Alt+Shift+Q` closes.
+    `Ctrl+Alt+Shift+F` fullscreen (replaces F11, which now goes to the host), `Ctrl+Alt+Shift+Q` closes,
+    `Ctrl+Alt+Shift+L` sends Win+L to the host.
     Released input comes back on the shortcut or a click in the window; focus gained = captured.
   - Focus lost, release shortcut, window closed: the client sends an all-released state first.
   - Host: thread `svc-input` per session (Input lane → open → apply → `vhid` feed), abs mapping to the

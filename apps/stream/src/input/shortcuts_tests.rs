@@ -57,3 +57,25 @@ fn reset_forgets_held_keys() {
     s.reset();
     assert_eq!(s.key(Z, true), KeyUse::Forward);
 }
+
+const L_WIN: u8 = 0xE3;
+const KEY_L: u8 = 0x0F;
+
+#[test]
+fn ctrl_alt_shift_l_locks_host() {
+    let mut s = Shortcuts::default();
+    hold(&mut s, &[L_CTRL, L_ALT, L_SHIFT]);
+    assert_eq!(s.key(KEY_L, true), KeyUse::Run(Shortcut::LockHost));
+    assert_eq!(s.key(KEY_L, false), KeyUse::Drop);
+}
+
+#[test]
+fn win_l_stays_on_this_pc() {
+    let mut s = Shortcuts::default();
+    hold(&mut s, &[L_WIN]);
+    // Windows locks this PC on Win+L before any hook: the host must not lock too.
+    assert_eq!(s.key(KEY_L, true), KeyUse::MaskWin);
+    assert_eq!(s.key(KEY_L, false), KeyUse::Drop);
+    s.key(L_WIN, false);
+    assert_eq!(s.key(KEY_L, true), KeyUse::Forward);
+}

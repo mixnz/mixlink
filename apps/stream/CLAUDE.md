@@ -29,7 +29,7 @@ with the host (spec 0020), D3D11VA decode and present with the host cursor on a 
   shutdown | hostError | timeout }`, `ConnectionLost`, `HostUnreachable`, `NotPaired` (the host is forgotten here).
 - Stdin: `LauncherToStream::Stop`; EOF = launcher gone → closes with reason `Stopped` (not in dev runs: `--play`, or
   `--connect` with `--drop`).
-- Ctrl+Alt+Shift + F fullscreen, + Z release / take back input (or click), + Q close; never sent to the host.
+- Ctrl+Alt+Shift + F fullscreen, + Z release / take back input (or click), + Q close, + L lock the host (Win+L locks here).
 - Exit code 0 after `Closed`; non-zero only if the event loop fails to start or the arguments are bad (2).
 - Dev: `mixlink-stream --play <file.h264|.hevc> [--fps 120] [--loop] [--measure]` (spec 0013); stats on stderr
   at close. Test files: `scripts/make-test-stream.sh`.
