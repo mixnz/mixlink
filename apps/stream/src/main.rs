@@ -36,6 +36,12 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    // winit registers the keyboard for Raw Input; while it is, Windows never calls this process's
+    // keyboard hook with the stream window in front (spec 0021 Results). The mouse stays registered.
+    #[cfg(windows)]
+    if let Err(error) = mixlink_input::platform::windows::raw_keyboard::stop_raw_keyboard() {
+        log::warn!("keyboard raw input still on, the keyboard hook may get no keys: {error}");
+    }
     let proxy = event_loop.create_proxy();
     let stdin_proxy = proxy.clone();
     let reader = thread::Builder::new()

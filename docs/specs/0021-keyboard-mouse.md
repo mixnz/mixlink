@@ -159,11 +159,16 @@ First run (2026-10-30), hook on `stream-input` (`Pump`: `MsgWaitForMultipleObjec
   not take reach the window (winit `KeyboardInput`, scan code) and go to the host from there; the hook
   still takes Win, Alt+Tab and the rest when it is called. The host hid its cursor while typing (Windows
   "hide pointer while typing") → relative mode: no relative until keys are quiet for 1 s.
+- Cause (2026-10-31, reproduced on the main PC with a plain window): while a process has the keyboard
+  registered for Raw Input and one of its windows is in front, Windows never calls that process's
+  low-level keyboard hook. winit registers mouse and keyboard; with only the mouse, the hook gets every key
+  (probe: both 0 keys, mouse 3, none 3, both then keyboard removed 3). Same report: Casey Muratori,
+  "Finding and Fixing a Five-Second Stall" (The Witness). Fix: `raw_keyboard::stop_raw_keyboard` right
+  after the event loop is built. The window path for keys stays as a fallback (a hook that times out is
+  removed by Windows without notice).
 
 ## Open questions
 - (Answered 2026-10-28: `SendInput` fallback is row T25; fullscreen moves to `Ctrl+Alt+Shift+F`; a cursor
   warped by a host program in absolute mode stays at the local pointer until the mouse moves.)
-- Why the newest keyboard hook in the foreground process gets no calls on the laptop (not on the main
-  PC): unknown. Without it Win and Alt+Tab act on the client.
 - (Answered 2026-10-30: a 150 ms hold with no button held before relative mode; window drags hid the
   host cursor for ~1 s each in the first run.)

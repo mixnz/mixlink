@@ -96,3 +96,7 @@ fn call_sink(key: RawKey) -> bool {
 #[cfg(test)]
 #[path = "hook_thread_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "raw_probe_tests.rs"]
+mod raw_probe;

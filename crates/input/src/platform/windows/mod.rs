@@ -3,6 +3,7 @@
 
 pub mod hook_thread;
 pub mod kbd_hook;
+pub mod raw_keyboard;
 pub mod thread_msg;
 pub mod vhid;
 pub mod vhid_wire;
