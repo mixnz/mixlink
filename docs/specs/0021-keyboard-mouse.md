@@ -131,7 +131,7 @@ front, and every other keyboard hook on the desktop was starved with it (Results
   Start on the host (not the laptop), Alt+Tab switches host windows; no key stuck after 5 minutes.
 - [x] Desktop mouse: host cursor sits under the laptop pointer at every edge and corner (windowed and
   `Ctrl+Alt+Shift+F` fullscreen, letterboxed), clicks, double-click, drag, right-click, wheel.
-- [ ] Game with mouse-look (a spec 0006 game): pointer locked, no local cursor, camera turns smoothly,
+- [x] Game with mouse-look (a spec 0006 game): pointer locked, no local cursor, camera turns smoothly,
   WASD + mouse buttons work; Esc to the game menu brings the absolute mode back.
 - [x] Focus loss (Alt+Tab out via `Ctrl+Alt+Shift+Z`, clicking another window) with W held → host
   releases W at once; window close with keys held → released.
@@ -140,12 +140,12 @@ front, and every other keyboard hook on the desktop was starved with it (Results
 - [x] Cable pulled while holding a key → host releases within 0.5 s.
 - [x] UAC prompt and lock screen on the host are usable from the laptop.
 - [x] `extend` topology: absolute mouse lands on the virtual monitor, not the physical one.
-- [ ] Results: input apply time p50 / p99 and repeats per session from the logs.
+- [x] Results: input apply time p50 / p99 and repeats per session from the logs.
 
 ## Results
 Unit and loopback tests pass (`proto::input`, `InputState`, `InputApplier`, `AbsMap`, `InputRecv`,
 `InputTx` / `Schedule`, shortcuts, window → stream mapping, `Pump` timer). The two-PC run (main PC host,
-laptop client, wired) is in progress.
+laptop client, wired) passes every criterion below.
 
 Passed on 2026-10-31: typing (Win, Alt+Tab on the host), desktop mouse, `--drop input=5` (519 packets dropped, 26
 events recovered, 9 presses / 9 releases), cable pulled with `a` held (released at once), UAC and lock
@@ -153,6 +153,8 @@ screen by mouse and keys, Win+L locks the client only, `Ctrl+Alt+Shift+L` locks 
 monitor to the right (pointer stays on the virtual monitor, no offset: absolute = main display). Host
 receive → fed p50 18–24 µs, p99 0.7–0.9 ms. Vietnamese typing slips with Unikey on the host happen with the
 host's own keyboard too (not MixLink).
+Game with mouse-look (2026-10-31): pointer locked and hidden, camera smooth (4420 raw motions, 4420 sent in
+one 2.5 min stretch), WASD and buttons, Esc to the menu → absolute, back in → relative.
 
 First run (2026-10-30), hook on `stream-input` (`Pump`: `MsgWaitForMultipleObjectsEx`):
 - Mouse: absolute and relative worked, 0 lost, host receive → fed p50 40 µs. Window drags on the host

@@ -2,7 +2,7 @@
 
 > Replace content each update; keep ≤ 80 lines. History lives in git, not here.
 
-**Updated:** 2026-10-28
+**Updated:** 2026-10-31
 **Phase:** 1 — LAN MVP
 
 ## Done
@@ -50,19 +50,19 @@ Details live in each spec; one line per item here.
   IddCx hardware cursor drawn by the client, keyframe / shape requests, fullscreen, frame-latency waitable +
   paced 3-deep queue, per-stage latency in the launcher. 1080p60 HEVC wired: total p50 / p99 26.9 / 36.9 ms (H.264
   30.3 / 39.8); wired loss 0.016 % of datagrams (below sockets) → ~1 hiccup / s until FEC.
-- T10 keyboard / mouse (0021), code + tests only: sealed whole-state Input packets (repeats +4 / +16 ms, 100 ms while
-  held), `stream-input` with an LL keyboard hook, absolute (cursor drawn locally) / relative (confined, raw) mouse from
-  the host cursor flag, `svc-input` → `vhid` (released after 500 ms silence). Ctrl+Alt+Shift + Z / F / Q; F11 to host.
+- T10 keyboard / mouse (0021): sealed whole-state Input packets, LL hook on `input-hook` (keyboard Raw Input off: it
+  stopped the hook), window keys as fallback, absolute / relative mouse from the host cursor (150 ms hold, no button,
+  1 s after typing), one `svc-input` per port → `vhid` (absolute = main display). Ctrl+Alt+Shift + Z / F / Q / L;
+  Win+L locks the client. Two-PC run passes all criteria; host receive → fed p50 18–24 µs, p99 < 1 ms.
 
 ## In progress
-- T10 two-PC run (spec 0021 → Acceptance): typing, desktop mouse, a mouse-look game, `--drop input=5`, `extend`.
 - T5 open rows (spec 0017 → Results): host with several adapters; "Needs update" row with a host on another version.
 - T21 open rows (spec 0015): power cut during a session, iGPU + dGPU host.
 - Main PC: drivers (frame share v3) and the MixLink service installed from `dist\` (spec 0019 run), service
   running; laptop paired with it (spec 0018).
 
 ## Next
-- Roadmap phase 1 after the T10 run: T11 / T13 by the table; T13 (FEC) matters most for smoothness (spec 0020 Results: wired
+- Roadmap phase 1: T11 / T13 by the table (T25 `SendInput` fallback after T10); T13 (FEC) matters most for smoothness (spec 0020 Results: wired
   loss ~1 hiccup / s; add send pacing there or in phase 3). Needs a roadmap row: physical monitor plugged in
   while headless is main. Maybe a row: add a host by IP (other subnet).
 - Phase 3 from spec 0020: pace host capture to the client's vsync (steady 60 fps waits a refresh in the client

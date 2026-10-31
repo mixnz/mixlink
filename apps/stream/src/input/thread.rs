@@ -326,7 +326,7 @@ impl Worker {
     /// Diagnostics: is the thread alive and is the hook being called?
     fn heartbeat(&self, stats: &LoopStats) {
         if let Some(hook) = &self.hook {
-            log::info!(
+            log::debug!(
                 "stream-input: {} wakes, {} timer ends, longest tick {} us; hook calls so far {}",
                 stats.woken,
                 stats.timeouts,
