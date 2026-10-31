@@ -52,8 +52,18 @@ pub fn run(
         Some(settings) => Some(display::service::spawn(Arc::clone(stop), settings)?),
         None => None,
     };
+    // Pad nodes left by a crash go first; pads come and go per session (spec 0016).
+    if opts.input
+        && let Err(error) = pads::remove_all(&mut WindowsPadHost)
+    {
+        log::warn!("leftover virtual Xbox controllers not removed: {error}");
+    }
+    // Held until `run` returns; closing it releases every key and button (spec 0016). Opened before the
+    // session listener: each stream feeds the client's keyboard and mouse through it (spec 0021).
+    let feeder = opts.input.then(open_input).flatten().map(Arc::new);
     let session = opts.session.clone().and_then(|mut settings| {
         settings.display = display.as_ref().map(|(_, handle)| handle.clone());
+        settings.input = feeder.clone();
         match session_listen::start(Arc::clone(stop), settings) {
             Ok(sessions) => {
                 log::info!("session listener on {}", sessions.addr);
@@ -78,14 +88,6 @@ pub fn run(
             .spawn(move || listen(&name, first, &security, &stop, started, &pairing))?
     };
     log::info!("serving {}", opts.pipe);
-    // Pad nodes left by a crash go first; pads come and go per session (spec 0016).
-    if opts.input
-        && let Err(error) = pads::remove_all(&mut WindowsPadHost)
-    {
-        log::warn!("leftover virtual Xbox controllers not removed: {error}");
-    }
-    // Held until `run` returns; closing it releases every key and button (spec 0016).
-    let _feeder = opts.input.then(open_input).flatten();
     // Dropped when `run` returns: stops the responder and sends the mDNS goodbye.
     let _advertiser = opts.discovery.clone().and_then(discovery::start);
     on_ready();
@@ -99,17 +101,22 @@ pub fn run(
     {
         log::error!("display thread panicked");
     }
-    if let Some(sessions) = session
-        && sessions.thread.join().is_err()
-    {
-        log::error!("session thread panicked");
+    if let Some(sessions) = session {
+        if sessions.thread.join().is_err() {
+            log::error!("session thread panicked");
+        }
+        if let Some(input) = sessions.input_thread
+            && input.join().is_err()
+        {
+            log::error!("input thread panicked");
+        }
     }
     log::info!("stopped");
     Ok(())
 }
 
 /// The feeder, or `None` with a warning: without the driver the service still runs (the `SendInput`
-/// fallback comes with the input path).
+/// fallback is not built yet).
 fn open_input() -> Option<VHid> {
     match open_feeder() {
         Ok(vhid) => {

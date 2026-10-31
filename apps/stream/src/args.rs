@@ -1,4 +1,4 @@
-//! Command line: `--connect <host id> --addr <ip:port> [--drop video=N,cursor=N]` (spec 0020, the launcher
+//! Command line: `--connect <host id> --addr <ip:port> [--drop video=N,cursor=N,input=N]` (spec 0020, the launcher
 //! spawns this) or `--play <file.h264|.hevc> [--fps N] [--loop] [--measure]` (spec 0013 dev mode).
 //! No arguments: an empty window (launcher demo).
 
@@ -56,7 +56,7 @@ pub enum ArgsError {
     BadHost(String),
     #[error("{0}: not an IPv4 address with a port")]
     BadAddr(String),
-    #[error("--drop {0}: expected video=N,cursor=N with N a percentage in 0..=100")]
+    #[error("--drop {0}: expected video=N,cursor=N,input=N with N a percentage in 0..=100")]
     BadDrop(String),
     #[error("--connect and --play cannot be used together")]
     BothModes,

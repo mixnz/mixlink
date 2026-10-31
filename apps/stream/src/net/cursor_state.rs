@@ -23,6 +23,44 @@ struct Shared {
     flags: AtomicU64,
     changed: AtomicBool,
     wake: OnceLock<Thread>,
+    /// The local pointer in stream pixels (spec 0021): `LOCAL_ACTIVE` | x (bits 32..48) | y (low 16 bits).
+    local: AtomicU64,
+}
+
+/// Set in `Shared::local` while the local pointer is drawn instead of the host position.
+const LOCAL_ACTIVE: u64 = 1 << 63;
+
+/// Called on `stream-net` when the host cursor shows or hides (spec 0021: mouse mode).
+pub struct VisibilityHook(Box<dyn FnMut(bool) + Send>);
+
+impl std::fmt::Debug for VisibilityHook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("VisibilityHook")
+    }
+}
+
+/// The winit thread's end (spec 0021): in absolute mouse mode the host cursor is drawn at the local
+/// pointer, without waiting for the host.
+#[derive(Debug, Clone)]
+pub struct LocalPointer {
+    shared: Arc<Shared>,
+}
+
+impl LocalPointer {
+    // HOT PATH
+    pub fn set(&self, x: u16, y: u16) {
+        let packed = LOCAL_ACTIVE | (u64::from(x) << 32) | u64::from(y);
+        if self.shared.local.swap(packed, Ordering::Relaxed) != packed {
+            notify(&self.shared);
+        }
+    }
+
+    /// Back to the host position.
+    pub fn clear(&self) {
+        if self.shared.local.swap(0, Ordering::Relaxed) != 0 {
+            notify(&self.shared);
+        }
+    }
 }
 
 /// One cursor change for the video thread.
@@ -41,6 +79,8 @@ pub struct CursorTx {
     /// Last shape id pushed; a position naming another one asks the host for it.
     have: u32,
     last_request: Option<(u32, Instant)>,
+    visible: Option<bool>,
+    on_visible: Option<VisibilityHook>,
 }
 
 #[derive(Debug)]
@@ -58,6 +98,8 @@ pub fn cursor_channel() -> (CursorTx, CursorRx) {
             shapes: tx,
             have: 0,
             last_request: None,
+            visible: None,
+            on_visible: None,
         },
         CursorRx { shared, shapes: rx },
     )
@@ -73,6 +115,12 @@ impl CursorTx {
         self.shared.xy.store(xy, Ordering::Relaxed);
         self.shared.flags.store(flags, Ordering::Relaxed);
         self.notify();
+        if self.visible != Some(draw.visible) {
+            self.visible = Some(draw.visible);
+            if let Some(hook) = self.on_visible.as_mut() {
+                (hook.0)(draw.visible);
+            }
+        }
         if shape_id == 0 || shape_id == self.have {
             return None;
         }
@@ -96,10 +144,12 @@ impl CursorTx {
     }
 
     fn notify(&self) {
-        self.shared.changed.store(true, Ordering::Release);
-        if let Some(thread) = self.shared.wake.get() {
-            thread.unpark();
-        }
+        notify(&self.shared);
+    }
+
+    /// `hook` runs on this thread each time the host cursor shows or hides.
+    pub fn on_visibility(&mut self, hook: Box<dyn FnMut(bool) + Send>) {
+        self.on_visible = Some(VisibilityHook(hook));
     }
 }
 
@@ -107,6 +157,12 @@ impl CursorRx {
     /// The calling thread is unparked on every change.
     pub fn attach_current_thread(&self) {
         let _ = self.shared.wake.set(thread::current());
+    }
+
+    pub fn local_pointer(&self) -> LocalPointer {
+        LocalPointer {
+            shared: Arc::clone(&self.shared),
+        }
     }
 
     /// The latest state when anything changed since the last call.
@@ -121,15 +177,29 @@ impl CursorRx {
         }
         let xy = self.shared.xy.load(Ordering::Relaxed);
         let flags = self.shared.flags.load(Ordering::Relaxed);
+        let local = self.shared.local.load(Ordering::Relaxed);
+        let (x, y) = if local & LOCAL_ACTIVE != 0 {
+            (i32::from((local >> 32) as u16), i32::from(local as u16))
+        } else {
+            ((xy >> 32) as u32 as i32, xy as u32 as i32)
+        };
         Some(CursorChange {
             draw: CursorDraw {
-                x: (xy >> 32) as u32 as i32,
-                y: xy as u32 as i32,
+                x,
+                y,
                 visible: flags >> 32 != 0,
             },
             shape_id: flags as u32,
             new_shape,
         })
+    }
+}
+
+/// Marks a change and wakes the video thread.
+fn notify(shared: &Shared) {
+    shared.changed.store(true, Ordering::Release);
+    if let Some(thread) = shared.wake.get() {
+        thread.unpark();
     }
 }
 

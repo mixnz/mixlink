@@ -13,6 +13,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use mixlink_core::config::{NetConfig, VideoConfig};
 use mixlink_core::ids::DeviceId;
 use mixlink_core::svc_ipc::{PairedInfo, PairingPrompt};
+use mixlink_input::platform::windows::vhid::VHid;
 use mixlink_net::endpoint::{EndpointEvent, HostControl, HostControlConfig};
 use mixlink_net::keys::StaticKeyPair;
 use mixlink_net::mode_policy::ModePolicy;
@@ -26,6 +27,8 @@ use crate::error::SvcError;
 use crate::pipe::session::PairingPort;
 use crate::secrets;
 use crate::stop::StopSignal;
+use crate::stream::input_service::InputControl;
+use crate::stream::input_thread;
 use crate::stream::session::run_stream;
 use crate::stream::streamer::{StreamControl, StreamEnd, StreamLanes, StreamStart, Streamer};
 
@@ -46,6 +49,8 @@ pub struct SessionSettings {
     pub keys: StaticKeyPair,
     /// `secrets` folder, already secured.
     pub secrets: PathBuf,
+    /// The virtual input feeder for client keyboard and mouse (spec 0021); `None` = driver missing.
+    pub input: Option<Arc<VHid>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,6 +121,8 @@ fn infos(devices: &[PairedDevice]) -> Vec<PairedInfo> {
 #[derive(Debug)]
 pub struct SessionListener {
     pub thread: JoinHandle<()>,
+    /// `svc-input` (spec 0021), ends with the stop signal.
+    pub input_thread: Option<JoinHandle<()>>,
     pub shared: Arc<PairingShared>,
     pub addr: SocketAddrV4,
 }
@@ -131,12 +138,15 @@ pub fn start(
     let missing = || SvcError::Session("control lane missing".to_owned());
     let tx = lanes.take_tx(Channel::Control).ok_or_else(missing)?;
     let rx = lanes.take_rx(Channel::Control).ok_or_else(missing)?;
-    let streams = match settings.display.clone() {
-        Some(display) => Some(StreamControl::new(
-            media_lanes(&mut lanes)?,
-            launcher(display),
-        )),
-        None => None,
+    let (streams, input_thread) = match settings.display.clone() {
+        Some(display) => {
+            let input_lane = lanes.take_rx(Channel::Input).ok_or_else(missing)?;
+            let (input, input_thread) =
+                input_thread::spawn(input_lane, settings.input.clone(), Arc::clone(&stop))?;
+            let streams = StreamControl::new(media_lanes(&mut lanes)?, launcher(display, input));
+            (Some(streams), Some(input_thread))
+        }
+        None => (None, None),
     };
     let paired = secrets::load_paired(&settings.secrets);
     let (commands, inbox) = mpsc::channel();
@@ -171,6 +181,7 @@ pub fn start(
         .spawn(move || worker.run(&stop))?;
     Ok(SessionListener {
         thread,
+        input_thread,
         shared,
         addr,
     })
@@ -186,11 +197,12 @@ fn media_lanes(lanes: &mut mixlink_net::Lanes) -> Result<StreamLanes, SvcError> 
     })
 }
 
-fn launcher(display: DisplayHandle) -> Launch {
+fn launcher(display: DisplayHandle, input: InputControl) -> Launch {
     Box::new(move |start: StreamStart, lanes| {
         let display = display.clone();
+        let input = input.clone();
         Streamer::spawn(lanes, move |lanes, stop| {
-            run_stream(&display, &start, lanes, stop)
+            run_stream(&display, &input, &start, lanes, stop)
         })
     })
 }

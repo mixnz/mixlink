@@ -49,3 +49,11 @@ fn tenth_of_a_percent_parses_and_drops_about_that() {
         .count();
     assert!((120..280).contains(&dropped), "{dropped}");
 }
+
+#[test]
+fn parses_input() {
+    let mut knob = DropKnob::parse("input=100").unwrap();
+    assert_eq!(knob.input_bp, 10_000);
+    assert!(knob.should_drop(DropLane::Input));
+    assert!(!knob.should_drop(DropLane::Video));
+}

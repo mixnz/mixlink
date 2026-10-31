@@ -182,6 +182,8 @@ fn session_settings(
             host,
             keys,
             secrets: dir,
+            // Filled in by `run` once the driver is open.
+            input: None,
         }),
         Err(error) => {
             log::error!("host key unavailable, pairing off: {error}");

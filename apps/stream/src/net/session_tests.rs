@@ -134,6 +134,7 @@ fn io() -> (SessionIo, Arc<OnceLock<VideoCodec>>, Arc<AtomicBool>) {
         codec: Arc::clone(&codec),
         want_keyframe: Arc::default(),
         stop: Arc::clone(&stop),
+        input: std::sync::mpsc::sync_channel(1).0,
     };
     (io, codec, stop)
 }

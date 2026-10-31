@@ -7,6 +7,7 @@ use mixlink_core::ipc::{
     CloseReason, LauncherToStream, StreamToLauncher, decode_line, encode_line,
 };
 use mixlink_proto::control::{CodecId, DisplayInfo};
+use mixlink_stream::input::shortcuts::Shortcut;
 use mixlink_stream::video::VideoEvent;
 
 /// Event forwarded to the window event loop (stdin thread, video thread).
@@ -19,6 +20,8 @@ pub enum StreamEvent {
     Video(VideoEvent),
     /// From `stream-net` (spec 0020).
     Net(NetEvent),
+    /// Typed while input is captured (spec 0021), from `stream-input`.
+    Shortcut(Shortcut),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +29,10 @@ pub enum NetEvent {
     Connected {
         mode: DisplayInfo,
         codec: CodecId,
+    },
+    /// The host cursor showed or hid: absolute or relative mouse (spec 0021).
+    HostCursor {
+        visible: bool,
     },
     /// The session ended from the host side or the network.
     Ended(CloseReason),

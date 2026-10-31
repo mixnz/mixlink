@@ -2636,6 +2636,7 @@ dependencies = [
 name = "mixlink-input"
 version = "0.1.0"
 dependencies = [
+ "log",
  "mixlink-core",
  "thiserror 2.0.21",
  "windows",
@@ -2703,11 +2704,13 @@ dependencies = [
  "log",
  "mixlink-codec",
  "mixlink-core",
+ "mixlink-input",
  "mixlink-net",
  "mixlink-proto",
  "mixlink-render",
  "rtrb",
  "thiserror 2.0.21",
+ "windows",
  "winit",
 ]
 

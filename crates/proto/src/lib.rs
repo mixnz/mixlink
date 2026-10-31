@@ -8,6 +8,7 @@ pub mod cursor;
 pub mod error;
 pub mod feedback;
 pub mod header;
+pub mod input;
 pub mod packetizer;
 pub mod reassembler;
 pub mod video;

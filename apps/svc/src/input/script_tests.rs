@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use mixlink_input::hid::keyboard::KeyboardState;
+use mixlink_input::hid::report::ReportSink;
 use mixlink_input::hid::report::{Report, Target};
 use mixlink_input::hid::xbox::PadState;
-use mixlink_input::platform::windows::vhid::{ReportSink, VHidError};
+use mixlink_input::platform::windows::vhid::VHidError;
 
 use super::*;
 
@@ -15,6 +16,8 @@ struct FakeSink {
 }
 
 impl ReportSink for FakeSink {
+    type Error = VHidError;
+
     fn feed(&mut self, report: &Report) -> Result<(), VHidError> {
         if self.in_use {
             return Err(VHidError::InUse);

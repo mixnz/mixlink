@@ -3,25 +3,27 @@
 
 use std::io;
 use std::sync::Arc;
+use std::time::Instant;
 
 use mixlink_core::ipc::{CloseReason, IPC_VERSION, LatencySummary, StreamToLauncher};
 use mixlink_proto::control::CodecId;
 use mixlink_stream::args::Mode;
 use mixlink_stream::au_queue::{AU_CAPACITY, AU_SLOTS, AuSender, channel};
 use mixlink_stream::feeder::Feeder;
+use mixlink_stream::input::shortcuts::Shortcut;
 use mixlink_stream::net::drop_knob::DropKnob;
 use mixlink_stream::video::{VideoEvent, VideoSource, VideoThread};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::{ElementState, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::event::{DeviceEvent, DeviceId, WindowEvent};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoopProxy};
 use winit::window::{Fullscreen, Window, WindowId};
 
 use crate::connect::{self, NetThread};
 use crate::ipc::{NetEvent, StreamEvent, send};
 use crate::platform::window::any_thread;
 use crate::strings;
+use crate::window_input::WindowInput;
 
 #[derive(Debug)]
 pub struct StreamApp {
@@ -33,6 +35,7 @@ pub struct StreamApp {
     feed: Option<AuSender>,
     feeder: Option<Feeder>,
     net: Option<NetThread>,
+    input: WindowInput,
     ready_sent: bool,
     closing: bool,
 }
@@ -47,6 +50,7 @@ impl StreamApp {
             feed: None,
             feeder: None,
             net: None,
+            input: WindowInput::new(),
             ready_sent: false,
             closing: false,
         }
@@ -135,6 +139,12 @@ impl StreamApp {
                     }
                     .to_owned(),
                 });
+                self.start_input(mode.width, mode.height);
+            }
+            NetEvent::HostCursor { visible } => {
+                if let Some(window) = self.window.clone() {
+                    self.input.host_cursor(&window, visible);
+                }
             }
             NetEvent::Ended(reason) => self.close(event_loop, reason),
         }
@@ -157,6 +167,9 @@ impl StreamApp {
         }
         self.closing = true;
         log::info!("closing: {reason:?}");
+        if let Some(counts) = self.input.stop() {
+            log::info!("input sent: {counts:?}");
+        }
         if let Some(net) = self.net.take()
             && let Some(end) = net.stop()
         {
@@ -176,7 +189,7 @@ impl StreamApp {
         event_loop.exit();
     }
 
-    /// F11: borderless fullscreen on the window's monitor, so Windows can flip frames straight to the
+    /// Ctrl+Alt+Shift+F: borderless fullscreen on the window's monitor, so Windows can flip frames straight to the
     /// screen instead of composing the window (steadier pacing at 60 Hz, spec 0020).
     fn toggle_fullscreen(&self) {
         if let Some(window) = &self.window {
@@ -185,6 +198,32 @@ impl StreamApp {
                 None => Some(Fullscreen::Borderless(None)),
             };
             window.set_fullscreen(next);
+        }
+    }
+
+    /// Keys and mouse to the host once the session is up (spec 0021).
+    fn start_input(&mut self, width: u32, height: u32) {
+        let (Some(net), Some(window)) = (&self.net, self.window.clone()) else {
+            return;
+        };
+        if let Some(tx) = net.take_input() {
+            let local = net.local.clone();
+            self.input
+                .start(&window, tx, (width, height), local, self.proxy.clone());
+        }
+    }
+
+    fn shortcut(&mut self, event_loop: &ActiveEventLoop, shortcut: Shortcut) {
+        match shortcut {
+            Shortcut::Release => {
+                if let Some(window) = self.window.clone() {
+                    self.input.release(&window);
+                }
+            }
+            Shortcut::Fullscreen => self.toggle_fullscreen(),
+            Shortcut::Close => self.close(event_loop, CloseReason::User),
+            // Sent to the host by `stream-input`.
+            Shortcut::LockHost => {}
         }
     }
 
@@ -214,19 +253,17 @@ impl ApplicationHandler<StreamEvent> for StreamApp {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        if let Some(window) = self.window.clone()
+            && let Some(shortcut) = self.input.window_event(&window, &event)
+        {
+            self.shortcut(event_loop, shortcut);
+        }
         match event {
             WindowEvent::CloseRequested => self.close(event_loop, CloseReason::User),
             WindowEvent::Resized(size) => {
                 if let Some(video) = &self.video {
                     video.resize(size.width, size.height);
                 }
-            }
-            WindowEvent::KeyboardInput { event, .. }
-                if event.state == ElementState::Pressed
-                    && !event.repeat
-                    && event.physical_key == PhysicalKey::Code(KeyCode::F11) =>
-            {
-                self.toggle_fullscreen();
             }
             WindowEvent::RedrawRequested => {
                 if let (Some(video), Some(window)) = (&self.video, &self.window) {
@@ -249,6 +286,21 @@ impl ApplicationHandler<StreamEvent> for StreamApp {
             StreamEvent::LauncherGone => self.close(event_loop, CloseReason::Stopped),
             StreamEvent::Video(video) => self.on_video(event_loop, video),
             StreamEvent::Net(net) => self.on_net(event_loop, net),
+            StreamEvent::Shortcut(shortcut) => self.shortcut(event_loop, shortcut),
         }
+    }
+
+    /// Wakes the loop when the mouse mode may change (spec 0021); otherwise waits for events.
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let next = self
+            .window
+            .clone()
+            .and_then(|window| self.input.poll(&window, Instant::now()));
+        event_loop.set_control_flow(next.map_or(ControlFlow::Wait, ControlFlow::WaitUntil));
+    }
+
+    // HOT PATH
+    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _id: DeviceId, event: DeviceEvent) {
+        self.input.device_event(&event);
     }
 }

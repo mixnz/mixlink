@@ -98,6 +98,7 @@ fn pair_and_connect_over_loopback() {
         host: HOST,
         keys: StaticKeyPair::generate().unwrap(),
         secrets: secrets.clone(),
+        input: None,
     };
     let listener = start(Arc::clone(&stop), settings).unwrap();
     let host_addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, listener.addr.port());
@@ -201,6 +202,7 @@ fn stream_failure_sends_bye_host_error() {
         host: HOST,
         keys: host_keys,
         secrets,
+        input: None,
     };
     let listener = start(Arc::clone(&stop), settings).unwrap();
     let host_addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, listener.addr.port());

@@ -115,8 +115,8 @@ fn capture_error_still_ends_monitor() {
         fail: false,
         log: RefCell::default(),
     };
-    let (_, end) = run_session(&monitor, &start(1, 9), lanes, |connector, lanes| {
-        assert_eq!(connector, 1);
+    let (_, end) = run_session(&monitor, &start(1, 9), lanes, |target, lanes| {
+        assert_eq!(target.connector, 1);
         (lanes, Err(SvcError::DisplayNotReady))
     });
     assert!(matches!(end, StreamEnd::Failed(_)));

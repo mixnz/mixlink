@@ -6,8 +6,9 @@ use std::time::Duration;
 
 use mixlink_input::hid::keyboard::KeyboardState;
 use mixlink_input::hid::mouse::{mouse_abs_report, mouse_rel_reports};
+use mixlink_input::hid::report::ReportSink;
 use mixlink_input::hid::xbox::{Dpad, PadState, buttons};
-use mixlink_input::platform::windows::vhid::{ReportSink, VHidError};
+use mixlink_input::platform::windows::vhid::VHidError;
 
 pub use crate::args::Script;
 
@@ -86,7 +87,7 @@ fn walk() -> Vec<Step> {
 pub fn play(
     steps: &[Step],
     slot: u8,
-    sink: &mut impl ReportSink,
+    sink: &mut impl ReportSink<Error = VHidError>,
     wait: &mut dyn FnMut(Duration) -> bool,
 ) -> Result<(), VHidError> {
     let mut keyboard = KeyboardState::default();

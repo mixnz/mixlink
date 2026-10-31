@@ -4,6 +4,7 @@
 
 use std::net::SocketAddrV4;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -24,6 +25,7 @@ use super::feedback_tx::{FeedbackTx, Rtt};
 use super::lanes::{Media, MediaCounts};
 use super::reasons::{bye_reason, reject_reason};
 use crate::au_queue::AuSender;
+use crate::input::sender::InputTx;
 use crate::net::cursor_state::CursorTx;
 
 /// No valid datagram from the host for this long: the connection is lost (as the host's timeout).
@@ -55,6 +57,8 @@ pub struct SessionIo {
     /// The decoder failed: ask for a keyframe.
     pub want_keyframe: Arc<AtomicBool>,
     pub stop: Arc<AtomicBool>,
+    /// The sealed input sender (spec 0021), handed over once the session is up, before `on_connected`.
+    pub input: SyncSender<InputTx>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,6 +76,7 @@ struct Link {
     video: RxLane,
     cursor: RxLane,
     feedback: TxLane,
+    input: TxLane,
 }
 
 fn open_link() -> Result<Link, CloseReason> {
@@ -85,6 +90,7 @@ fn open_link() -> Result<Link, CloseReason> {
         video: lanes.take_rx(Channel::Video).ok_or_else(missing)?,
         cursor: lanes.take_rx(Channel::Cursor).ok_or_else(missing)?,
         feedback: lanes.take_tx(Channel::Feedback).ok_or_else(missing)?,
+        input: lanes.take_tx(Channel::Input).ok_or_else(missing)?,
         transport,
     })
 }
@@ -119,6 +125,10 @@ pub fn run(
         CodecId::Hevc => VideoCodec::Hevc,
     };
     let _ = io.codec.set(codec);
+    let input = InputTx::new(link.input, &session.keys, plan.addr, plan.drop);
+    if io.input.try_send(input).is_err() {
+        log::warn!("input sender not handed over; keys and mouse stay on this PC");
+    }
     on_connected(session.mode, session.codec);
     let media = Media::new(link.video, link.cursor, &session.keys, plan.addr, plan.drop);
     let feedback = FeedbackTx::new(link.feedback, &session.keys, plan.addr);

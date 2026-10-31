@@ -8,17 +8,20 @@ use std::time::{Duration, Instant};
 
 use mixlink_capture::{CursorSource, IddSource};
 use mixlink_codec::{EncoderConfig, VideoCodec};
+use mixlink_input::host::abs_map::AbsMap;
 use mixlink_proto::control::CodecId;
 
 use super::cursor_send::{CursorSender, census};
 use super::feedback::FeedbackRx;
+use super::input_recv::InputRecv;
+use super::input_service::InputControl;
 use super::net_sink::NetSink;
 use super::streamer::{StreamEnd, StreamLanes, StreamStart, run_session};
 use super::video_send::VideoSender;
 use crate::capture::flow::run_loop;
 use crate::capture::report::Stats;
 use crate::capture_args::Levers;
-use crate::display::requests::DisplayHandle;
+use crate::display::requests::{DisplayHandle, StreamTarget};
 use crate::error::SvcError;
 use crate::platform::windows::priority::apply_thread;
 
@@ -36,6 +39,7 @@ const SESSION_MAX: Duration = Duration::from_secs(365 * 24 * 3600);
 /// Runs one session's stream; the lanes always come back.
 pub fn run_stream(
     display: &DisplayHandle,
+    input: &InputControl,
     start: &StreamStart,
     lanes: StreamLanes,
     stop: &AtomicBool,
@@ -49,13 +53,14 @@ pub fn run_stream(
         start.mode.refresh_mhz,
         start.codec
     );
-    run_session(display, start, lanes, |connector, lanes| {
-        stream_on(connector, start, lanes, stop)
+    run_session(display, start, lanes, |target, lanes| {
+        stream_on(target, input, start, lanes, stop)
     })
 }
 
 fn stream_on(
-    connector: u32,
+    target: &StreamTarget,
+    input: &InputControl,
     start: &StreamStart,
     lanes: StreamLanes,
     stop: &AtomicBool,
@@ -65,6 +70,14 @@ fn stream_on(
         cursor,
         feedback,
     } = lanes;
+    let connector = target.connector;
+    let stream_size = (start.mode.width, start.mode.height);
+    // `svc-input` (spec 0021) applies this client's keys and mouse until `stop` below.
+    input.start(InputRecv::new(
+        &start.keys,
+        start.peer,
+        AbsMap::new(stream_size),
+    ));
     let shape_request = Arc::new(AtomicBool::new(false));
     let cursor_stop = AtomicBool::new(false);
     let mut cursor = CursorSender::new(cursor, &start.keys, start.peer);
@@ -87,6 +100,7 @@ fn stream_on(
         cursor_stop.store(true, Ordering::Release);
         captured
     });
+    input.stop();
     let (video, feedback) = sink.into_lanes();
     let lanes = StreamLanes {
         video,

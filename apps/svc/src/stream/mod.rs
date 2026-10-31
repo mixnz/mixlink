@@ -4,6 +4,10 @@
 pub mod cursor_send;
 pub mod feedback;
 pub mod gaps;
+pub mod input_recv;
+pub mod input_service;
+#[cfg(windows)]
+pub mod input_thread;
 #[cfg(windows)]
 pub mod net_sink;
 #[cfg(windows)]

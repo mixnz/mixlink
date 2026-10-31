@@ -2,7 +2,7 @@
 
 > Replace content each update; keep ≤ 80 lines. History lives in git, not here.
 
-**Updated:** 2026-10-28
+**Updated:** 2026-10-31
 **Phase:** 1 — LAN MVP
 
 ## Done
@@ -15,8 +15,8 @@ Details live in each spec; one line per item here.
   vs DDA 422 µs, build `vdisplay` for IddCx 1.4; S3 (0006) ADR-0007 holds with changes, measure input elevated;
   S4 (0007) ADR-0005 holds, NVENC p99 3.15 ms in Session 0 with levers, FFmpeg 8.1 in `C:\tools\ffmpeg`;
   S5 (0008) EA Javelin and EAC titles launch with our drivers (`docs/compat/anti-cheat.md`).
-- T2 core types (0009): ids, QPC clock (`Ticks`), `StageStamps`, host / client config.
-- T3 protocol (0010): 16 B header v1, 6 channels, packetizer / reassembler, control handshake, cursor messages.
+- T2 core types (0009): ids, QPC clock, `StageStamps`, config. T3 protocol (0010): 16 B header v1, 6 channels,
+  packetizer / reassembler, control handshake, cursor messages.
 - T4 UDP transport (0011): `mixlink-net` socket, send / recv threads, per-channel lanes, `Hello` resend;
   `tools/net-probe`. Wired 0 % loss, RTT p99 0.76 ms (laptop Best performance) to 4.1 ms (power saving).
 - T19 service shell (0012): `mixlink-svc` as service `MixLink` or `--console`, `install` / `uninstall`,
@@ -30,8 +30,7 @@ Details live in each spec; one line per item here.
 - T21 virtual display (0015): `vdisplay` has no monitor until the service's `ADD_MONITOR` IOCTL (≤ 4, handle
   close departs them); stable EDID per client; `session::begin` / `end` save, switch (`virtualOnly` / `extend`,
   `host.json`), restore the layout; in Session 0 through a console-session helper (`display-agent`, CCD is
-  denied there); service start restores a crash-left layout and adds a headless 1080p60 monitor. Main PC runs
-  pass (spec 0015 → Results), incl. headless cold boot.
+  denied there); service start restores a crash-left layout and adds a headless 1080p60 monitor. Runs pass (0015).
 - T22 virtual HID (0016): only the service (SYSTEM / Admins) feeds `vhid` through a control node; feeder exit =
   everything released; NKRO keyboard, relative + absolute mouse reach UAC and the lock screen. Pads are virtual
   Xbox Series pads (ADR-0009): software devices `SWD\MixLinkPad\000N` per slot, inbox `xinputhid`, XInput
@@ -41,35 +40,36 @@ Details live in each spec; one line per item here.
   Public network; launcher lists hosts (5 s expiry). Two-PC run passes (mDNS only, broadcast only, stop → gone).
 - T6 pairing (0018): PIN prompt in the tray → SPAKE2 in the launcher; Noise KK session (`svc-session` on 47801),
   host commits on the first sealed Ping; AES-128-GCM datagrams (seal / open p99 0.4 µs); keys in `secrets\`
-  (SYSTEM + Admins) and `%LOCALAPPDATA%\MixLink`; pipe v2; tray trusts only the service PID; `net-probe pair | connect`.
-  Two-PC run passes (fixed: tray Cancel reaches the launcher; tray checks the pipe server before `Hello`).
+  (SYSTEM + Admins) and `%LOCALAPPDATA%\MixLink`; pipe v2; tray trusts only the service PID; `net-probe pair | connect`. Two-PC run passes.
 - T7 capture + encode (0019): `vdisplay` frame share v3 per monitor (surface held until the reader releases it,
   500 ms heartbeat), `mixlink-capture::IddSource`, NVENC `Encoder` on the captured texture (no copy; BT.601-tagged,
   client picks the matrix), `mixlink-svc capture try`. 1440p120: capture p99 0.41 ms, encode p99 2.78 / 2.24 ms
   (H.264 / HEVC); MMCSS or priority class carries the gain, GPU priority none. Row T24 = DDA fallback.
 - T9 end-to-end video (0020): Connect in the launcher → `mixlink-stream --connect` (session in the stream process,
   sealed video / cursor / feedback), virtual monitor per session (`svc-display` requests), NVENC → `FrameMeta` + AU,
-  IddCx hardware cursor drawn by the client, keyframe / shape requests, F11 fullscreen, frame-latency waitable +
+  IddCx hardware cursor drawn by the client, keyframe / shape requests, fullscreen, frame-latency waitable +
   paced 3-deep queue, per-stage latency in the launcher. 1080p60 HEVC wired: total p50 / p99 26.9 / 36.9 ms (H.264
   30.3 / 39.8); wired loss 0.016 % of datagrams (below sockets) → ~1 hiccup / s until FEC.
+- T10 keyboard / mouse (0021): sealed whole-state Input packets, LL hook on `input-hook` (keyboard Raw Input off: it
+  stopped the hook), window keys as fallback, absolute / relative mouse from the host cursor (150 ms hold, no button,
+  1 s after typing), one `svc-input` per port → `vhid` (absolute = main display). Ctrl+Alt+Shift + Z / F / Q / L;
+  Win+L locks the client. Two-PC run passes all criteria; host receive → fed p50 18–24 µs, p99 < 1 ms.
 
 ## In progress
 - T5 open rows (spec 0017 → Results): host with several adapters; "Needs update" row with a host on another version.
 - T21 open rows (spec 0015): power cut during a session, iGPU + dGPU host.
 - Main PC: drivers (frame share v3) and the MixLink service installed from `dist\` (spec 0019 run), service
   running; laptop paired with it (spec 0018).
-- `MixLinkS4` and S5 drivers removed; test machine may still have ViGEmBus; S2b clean-up (spec 0005) unconfirmed.
 
 ## Next
-- Manual checks left from T1: host tray Open/X/Quit, stream resize with debug layer, `npm run dev:host`.
-- Roadmap phase 1: T10 next by the table; T13 (FEC) matters most for smoothness (spec 0020 Results: wired
+- Roadmap phase 1: T11 / T13 by the table (T25 `SendInput` fallback after T10); T13 (FEC) matters most for smoothness (spec 0020 Results: wired
   loss ~1 hiccup / s; add send pacing there or in phase 3). Needs a roadmap row: physical monitor plugged in
   while headless is main. Maybe a row: add a host by IP (other subnet).
 - Phase 3 from spec 0020: pace host capture to the client's vsync (steady 60 fps waits a refresh in the client
   queue); renegotiate the mode when the stream window changes monitor.
 - Spec 0014 open row: tampered package with the remove-first install (Steam-on-a-pad uninstall passes, 0016).
 - T12 creates a pad per client gamepad; rumble (report 0x03) is kept per pad, not yet sent to the client.
-- Inputs for later rows: T10 ← 0020 (F11 fullscreen exists; pointer lock, hide the local cursor); T11 ← 0007
+- Inputs for later rows: T25 (`SendInput` fallback) ← 0021; T11 ← 0007
   (10 ms loopback, silence fill); T22 / T12 ← 0006 Verdict; T24 / phase 2 ← 0007 (QSV decoder-bind pool, AMF
   unproven); HDR row later (0015).
 - Phase 3 notes: keep CPU / NIC awake while streaming, pacing, measure all power modes (spec 0011).
